@@ -20,12 +20,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+
 #define String_(x) #x
 #define String(x) String_(x)
 
 #define PretextView_Version "PretextView Version " String(PV) 
 
-#include "Header.h"
+#include <Header.h>
 
 #ifdef DEBUG
 #include <errno.h>
@@ -43,8 +44,8 @@ SOFTWARE.
 #include <GLFW/glfw3.h>
 #pragma clang diagnostic pop
 
-#include "TextureLoadQueue.cpp"
-#include "ColorMapData.cpp"
+#include "TextureLoadQueue.cpp"  // 
+#include "ColorMapData.cpp"      //  导入 color map 的设定
 
 #pragma clang diagnostic push
 #pragma GCC diagnostic ignored "-Wfloat-equal"
@@ -735,13 +736,12 @@ Mouse_Move;
 struct
 tool_tip
 {
-    pointui pixels;
-    point2f worldCoords;
+    pointui pixels;       // point coordinate defined in unsigned integers
+    point2f worldCoords;  // coors of the word defined in f32
 };
 
 global_variable
-tool_tip
-Tool_Tip_Move;
+tool_tip Tool_Tip_Move; 
 
 struct
 edit_pixels
@@ -1005,7 +1005,8 @@ global_function
 u08
 IsContigInverted(u32 index)
 {
-    return(Contigs->contigInvertFlags[index >> 3] & (1 << (index & 7)));
+    return(Contigs->contigInvertFlags[index >> 3] & (1 << (index & 7)));  // 所以这个32位的数：后三位表示1所在的位数，其他的表示编号
+    // return(Contigs->contigInvertFlags[index / 8] & (1 << (index % 8)));  // check if contig is inverted  
 }
 
 #define Max_Number_of_Contigs 4096
@@ -1044,66 +1045,70 @@ Map_State;
 
 global_function
 void
-UpdateContigsFromMapState()
+UpdateContigsFromMapState()  // todo reading 从map的状态更新contigs
 {
-    u32 lastScaffID = Map_State->scaffIds[0];
-    u32 scaffId = lastScaffID ? 1 : 0;
-    u32 lastId = Map_State->originalContigIds[0];
-    u32 lastCoord = Map_State->contigRelCoords[0];
+    u32 lastScaffID = Map_State->scaffIds[0];       // 第一个scaff的编号
+    u32 scaffId = lastScaffID ? 1 : 0;              // 
+    u32 lastId = Map_State->originalContigIds[0];   // 第一个像素点对应的id
+    u32 lastCoord = Map_State->contigRelCoords[0];  // 第一个像素点的局部坐标
     u32 contigPtr = 0;
     u32 length = 0;
     u32 startCoord = lastCoord;
-    u08 inverted = Map_State->contigRelCoords[1] < lastCoord;
+    u08 inverted = Map_State->contigRelCoords[1] < lastCoord;  // 判断是不是反转的
     Map_State->contigIds[0] = 0;
     
     u32 pixelIdx = 0;
-    ForLoop(Number_of_Original_Contigs) (Original_Contigs + index)->nContigs = 0;
-    ForLoop(Number_of_Pixels_1D - 1)
+    ForLoop(Number_of_Original_Contigs) (Original_Contigs + index)->nContigs = 0; // 将每一个contig的 片段数目 置为零
+    ForLoop(Number_of_Pixels_1D - 1)    // 遍历每一个像素点 更新 Original_Contigs， Contigs 
+    // ？？ 为什么遍历完之后，contigPtr为214，但是Number_of_Original_Contigs = 218 
     {
-        if (contigPtr == Max_Number_of_Contigs) break;
+        if (contigPtr == Max_Number_of_Contigs) break;  // 确保 contigPtr 不超出最大contig的数值
 
         ++length;
 
-        pixelIdx = index + 1;
-        u32 id = Map_State->originalContigIds[pixelIdx];
-        u32 coord = Map_State->contigRelCoords[pixelIdx];
-
-        if (id != lastId || (inverted && coord != (lastCoord - 1)) || (!inverted && coord != (lastCoord + 1)))
+        pixelIdx = index + 1;   // 像素点编号， 加一因为第一个已经用来初始化了
+        u32 id = Map_State->originalContigIds[pixelIdx];  // 像素点的 contig id
+        u32 coord = Map_State->contigRelCoords[pixelIdx]; // 像素点的局部坐标
+        
+        if (id != lastId || (inverted && coord != (lastCoord - 1)) || (!inverted && coord != (lastCoord + 1))) // 如果不是一个连续片段
         {
-            (Original_Contigs + lastId)->contigMapPixels[(Original_Contigs + lastId)->nContigs++] = pixelIdx - 1 - (length >> 1);
+            (Original_Contigs + lastId)->contigMapPixels[(Original_Contigs + lastId)->nContigs++] = pixelIdx - 1 - (length >> 1); // original contig 的第nContigs个片段对应的像素片段的中点
 
-            contig *cont = Contigs->contigs + contigPtr++;
-            cont->originalContigId = lastId;
-            cont->length = length;
-            cont->startCoord = startCoord;
-            cont->metaDataFlags = Map_State->metaDataFlags + pixelIdx - 1;
+            contig *cont = Contigs->contigs + contigPtr++; // 获取上一个contig的指针， 并且给contigPtr + 1
+            cont->originalContigId = lastId; // 更新这个片段的id
+            cont->length = length;           // 更新长度
+            cont->startCoord = startCoord;   // 更新开头为当前片段在该contig上的局部坐标 endCoord = startCoord + length - 1
+            cont->metaDataFlags = Map_State->metaDataFlags + pixelIdx - 1; // 将该片段的标签修改为上一个
 
-            u32 thisScaffID = Map_State->scaffIds[pixelIdx - 1];
-            cont->scaffId = thisScaffID ? ((thisScaffID == lastScaffID) ? (scaffId) : (++scaffId)) : 0;
-            lastScaffID = thisScaffID;
+            u32 thisScaffID = Map_State->scaffIds[pixelIdx - 1]; // 上一个像素点对应的 scaffid
+            cont->scaffId = thisScaffID ? ((thisScaffID == lastScaffID) ? (scaffId) : (++scaffId)) : 0;  // 如果存在scaffid则（判断是不是同一个scaff，如果是则继续用scaffid，否则++scaffid），否则为0  
+            lastScaffID = thisScaffID; // 更新
 
-            if (IsContigInverted(contigPtr - 1))
-            {
-                if (!inverted) Contigs->contigInvertFlags[(contigPtr - 1) >> 3] &= ~(1 << ((contigPtr - 1) & 7));
+
+            // ？？ 关于反向这部分没有搞懂
+            if (IsContigInverted(contigPtr - 1)) // 判断上一个contig是否反向
+            {   // 为什么采用位操作更新contigflag？？
+                if (!inverted) Contigs->contigInvertFlags[(contigPtr - 1) >> 3] &= ~(1 << ((contigPtr - 1) & 7));  // 取反操作是对补码（计算机以原码存储）进行的操作， 正数（补码就是原码）， 负数（原码除符号位以外取反再加一得到补码）
             }
             else
             {
-                if (inverted) Contigs->contigInvertFlags[(contigPtr - 1) >> 3] |= (1 << ((contigPtr - 1) & 7));
+                if (inverted) Contigs->contigInvertFlags[(contigPtr - 1) >> 3] |= (1 << ((contigPtr - 1) & 7));  // 如果反向
             }
 
-            startCoord = coord;
-            length = 0;
-            if (pixelIdx < (Number_of_Pixels_1D - 1)) inverted = Map_State->contigRelCoords[pixelIdx + 1] < coord;
+            startCoord = coord; // 当前片段开始的坐标
+            length = 0;         // 当前片段长度清零0
+            if (pixelIdx < (Number_of_Pixels_1D - 1)) inverted = Map_State->contigRelCoords[pixelIdx + 1] < coord;  // 更新inverted
         }
-
-        Map_State->contigIds[pixelIdx] = (u32)contigPtr;
-        lastId = id;
-        lastCoord = coord;
+        // 更新上一个id和局部坐标
+        Map_State->contigIds[pixelIdx] = (u32)contigPtr; // 像素点对应的 片段id 修改为当前的统计得到片段id
+        lastId = id;       // 更新上一个像素点的id
+        lastCoord = coord; // 更新上一个像素点的局部坐标
     }
 
-    if (contigPtr < Max_Number_of_Contigs)
+    if (contigPtr < Max_Number_of_Contigs) // ？？ contigptr 为什么小于 Number_of_Original_Contigs
+    // 更新最后一个contig的最后一个片段信息
     {
-        (Original_Contigs + lastId)->contigMapPixels[(Original_Contigs + lastId)->nContigs++] = pixelIdx - 1 - (length >> 1);
+        (Original_Contigs + lastId)->contigMapPixels[(Original_Contigs + lastId)->nContigs++] = pixelIdx - 1 - (length >> 1); 
 
         ++length;
         contig *cont = Contigs->contigs + contigPtr++;
@@ -4483,7 +4488,7 @@ TestFile(const char *fileName, u64 *fileSize = 0)
         if (!file)
         {
 #ifdef DEBUG
-            fprintf(stderr, "Error: %d\n", errno);
+            fprintf(stderr, "The file is not available: \'%s\' [errno %d] \n", fileName, errno);
             exit(errno);
 #endif
         }
@@ -4501,9 +4506,9 @@ TestFile(const char *fileName, u64 *fileSize = 0)
             u32 bytesRead = (u32)fread(magicTest, 1, sizeof(magicTest), file);
             if (bytesRead == sizeof(magicTest))
             {
-                ForLoop(sizeof(Magic))
+                ForLoop(sizeof(Magic)) // #define ForLoop(n) for (u32 index=0; index<n; index++)
                 {
-                    if (Magic[index] != magicTest[index])
+                    if (Magic[index] != magicTest[index]) 
                     {
                         fclose(file);
                         file = 0;
@@ -4518,7 +4523,7 @@ TestFile(const char *fileName, u64 *fileSize = 0)
             }
         }
     }
-    return(file);
+    return(file); // 仅仅返回正确的file指针，否则返回空指针
 }
 
 global_function
@@ -4531,13 +4536,13 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
 {
     u64 fileSize = 0;
 
-    FILE *file = TestFile(filePath, &fileSize);
-    if (!file)
+    FILE *file = TestFile(filePath, &fileSize); //  检查前4个字节读取到的数据， 如果为 u08 Magic[] = {'p', 's', 't', 'm'} 则通过验证，否则将指针file设置为空指针
+    if (!file)    // 如果为空指针， 返回读取错误fileErr
     {
         return(fileErr);
     }
     
-    FenceIn(File_Loaded = 0);
+    FenceIn(File_Loaded = 0);  // 在线程保护的情况下更新全局变量 File_Loaded
 
     static u32 reload = 0;
     
@@ -4622,29 +4627,66 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
         *fileName = tmp + 1;
 
         u32 intBuff[16];
-        PushStringIntoIntArray(intBuff, ArrayCount(intBuff), (u08 *)(*fileName));
+        PushStringIntoIntArray(intBuff, ArrayCount(intBuff), (u08 *)(*fileName)); // 将字符穿转移到intbuff数组中
 
-        u32 nBytesHeaderComp;
-        u32 nBytesHeader;
-        fread(&nBytesHeaderComp, 1, 4, file);
+        /*
+        这段代码假设文件中的数据是以 4 字节整数的形式存储的，并且依次存储了 
+        nBytesHeaderComp 和 nBytesHeader 两个值。通常情况下，
+        这种操作用于读取文件中存储的数据头部信息或者其他固定格式的数据。
+        */
+        u32 nBytesHeaderComp; // 压缩后数据大小
+        u32 nBytesHeader;     // 解压后数据大小
+        fread(&nBytesHeaderComp, 1, 4, file);  // 从文件中读取 4 个字节的数据，并将其存储在 nBytesHeaderComp 变量中 
         fread(&nBytesHeader, 1, 4, file);
 
-        u08 *header = PushArrayP(arena, u08, nBytesHeader);
-        u08 *compressionBuffer = PushArrayP(arena, u08, nBytesHeaderComp);
+        u08 *header = PushArrayP(arena, u08, nBytesHeader);                // 从内存池中分配u08 数组，大小为 nBytesHeader
+        u08 *compressionBuffer = PushArrayP(arena, u08, nBytesHeaderComp); // 从内存池中分配u08 数组，大小为 nBytesHeaderComp
 
-        fread(compressionBuffer, 1, nBytesHeaderComp, file);
-        *headerHash = FastHash64(compressionBuffer, nBytesHeaderComp, FastHash64(intBuff, sizeof(intBuff), 0xbafd06832de619c2));
-        if (libdeflate_deflate_decompress(Decompressor, (const void *)compressionBuffer, nBytesHeaderComp, (void *)header, nBytesHeader, NULL))
+        fread(compressionBuffer, 1, nBytesHeaderComp, file);  // nBytesHeaderComp个字节的压缩数据，存储到compressionBuffer
+        *headerHash = FastHash64(
+            compressionBuffer, 
+            nBytesHeaderComp, 
+            FastHash64(intBuff, sizeof(intBuff), 0xbafd06832de619c2)
+            );
+        if (
+            libdeflate_deflate_decompress(
+            Decompressor,                     // 指向 解压缩器 
+            (const void *)compressionBuffer,  // 指向 即将解压的数据，(const void *)强制转换为不可修改的内存块
+            nBytesHeaderComp,                 // 解压缩的字节数
+            (void *)header,                   // 指向 解压缩后存储的位置，转换为通用内存块
+            nBytesHeader,                     // 解压后预计大小
+            NULL)                             // 表示不传递其他参数给压缩函数
+        )
         {
-            return(decompErr);
+            return(decompErr); // decompress err
         }
-        FreeLastPushP(arena); // comp buffer
+        FreeLastPushP(arena); // comp buffer  释放内存池（arena）中最近一次通过 PushArrayP 宏分配的内存空间
+                              // 遍历内存池链表，找到最后一个内存池，并释放其最近一次分配的内存空间。防止内存泄漏
+
+        /*
+        header的格式
+        ==========================
+        nBytes           Contents
+        --------------------------
+        8             Total_Genome_Length
+        4             Number_of_Original_Contigs
+        -------------------
+            Number_of_Original_Contigs 个 contigs 的存储规则 
+        -------------------
+            4      contig fracs
+            64       name
+        ------------------
+        1           textureRes
+        1           nTextRes
+        1           mipMapLevels  
+
+        */
 
         u64 val64;
-        u08 *ptr = (u08 *)&val64;
+        u08 *ptr = (u08 *)&val64;  // 获取val64存储的 八位无符号整型（u08）的指针
         ForLoop(8)
         {
-            *ptr++ = *header++;
+            *ptr++ = *header++;    // 指针赋值给到val64的大小 -> 整个基因的长度
         }
         Total_Genome_Length = val64;
 
@@ -4654,62 +4696,69 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
         {
             *ptr++ = *header++;
         }
-        Number_of_Original_Contigs = val32;
+        Number_of_Original_Contigs = val32;   // 指针赋值给到val32的值 -> contigs的数目
 
+        // 从内存池中分配存储原始 contig 的数组内存，类型为 original_contig，数组长度为 Number_of_Original_Contigs
         Original_Contigs = PushArrayP(arena, original_contig, Number_of_Original_Contigs);
+        // 分配一个存储浮点数的数组
         f32 *contigFracs = PushArrayP(arena, f32, Number_of_Original_Contigs);
-        ForLoop(Number_of_Original_Contigs)
+        ForLoop(Number_of_Original_Contigs) // 读取 contigs  ！！！！
         {
+
             f32 frac;
             u32 name[16];
 
+            // 读取每个contig 对应的一个f32
             ptr = (u08 *)&frac;
-            ForLoop2(4)
+            ForLoop2(4)           // 从header中读取4个字节的数据存储到frac中 
             {
                 *ptr++ = *header++;
             }
-
-            contigFracs[index] = frac;
+            contigFracs[index] = frac; // 将这个f32 存储到 contigFracs[index] 中
+            
+            // 读取contig的名字
             ptr = (u08 *)name;
             ForLoop2(64)
             {
                 *ptr++ = *header++;
             }
-
+            // contig name赋值
             ForLoop2(16)
             {
-                Original_Contigs[index].name[index2] = name[index2];
+                // ？？ 一个contig 的name为什么是一个长度为u32的数组
+                Original_Contigs[index].name[index2] = name[index2];   // 将 u32 name[16] 给到每一个contig  的name
             }
-
-            (Original_Contigs + index)->contigMapPixels = PushArrayP(arena, u32, Number_of_Pixels_1D);
-            (Original_Contigs + index)->nContigs = 0;
+            
+            (Original_Contigs + index)->contigMapPixels = PushArrayP(arena, u32, Number_of_Pixels_1D); // 为每个contig 的 mapPixels 变量 申请内存
+            (Original_Contigs + index)->nContigs = 0; 
         }
 
-        u08 textureRes = *header++;
-        u08 nTextRes = *header++;
-        u08 mipMapLevels = *header;
+        u08 textureRes = *header++;  // 分辨率
+        u08 nTextRes = *header++;    // 纹理数目
+        u08 mipMapLevels = *header;  // ？？
 
-        Texture_Resolution = Pow2(textureRes);
-        Number_of_Textures_1D = Pow2(nTextRes);
+        Texture_Resolution = Pow2(textureRes);   // 纹理分辨率 当前显示的像素点个数，1024 
+        Number_of_Textures_1D = Pow2(nTextRes);  // 一维纹理数目 可以放大的次数，每一个像素点可以放大32次，
         Number_of_MipMaps = mipMapLevels;
 
-        Number_of_Pixels_1D = Number_of_Textures_1D * Texture_Resolution;
+        Number_of_Pixels_1D = Number_of_Textures_1D * Texture_Resolution; // 更新一维数据的长度
 
-        Map_State = PushStructP(arena, map_state);
-        Map_State->contigIds = PushArrayP(arena, u32, Number_of_Pixels_1D);
-        Map_State->originalContigIds = PushArrayP(arena, u32, Number_of_Pixels_1D);
-        Map_State->contigRelCoords = PushArrayP(arena, u32, Number_of_Pixels_1D);
-        Map_State->scaffIds = PushArrayP(arena, u32, Number_of_Pixels_1D);
-        Map_State->metaDataFlags = PushArrayP(arena, u64, Number_of_Pixels_1D);
-        memset(Map_State->scaffIds, 0, Number_of_Pixels_1D * sizeof(u32));
+        Map_State = PushStructP(arena, map_state);                                   // 从内存池中分配一个包含 map_state 结构的内存块，并返回指向该结构的指针， 存储contigs map到图像中的数据
+        Map_State->contigIds = PushArrayP(arena, u32, Number_of_Pixels_1D);          // 从内存池中分配存储 contigIds 的数组，数组长度为 Number_of_Pixels_1D
+        Map_State->originalContigIds = PushArrayP(arena, u32, Number_of_Pixels_1D);  // 
+        Map_State->contigRelCoords = PushArrayP(arena, u32, Number_of_Pixels_1D);    // 像素坐标
+        Map_State->scaffIds = PushArrayP(arena, u32, Number_of_Pixels_1D);           // scaffID
+        Map_State->metaDataFlags = PushArrayP(arena, u64, Number_of_Pixels_1D);      // 标记
+        memset(Map_State->scaffIds, 0, Number_of_Pixels_1D * sizeof(u32));           // 将scaffID和metaDataFlags初始化为0
         memset(Map_State->metaDataFlags, 0, Number_of_Pixels_1D * sizeof(u64));
-        f32 total = 0.0f;
+        f32 total = 0.0f; // 所有contig的一个浮点数的累积, finally should approximately be 1.0
         u32 lastPixel = 0;
-        u32 relCoord = 0;
-        ForLoop(Number_of_Original_Contigs)
+        u32 relCoord = 0; 
+
+        ForLoop(Number_of_Original_Contigs)  // 初始设定每个contig的每个像素点的id和局部坐标
         {
-            total += contigFracs[index];
-            u32 pixel = (u32)((f64)Number_of_Pixels_1D * (f64)total);
+            total += contigFracs[index]; // 当前所有contig对应的浮点数的累积，包括当前contig
+            u32 pixel = (u32)((f64)Number_of_Pixels_1D * (f64)total);  // 每行像素点数 * 当前占比
             
             relCoord = 0;
 #ifdef RevCoords
@@ -4717,8 +4766,8 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
 #endif
             while (lastPixel < pixel)
             {
-                Map_State->originalContigIds[lastPixel] = index;
-                Map_State->contigRelCoords[lastPixel++] = 
+                Map_State->originalContigIds[lastPixel] = index; // 每一个像素点对应的都是当前contig的编号
+                Map_State->contigRelCoords[lastPixel++] =        // 每一个像素点对应的在当前contig中的局部坐标
 #ifdef RevCoords
                     tmp - relCoord++;
 #else
@@ -4726,50 +4775,60 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
 #endif
             }
         }
-        while (lastPixel < Number_of_Pixels_1D)
+        while (lastPixel < Number_of_Pixels_1D)  // 处理数值计算导致的lastPixel小于Number_of_Pixels_1D的问题
         {
-            Map_State->originalContigIds[lastPixel] = (u32)(Number_of_Original_Contigs - 1);
-            Map_State->contigRelCoords[lastPixel++] = relCoord++;
+            Map_State->originalContigIds[lastPixel] = (u32)(Number_of_Original_Contigs - 1); //假设其为最后一个contig的像素点
+            Map_State->contigRelCoords[lastPixel++] = relCoord++;                            
         }
 
-        Contigs = PushStructP(arena, contigs);
-        Contigs->contigs = PushArrayP(arena, contig, Max_Number_of_Contigs);
-        Contigs->contigInvertFlags = PushArrayP(arena, u08, (Max_Number_of_Contigs + 7) >> 3);
+        Contigs = PushStructP(arena, contigs);              // 声明一个存储contigs的内存块， 其返回Contigs作为这个块的指针，实际上此处为整个genome的信息
+        Contigs->contigs = PushArrayP(arena, contig, Max_Number_of_Contigs); // 每一个Contigs中会有contigs (片段)，一共有Max_Number_of_Contigs多个片段，最多存放4096个contigs
+        Contigs->contigInvertFlags = PushArrayP(arena, u08, (Max_Number_of_Contigs + 7) >> 3);  // (4096 + 7 ) >> 3 = 512, 声明512个u08的存储空间
 
-        UpdateContigsFromMapState();
+        UpdateContigsFromMapState();  //  根据mapstate 跟新当前的contigs, 并且更新original_contigs里面的每个contig所包含的片段的个数和片段的中点
 
-        u32 nBytesPerText = 0;
+        u32 nBytesPerText = 0;   //  程序将一整张图分成了32*32个小格子，每一个格子被称作texture
         ForLoop(Number_of_MipMaps)
         {
             nBytesPerText += Pow2((2 * textureRes--));
         }
         nBytesPerText >>= 1;
-        Bytes_Per_Texture = nBytesPerText;
+        Bytes_Per_Texture = nBytesPerText;  // 一个texture 对应的字节数目  todo reading 
 
-        File_Atlas = PushArrayP(arena, file_atlas_entry, (Number_of_Textures_1D + 1) * (Number_of_Textures_1D >> 1));
+        File_Atlas = PushArrayP(arena, file_atlas_entry, (Number_of_Textures_1D + 1) * (Number_of_Textures_1D >> 1));   // 因为对称性 1+...+ 32 = 528 
 
-        u32 currLocation = sizeof(Magic) + 8 + nBytesHeaderComp;
-        ForLoop((Number_of_Textures_1D + 1) * (Number_of_Textures_1D >> 1))
+        u32 currLocation = sizeof(Magic) + 8 + nBytesHeaderComp;            // current localtion of the pointer = magic_check + (u32 compressed head length) +  (u32 decompressed head length) + compressed header length  
+        ForLoop((Number_of_Textures_1D + 1) * (Number_of_Textures_1D >> 1)) // loop through total number of the textures
         {
-            file_atlas_entry *entry = File_Atlas + index;
-            u32 nBytes;
-            fread(&nBytes, 1, 4, file);
-            fseek(file, nBytes, SEEK_CUR);
-            currLocation += 4;
+            /*
+            数据结构：
+                - magic (4 bytes)
+                - 8 bytes
+                - headercomp (nBytesHeaderComp bytes)
+                - a block of entry:
+                    - number of bytes in u32
+                    - data
 
-            entry->base = currLocation;
-            entry->nBytes = nBytes;
+            */
+            file_atlas_entry *entry = File_Atlas + index; // get the temprory pointer of the entry
+            u32 nBytes;      // define a u32 to save the data 
+            fread(&nBytes, 1, 4, file);    // 读取四个字节, 前四个字节存储一个u32表示大小，后面的数据存储
+            fseek(file, nBytes, SEEK_CUR); // 文件指针会向前移动 nBytes 个字节，SEEK_CUR在c标准库中被定义为1, after the loop, pointer file is moved to the end of the reading file 
+            currLocation += 4;             // 每移动一次，currLocation 增加 4 
+
+            entry->base = currLocation;    // 存储当前位置，也就是数据块开始存储的位置，除去了用于存储长度的前四个字节
+            entry->nBytes = nBytes;        // 存储texture对应的数据大小 in byte
 
             currLocation += nBytes;
         }
 
         // Extensions
         {
-            u08 magicTest[sizeof(Extension_Magic_Bytes[0])];
+            u08 magicTest[sizeof(Extension_Magic_Bytes[0])];  // define a u08 array, to check the end of the file, use this to read the extensions 
 
             while ((u64)(currLocation + sizeof(magicTest)) < fileSize)
             {
-                u32 bytesRead = (u32)fread(magicTest, 1, sizeof(magicTest), file);
+                u32 bytesRead = (u32)fread(magicTest, 1, sizeof(magicTest), file); // reading 4 bytes from the file
                 currLocation += bytesRead;
                 if (bytesRead == sizeof(magicTest))
                 {
@@ -4779,53 +4838,71 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
                         u08 *magic = (u08 *)Extension_Magic_Bytes[index];
                         ForLoop2(sizeof(magicTest))
                         {
-                            if (magic[index2] != magicTest[index2])
+                            if (magic[index2] != magicTest[index2]) // magicTest is from the file, magic is from the definition // if magic this isn't the same, means no extensions found
                             {
                                 foundExtension = 0;
                                 break;
                             }
                         }
 
-                        if (foundExtension)
+                        if (foundExtension)  // if extension is found
                         {
-                            extension_type type = (extension_type)index;
+                            extension_type type = (extension_type)index; // get the type of the extension
                             u32 extensionSize = 0;
                             switch (type)
                             {
                                 case extension_graph:
                                     {
                                         u32 compSize;
-                                        fread(&compSize, 1, sizeof(u32), file);
-                                        graph *gph = PushStructP(arena, graph);
+                                        fread(&compSize, 1, sizeof(u32), file);   // get the size of the extension data
+                                        graph *gph = PushStructP(arena, graph);   // create the size to store the extension data
                                         extension_node *node = PushStructP(arena, extension_node);
-                                        u08 *dataPlusName = PushArrayP(arena, u08, ((sizeof(u32) * Number_of_Pixels_1D) + sizeof(gph->name) ));
+                                        u08 *dataPlusName = PushArrayP(arena, u08, ((sizeof(u32) * Number_of_Pixels_1D) + sizeof(gph->name) )); // there are 1024 * 32 u32 numbers. Every single one of them represents the data on a pixel.
 #pragma clang diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-align"
-                                        gph->data = (u32 *)(dataPlusName + sizeof(gph->name));
+                                        gph->data = (u32 *)(dataPlusName + sizeof(gph->name));  // the first 16 u32 are the name of the extention, which can include 16*32/8=64 u08 (char).
 #pragma clang diagnostic pop                                       
                                         extensionSize += (compSize + sizeof(u32));
                                         u08 *compBuffer = PushArrayP(arena, u08, compSize);
-                                        fread(compBuffer, 1, compSize, file);
-                                        if (libdeflate_deflate_decompress(Decompressor, (const void *)compBuffer, compSize, (void *)dataPlusName, (sizeof(u32) * Number_of_Pixels_1D) + sizeof(gph->name), NULL))
-                                        {
+                                        fread(compBuffer, 1, compSize, file);    // read the extension data from the file pointer
+                                        if (libdeflate_deflate_decompress(Decompressor, (const void *)compBuffer, compSize, (void *)dataPlusName, (sizeof(u32) * Number_of_Pixels_1D) + sizeof(gph->name), NULL))   // decompress compBuffer to dataPlusName 
+                                        /* code from the libdeflate.h
+                                        enum libdeflate_result {
+                                            // Decompression was successful.  
+                                            LIBDEFLATE_SUCCESS = 0,
+
+                                            // Decompression failed because the compressed data was invalid,
+                                            * corrupt, or otherwise unsupported.  
+                                            LIBDEFLATE_BAD_DATA = 1,
+
+                                            // A NULL 'actual_out_nbytes_ret' was provided, but the data would have
+                                            * decompressed to fewer than 'out_nbytes_avail' bytes.  
+                                            LIBDEFLATE_SHORT_OUTPUT = 2,
+
+                                            // The data would have decompressed to more than 'out_nbytes_avail'
+                                            * bytes.  
+                                            LIBDEFLATE_INSUFFICIENT_SPACE = 3,
+                                        };
+                                        */
+                                        {   // unsuccessful decompress
                                             FreeLastPushP(arena); // data
                                             FreeLastPushP(arena); // graph
                                             FreeLastPushP(arena); // node
                                         }
                                         else
-                                        {
+                                        {   // successful decompress
 #pragma clang diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-align"
-                                            u32 *namePtr = (u32 *)dataPlusName;
+                                            u32 *namePtr = (u32 *)dataPlusName;  // get a temp pointer
 #pragma clang diagnostic pop
-                                            ForLoop2(ArrayCount(gph->name))
+                                            ForLoop2(ArrayCount(gph->name))  // get the graph name
                                             {
                                                 gph->name[index2] = *(namePtr + index2);
                                             }
 
-                                            node->type = type;
+                                            node->type = type;      // assign the gph to node
                                             node->extension = gph;
-                                            AddExtension(node);
+                                            AddExtension(node);     // add node to extension
                                         }
                                         FreeLastPushP(arena); // compBuffer
                                     }
@@ -4842,7 +4919,7 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
             }
         }
         
-        fclose(file);
+        fclose(file); // ?? the data of the entry has not been read
     }
 
     // Load Textures
@@ -7409,32 +7486,45 @@ IconLoad(u08 *buffer, u32 bufferSize)
     stbi_image_free(data);
     return nk_image_id((s32)tex);
 }
-//
 
-#ifdef DEBUG
-global_function
-void
-GLAPIENTRY
+void GLAPIENTRY
 MessageCallback( GLenum source,
-        GLenum type,
-        GLuint id,
-        GLenum severity,
-        GLsizei length,
-        const GLchar* message,
-        const void* userParam )
+                 GLenum type,
+                 GLuint id,
+                 GLenum severity,
+                 GLsizei length,
+                 const GLchar* message,
+                 const void* userParam )
 {
-    (void)source;
-    (void)id;
-    (void)length;
-    (void)userParam;
-    fprintf( stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
-            ( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
+  fprintf( stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+           ( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
             type, severity, message );
-    
-    u32 BreakHere = 0;
-    (void)BreakHere;
 }
-#endif
+
+// #ifdef DEBUG
+// global_function
+// void GLAPIENTRY
+// MessageCallback( 
+//     GLenum source,
+//     GLenum type,
+//     GLuint id,
+//     GLenum severity,
+//     GLsizei length,
+//     const GLchar* message,
+//     const void* userParam )
+// {
+//     (void)source;
+//     (void)id;
+//     (void)length;
+//     (void)userParam;
+//     fprintf( stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+//             ( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
+//             type, severity, message );
+    
+//     // u32 BreakHere = 0;
+//     // (void)BreakHere;
+// }
+// #endif
 
 #ifndef _WIN32
 #include <sys/stat.h>
@@ -8712,23 +8802,26 @@ SortMapByMetaTags()
 
 MainArgs
 {
-    u32 initWithFile = 0;
-    u08 currFile[256];
+    u32 initWithFile = 0;   // initialization with .map file or not 
+    u08 currFile[256];      // save the name of file inputed 
     u08 *currFileName = 0;
+    #ifdef DEBUG
+    printf("%s\n", currFileName);  
+    #endif
     u64 headerHash = 0;
     if (ArgCount >= 2)
     {
         initWithFile = 1;
-        CopyNullTerminatedString((u08 *)ArgBuffer[1], currFile);
+        CopyNullTerminatedString((u08 *)ArgBuffer[1], currFile);  // copy the filepath to currfile
     }
 
-    Mouse_Move.x = -1.0;
+    Mouse_Move.x = -1.0;  // intialize the mouse position
     Mouse_Move.y = -1.0;
 
-    Tool_Tip_Move.pixels.x = 0;
-    Tool_Tip_Move.pixels.y = 0;
-    Tool_Tip_Move.worldCoords.x = 0;
-    Tool_Tip_Move.worldCoords.y = 0;
+    Tool_Tip_Move.pixels.x = 0;      // green selection band
+    Tool_Tip_Move.pixels.y = 0;      //
+    Tool_Tip_Move.worldCoords.x = 0; // word with the mouse
+    Tool_Tip_Move.worldCoords.y = 0; // 
 
     Edit_Pixels.pixels.x = 0;
     Edit_Pixels.pixels.y = 0;
@@ -8747,8 +8840,9 @@ MainArgs
     Thread_Pool = ThreadPoolInit(&Working_Set, 3); 
 
     glfwSetErrorCallback(ErrorCallback);
-    if (!glfwInit())
-    {
+    if (!glfwInit())// in debug mode, do not initialize the window
+    {      
+        fprintf(stderr, "Failed in initializing the glfw window, exit...\n");  
         exit(EXIT_FAILURE);
     }
 
@@ -8792,23 +8886,25 @@ MainArgs
     glBlendEquation(GL_FUNC_ADD);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-#ifdef DEBUG
+    #ifdef DEBUG
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-    glDebugMessageCallback( MessageCallback, 0 );
-#endif
-
+    // TODO: CHECK THE PROBLEM
+    // glDebugMessageCallback( MessageCallback, 0 ); // Exception has occurred. EXC_BAD_ACCESS (code=1, address=0x0)
+    #endif
+    
     s32 width, height, display_width, display_height;
     glfwGetWindowSize(window, &width, &height);
     glfwGetFramebufferSize(window, &display_width, &display_height);
     Screen_Scale.x = (f32)display_width/(f32)width;
     Screen_Scale.y = (f32)display_height/(f32)height;
-
+    
     // Cursors
     GLFWcursor *arrowCursor = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
     GLFWcursor *crossCursor = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
 
-    Setup();
+    Setup(); 
+
     if (initWithFile)
     {
         UI_On = LoadFile((const char *)currFile, Loading_Arena, (char **)&currFileName, &headerHash) == ok ? 0 : 1;

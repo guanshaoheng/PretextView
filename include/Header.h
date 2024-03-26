@@ -49,8 +49,8 @@ SOFTWARE.
 
 #ifdef _WIN32
 #include <intrin.h>
-#else
-#include <x86intrin.h>
+#else  // problem is here
+#include <x86intrin.h>  // please use ```arch -x86_64 zsh```, before run the compiling
 #endif
 
 #include "libdeflate.h"
@@ -60,6 +60,7 @@ typedef int16_t s16;
 typedef int32_t s32;
 typedef int64_t s64;
 
+// using u08=uint8_t; // 
 typedef uint8_t u08;
 typedef uint16_t u16;
 typedef uint32_t u32;
@@ -140,9 +141,15 @@ typedef size_t memptr;
 #else
 #define ThreadFence _mm_mfence()
 #endif
-#define FenceIn(x) ThreadFence; \
+
+/*
+定义了一个名为 FenceIn 的宏，它的作用是在一个代码块中插入线程屏障（Thread Fence），
+会先执行第一个线程屏障 ThreadFence，然后执行你的代码，最后再执行第二个线程屏障 ThreadFence，
+确保插入的代码执行顺序正确。
+*/
+#define FenceIn(x) ThreadFence; \ 
 	x; \
-	ThreadFence
+	ThreadFence 
 
 typedef volatile u32 threadSig;
 
@@ -151,8 +158,11 @@ typedef pthread_t thread;
 typedef pthread_mutex_t mutex;
 typedef pthread_cond_t cond;
 
-#define InitialiseMutex(x) x = PTHREAD_MUTEX_INITIALIZER
-#define InitialiseCond(x) x = PTHREAD_COND_INITIALIZER
+// 错误消息表明编译器认为 PTHREAD_MUTEX_INITIALIZER 不是一个有效的表达式。通常情况下，PTHREAD_MUTEX_INITIALIZER 是一个宏，它会被展开为一个结构体初始化器，而不是一个单独的表达式。
+// #define InitialiseMutex(x) x = PTHREAD_MUTEX_INITIALIZER
+// #define InitialiseCond(x) x = PTHREAD_COND_INITIALIZER
+#define InitialiseMutex(x) pthread_mutex_init(&(x), NULL)
+#define InitialiseCond(x)  pthread_cond_init(&(x), NULL)
 
 #define LaunchThread(thread, func, dataIn) pthread_create(&thread, NULL, func, dataIn)
 #define WaitForThread(x) pthread_join(*x, NULL)
@@ -265,15 +275,15 @@ thread_context
 
 #define Default_Memory_Alignment_Pow2 4
 
-struct
-memory_arena
+struct memory_arena
 {
-   memory_arena *next;
-   u08 *base;
-   u64 currentSize;
-   u64 maxSize;
-   u64 active;
+   memory_arena *next;     // 指向下一个内存池的指针，用于支持内存池链表结构
+   u08 *base;              // 内存池的基地址，指向分配给该内存池的内存块的起始位置
+   u64 currentSize;        // 当前内存池已使用的字节数，用于跟踪内存使用情况
+   u64 maxSize;            // 内存池的最大容量，指示内存池可以容纳的最大字节数
+   u64 active;             // 标记内存池是否处于活动状态，通常用于判断内存池是否可用
 };
+
 
 struct
 memory_arena_snapshot
@@ -502,7 +512,7 @@ global_function
 void
 BinarySemaphoreInit(binary_semaphore *bsem, u32 value)
 {
-    InitialiseMutex(bsem->mut);
+    InitialiseMutex(bsem->mut); // 错误消息表明编译器认为 PTHREAD_MUTEX_INITIALIZER 不是一个有效的表达式。通常情况下，PTHREAD_MUTEX_INITIALIZER 是一个宏，它会被展开为一个结构体初始化器，而不是一个单独的表达式。
     InitialiseCond(bsem->con);
     bsem->v = value;
 }
@@ -704,7 +714,8 @@ JobQueueInit(memory_arena *arena, job_queue *jobQueue)
     jobQueue->hasJobs = PushStructP(arena, binary_semaphore);
     jobQueue->hasFree = PushStructP(arena, binary_semaphore);
 
-    InitialiseMutex(jobQueue->rwMutex);
+    InitialiseMutex(jobQueue->rwMutex); // 错误消息表明编译器认为 PTHREAD_MUTEX_INITIALIZER 不是一个有效的表达式。通常情况下，PTHREAD_MUTEX_INITIALIZER 是一个宏，它会被展开为一个结构体初始化器，而不是一个单独的表达式。
+
     BinarySemaphoreInit(jobQueue->hasJobs, 0);
     BinarySemaphoreInit(jobQueue->hasFree, 0);
 
@@ -776,7 +787,7 @@ ThreadPoolInit(memory_arena *arena, u32 nThreads)
 
     threadPool->threads = PushArrayP(arena, thread_context*, nThreads);
 	
-    InitialiseMutex(threadPool->threadCountLock);
+    InitialiseMutex(threadPool->threadCountLock); //错误消息表明编译器认为 PTHREAD_MUTEX_INITIALIZER 不是一个有效的表达式。通常情况下，PTHREAD_MUTEX_INITIALIZER 是一个宏，它会被展开为一个结构体初始化器，而不是一个单独的表达式。
     InitialiseCond(threadPool->threadsAllIdle);
 	
     for (   u32 index = 0;
@@ -1081,17 +1092,18 @@ RGBADisplayFormat(u32 rgba)
 global_function
 u08 *
 PushStringIntoIntArray(u32 *intArray, u32 arrayLength, u08 *string, u08 stringTerminator = '\0')
-{
+{ 
     u08 *stringToInt = (u08 *)intArray;
     u32 stringLength = 0;
 
+    // 将 string 转移到 stringToInt
     while (*string != stringTerminator && stringLength < (arrayLength << 2))
     {
         *(stringToInt++) = *(string++);
         ++stringLength;
     }
 
-    while (stringLength & 3)
+    while (stringLength & 3)  // 按位与操作, 确保stringLength的二进制的后两位都是0
     {
         *(stringToInt++) = 0;
         ++stringLength;
@@ -1145,12 +1157,16 @@ FastHash64(void *buf, u64 len, u64 seed)
 
     switch (len & 7)
     {
-	case 7: v ^= (u64)pos2[6] << 48; [[clang::fallthrough]];
-	case 6: v ^= (u64)pos2[5] << 40; [[clang::fallthrough]];
-	case 5: v ^= (u64)pos2[4] << 32; [[clang::fallthrough]];
-	case 4: v ^= (u64)pos2[3] << 24; [[clang::fallthrough]];
-	case 3: v ^= (u64)pos2[2] << 16; [[clang::fallthrough]];
-	case 2: v ^= (u64)pos2[1] << 8;  [[clang::fallthrough]];
+        /*
+        错误发生在 [[clang::fallthrough]] 上，它似乎被识别为一个表达式，但实际上它是一个注释，用于指示编译器有意执行 switch 语句中的“fall through”。然而，该注释只有在编译器支持 C++11 或以上版本，并且启用了相应的警告时才有效。对于C语言，通常不会使用这种语法。
+        要解决此错误，您可以将 [[clang::fallthrough]] 注释替换为标准的  fallthrough  注释，或者删除这个注释，因为在 switch 语句中，如果您没有明确指定 break，则默认会执行“fall through”行为。
+        */
+	case 7: v ^= (u64)pos2[6] << 48; /*[[clang::fallthrough]];*/
+	case 6: v ^= (u64)pos2[5] << 40; /*[[clang::fallthrough]];*/
+	case 5: v ^= (u64)pos2[4] << 32; /*[[clang::fallthrough]];*/
+	case 4: v ^= (u64)pos2[3] << 24; /*[[clang::fallthrough]];*/
+	case 3: v ^= (u64)pos2[2] << 16; /*[[clang::fallthrough]];*/
+	case 2: v ^= (u64)pos2[1] << 8;  /*[[clang::fallthrough]];*/
 	case 1: v ^= (u64)pos2[0];
 		h ^= HashMix(v);
 		h *= m;
