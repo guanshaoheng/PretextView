@@ -4,10 +4,10 @@
 # arch -x86_64 zsh  # 首先进入 x86_64的编译环境
 # conda activate pretext
 
-buildtype="debug"  # release debug
+buildtype="debug"  # release debug, 
 
 # -------------Compile environment----------------
-# use cmake 3.25 
+# add the path of cmake to the environment path
 export PATH="/opt/homebrew/bin:$PATH"
 # -----------------------------
 
