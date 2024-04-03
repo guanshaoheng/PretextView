@@ -51,7 +51,16 @@ PretextView uses the following third-party libraries:
 * Fonts from the 'Droid Serif' font set
 * [Icons from open-iconic](https://github.com/iconic/open-iconic)
 
-# Installation
+# Installation 安装
+install this software on Mac with m-chip, [please shift the terminal's architecture into `x86_64` first](https://github.com/guanshaoheng/PretextView/blob/d2fd36fd215013c39325abc66580a262202ff6d6/install.sh#L3):   
+
+```bash
+arch -x86_64 zsh
+conda activate /environment/with/all/dependencies 
+```
+
+Also check if you need the [debug or release](https://github.com/guanshaoheng/PretextView/blob/d2fd36fd215013c39325abc66580a262202ff6d6/install.sh#L7) version while compiling.
+
 Requires:
 * clang >= 11.0.0 [Unix]
 * clang-cl >= 11.0.0 [Windows]
