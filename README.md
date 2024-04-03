@@ -21,7 +21,7 @@ Map state can be output in [AGP](https://www.ncbi.nlm.nih.gov/assembly/agp/AGP_S
 Note that object/part sizes will only be accurate up to the size of an individual map texel, and that any input sequences smaller than an individual texel will not be output.<br/>
 AGP files can be corrected by the included python script [AGPCorrect](https://github.com/wtsi-hpag/PretextView/blob/master/AGPCorrect), which requires access to the input sequences in (gzipped) FASTA format.
 ```bash
-AGPCorrect ref.fa(.gz) map.agp >corrected_scaffs.agp
+AGPCorrect /path/to/ref.fa(.gz) /path/to/current/map.agp /path/to/corrected_scaffs.agp
 ```
 The script requires
 * Python >= 3.8
