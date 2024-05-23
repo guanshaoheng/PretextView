@@ -21,6 +21,7 @@ SOFTWARE.
 */
 
 
+#define output_flag false    // 是否启用输出  NOTE: 如果启用这个的话 经常会出现线程之间的问题，至今不清楚为什么会这样
 #define String_(x) #x
 #define String(x) String_(x)
 
@@ -155,11 +156,12 @@ FragmentSource_Texture = R"glsl(
     uniform float oopixpertex;
     uniform samplerBuffer colormap;
     uniform vec3 controlpoints;
-    float bezier(float t)
+    float bezier(float t)  // 斜线方程
     {
         float tsq = t * t;
         float omt = 1.0 - t;
-        float omtsq = omt * omt;
+        float omtsq = omt * omt; // (1-t)^2
+        // (1-t)^2 * x + 2*t* (1-t)^2 * y + t^2 * z
         return((omtsq * controlpoints.x) + (2.0 * t * omt * controlpoints.y) + (tsq * controlpoints.z));
     }
     float linearTextureID(vec2 coords)
@@ -179,7 +181,7 @@ FragmentSource_Texture = R"glsl(
         }
 
         int i = int(min);
-        return((min * ntex1dm1) -
+        return ((min * ntex1dm1) -
         ((i & 1) == 1 ? (((i-1)>>1) * min) : 
          ((i>>1)*(min-1))) + max);
     }
@@ -495,15 +497,15 @@ GLFWChangeWindowSize(GLFWwindow *win, s32 width, s32 height)
 struct
 contact_matrix
 {
-    GLuint textures;
+    GLuint textures;       // 存储一个或多个OpenGL纹理对象的句柄
     GLuint pixelStartLookupBuffer;
     GLuint pixelRearrangmentLookupBuffer;
     GLuint pixelStartLookupBufferTex;
     GLuint pixelRearrangmentLookupBufferTex;
     GLint pad;
-    GLuint *vaos;
-    GLuint *vbos;
-    GLuint shaderProgram;
+    GLuint *vaos;          // 指向顶点数组对象数组
+    GLuint *vbos;          // 指向顶点缓冲区对象数组
+    GLuint shaderProgram;  // 着色器编号
     GLint matLocation;
 };
 
@@ -1043,6 +1045,50 @@ global_variable
 map_state *
 Map_State;
 
+
+// 定义一个 struct 存储所有的textures, 从而将所有的texture输出到python中
+struct allTextures4output{
+u08** texture_p;  // 定义一个指针存储所有的texture
+u32 n_bytes_per_texture;
+u32 mipmap_num;
+u32 n_textures;
+u32 n_textures_1d; 
+};
+
+global_variable
+allTextures4output*
+all_textures4output = (allTextures4output*) malloc(sizeof(allTextures4output*));
+global_variable bool all_texture_already_got = false;
+
+
+global_function 
+u32 
+texture_id_cal(const u16& x, const u16& y){
+    /*
+        (Number_of_Textures_1D+Number_of_Textures_1D-x-1) * x  /2 + y - x
+        = (2*Number_of_Textures_1D - x +  1 ) * x /2 + y - x + 1
+        = (2*Number_of_Textures_1D - x -  1 ) * x /2 + y  + 1
+        
+    */
+    // return ((( (Number_of_Textures_1D<<1 )- 3*id[0] - 1) * id[0])>>1) + id[1] + 1 ;
+    return ((( (Number_of_Textures_1D<<1 )- x - 1) * x)>>1)  + y  ;  // 注意数据溢出， u16 最大为 2**16-1 
+
+    // u32 index_ = (u32) ((( (Number_of_Textures_1D<<1 )- x - 1) * x)>>1)  + y  ;  // 注意数据溢出， u16 最大为 2**16-1 
+    // u32 tmpx=x;
+    // u32 n = (u32) Number_of_Textures_1D;
+    // u32 index = (u32) (y-x);
+    // while (tmpx>0){
+    //     index += n--;
+    //     tmpx--;
+    // }
+
+    // if (index_ != index){
+    //     fprintf(stderr, "Please check index_(%d) != index(%d)", index_, index);
+    //     exit(1);
+}
+
+
+
 global_function
 void
 UpdateContigsFromMapState()  // todo reading 从map的状态更新contigs
@@ -1060,7 +1106,7 @@ UpdateContigsFromMapState()  // todo reading 从map的状态更新contigs
     u32 pixelIdx = 0;
     ForLoop(Number_of_Original_Contigs) (Original_Contigs + index)->nContigs = 0; // 将每一个contig的 片段数目 置为零
     ForLoop(Number_of_Pixels_1D - 1)    // 遍历每一个像素点 更新 Original_Contigs， Contigs 
-    // ？？ 为什么遍历完之后，contigPtr为214，但是Number_of_Original_Contigs = 218 
+    // 遍历完之后，contigPtr为214，但是Number_of_Original_Contigs = 218 
     {
         if (contigPtr == Max_Number_of_Contigs) break;  // 确保 contigPtr 不超出最大contig的数值
 
@@ -1085,13 +1131,14 @@ UpdateContigsFromMapState()  // todo reading 从map的状态更新contigs
             lastScaffID = thisScaffID; // 更新
 
 
-            // ？？ 关于反向这部分没有搞懂
+            // 余数表示8数的第几位，如果未反向则对应位为0，若反向则对应位为1
             if (IsContigInverted(contigPtr - 1)) // 判断上一个contig是否反向
-            {   // 为什么采用位操作更新contigflag？？
-                if (!inverted) Contigs->contigInvertFlags[(contigPtr - 1) >> 3] &= ~(1 << ((contigPtr - 1) & 7));  // 取反操作是对补码（计算机以原码存储）进行的操作， 正数（补码就是原码）， 负数（原码除符号位以外取反再加一得到补码）
+            {   // 位操作更新contigflag
+                // 每8个片段的正反采用一个u08表示，每一个bit表示一个正反，余数表示这八个中的第几个，如果没有反向则对应位为0
+                if (!inverted) Contigs->contigInvertFlags[(contigPtr - 1) >> 3] &= ~(1 << ((contigPtr - 1) & 7));  
             }
             else
-            {
+            {   // 如果反向则额对应位的bit为1
                 if (inverted) Contigs->contigInvertFlags[(contigPtr - 1) >> 3] |= (1 << ((contigPtr - 1) & 7));  // 如果反向
             }
 
@@ -1105,7 +1152,7 @@ UpdateContigsFromMapState()  // todo reading 从map的状态更新contigs
         lastCoord = coord; // 更新上一个像素点的局部坐标
     }
 
-    if (contigPtr < Max_Number_of_Contigs) // ？？ contigptr 为什么小于 Number_of_Original_Contigs
+    if (contigPtr < Max_Number_of_Contigs) //  contigptr 小于 Number_of_Original_Contigs
     // 更新最后一个contig的最后一个片段信息
     {
         (Original_Contigs + lastId)->contigMapPixels[(Original_Contigs + lastId)->nContigs++] = pixelIdx - 1 - (length >> 1); 
@@ -4264,64 +4311,79 @@ File_Atlas;
 global_function
 void
 LoadTexture(void *in)
-{
+{   // 
     GLuint *textureHandle = (GLuint *)in;
 
-    u16 id[2];
-    id[0] = (u16)(*textureHandle >> 16);
-    id[1] = (u16)(*textureHandle & ((1 << 16) - 1));
-    texture_buffer *buffer = TakeTextureBufferFromQueue_Wait(Texture_Buffer_Queue);
-    buffer->x = id[0];
-    buffer->y = id[1];
+    texture_buffer *buffer = TakeTextureBufferFromQueue_Wait(Texture_Buffer_Queue);  // 从队列中拿一个非空的buffer的指针
+    buffer->x = (u16)(*textureHandle >> 16); // the former 16 bits represent the row number
+    buffer->y = (u16)(*textureHandle & ((1 << 16) - 1)); // the lower 16 bits represnet the column number
 
-    u32 linearIndex =   (buffer->x * (Number_of_Textures_1D - 1)) -
-        ((buffer->x & 1) ? (((buffer->x-1)>>1) * buffer->x) : 
-         ((buffer->x>>1)*(buffer->x-1))) + buffer->y;
+    /* 
+    rule for linear ordering
+    Ordering of the texture boxes
+        ========================
+        00 01 02 03 04 ... 30 31
+        // 32 33 34 35 ... 61 62
+        // // 63 64 65 ... 91 92
+        // // // ...
+        ========================
+    */
+    // u32 linearIndex =  (buffer->x * (Number_of_Textures_1D - 1)) - ((buffer->x * (buffer->x-1)) >> 1) + buffer->y;  // get the index accoding to index in x and y diretion 
+    u32 linearIndex = texture_id_cal(buffer->x, buffer->y); 
 
-    file_atlas_entry *entry = File_Atlas + linearIndex;
-    u32 nBytes = entry->nBytes;
-    fseek(buffer->file, entry->base, SEEK_SET);
+    file_atlas_entry *entry = File_Atlas + linearIndex;  // set a tempory pointer 
+    u32 nBytes = entry->nBytes; // base is the beginning, nBytes is the size 
+    fseek(buffer->file, entry->base, SEEK_SET); // 
 
-    fread(buffer->compressionBuffer, 1, nBytes, buffer->file);
+    fread(buffer->compressionBuffer, 1, nBytes, buffer->file);  // 读取压缩的texture
 
     if (libdeflate_deflate_decompress(buffer->decompressor, (const void *)buffer->compressionBuffer, nBytes, (void *)buffer->texture, Bytes_Per_Texture, NULL))
-    {
+    { // 解压压缩的texture到 buffer->texture
         fprintf(stderr, "Could not decompress texture from disk\n");
     }
 
-    u32 x;
-    u32 y;
-    do
-    {
-        FenceIn(linearIndex = (u32)Texture_Ptr);
+    // u32 x;
+    // u32 y;
+    // do  // 将读取到texture传递到Current_Loaded_Texture，从而完成当前texture的读取
+    // {   // 由于当前读的texture的行列编号为buffer->x 和 buffer->y，不确定要将buffer_texture穿给谁，因此做一个循环，知道texture被改变为对应的值的时候，将其传给对应current_loaded_texture
+    //     FenceIn(linearIndex = (u32)Texture_Ptr);
 
-        u32 n = Number_of_Textures_1D;
-        x = 0;
+    //     u32 n = Number_of_Textures_1D; // 32
+    //     x = 0;
 
-        while (linearIndex >= n)
-        {
-            linearIndex -= n--;
-            ++x;
-        }
-        y = x + linearIndex;
+    //     while (linearIndex >= n)
+    //     {
+    //         linearIndex -= n--;
+    //         ++x;
+    //     }
+    //     y = x + linearIndex; //  通过lienarIndex 反向计算出行列分别为多少
 
-    } while (buffer->x != (u16)x || buffer->y != (u16)y);
+    // } while (buffer->x != (u16)x || buffer->y != (u16)y); 
 
-    FenceIn(Current_Loaded_Texture = buffer);
+    // FenceIn(Current_Loaded_Texture = buffer); // 在其他的线程中读取并赋值到current_loaded_texture
+
+    u32 texture_index_tmp;
+    do  // 将读取到texture传递到Current_Loaded_Texture，从而完成当前texture的读取
+    {   // 由于当前读的texture的行列编号为buffer->x 和 buffer->y，不确定要将buffer_texture穿给谁，因此做一个循环，知道texture被改变为对应的值的时候，将其传给对应current_loaded_texture
+        FenceIn(texture_index_tmp = (u32) Texture_Ptr);
+    } while (linearIndex != texture_index_tmp); 
+
+    FenceIn(Current_Loaded_Texture = buffer); // 在其他的线程中读取并赋值到current_loaded_textur
+    
 }
 
 global_function
 void
-PopulateTextureLoadQueue(void *in)
+PopulateTextureLoadQueue(void *in) // 填充已经初始化过的 所有的queue，填充的任务为所有的528个texture的读取任务
 {
-    u32 *packedTextureIndexes = (u32 *)in;
+    u32 *packedTextureIndexes = (u32 *)in;  // 将空指针转化为u32
     u32 ptr = 0;
     ForLoop(Number_of_Textures_1D)
     {
         ForLoop2(Number_of_Textures_1D - index)
         {
-            packedTextureIndexes[ptr] = (index << 16) | (index + index2);
-            ThreadPoolAddTask(Thread_Pool, LoadTexture, (void *)(packedTextureIndexes + ptr++));
+            packedTextureIndexes[ptr] = (index << 16) | (index + index2); // 修改了在loadfile中定义的index参数，修改为每一个任务对应的行、列编号。the former 16 bit is the number of row and later 16 bit is the column
+            ThreadPoolAddTask(Thread_Pool, LoadTexture, (void *)(packedTextureIndexes + ptr++)); // 填充当前的任务队列，输入为对应的texture的行、列编号
         }
     }
 }
@@ -4482,7 +4544,7 @@ global_function
 FILE *
 TestFile(const char *fileName, u64 *fileSize = 0)
 {
-    FILE *file;
+    FILE *file=0;
     {
         file = fopen(fileName, "rb");
         if (!file)
@@ -4643,11 +4705,12 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
         u08 *compressionBuffer = PushArrayP(arena, u08, nBytesHeaderComp); // 从内存池中分配u08 数组，大小为 nBytesHeaderComp
 
         fread(compressionBuffer, 1, nBytesHeaderComp, file);  // nBytesHeaderComp个字节的压缩数据，存储到compressionBuffer
-        *headerHash = FastHash64(
+        *headerHash = FastHash64( // head的地址采用fasthash加密，作为存储文件的文件名。 compressionBuffer所指向的值进行hash得到一个名字，作为存储文件的文件名
             compressionBuffer, 
-            nBytesHeaderComp, 
+            nBytesHeaderComp,  
             FastHash64(intBuff, sizeof(intBuff), 0xbafd06832de619c2)
             );
+        fprintf(stdout, "The headerHash is calculated accordig to the compressed head, the hash number is (%llu) and the cache file name is (%s)\n", *headerHash, (u08*) headerHash);
         if (
             libdeflate_deflate_decompress(
             Decompressor,                     // 指向 解压缩器 
@@ -4702,7 +4765,7 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
         Original_Contigs = PushArrayP(arena, original_contig, Number_of_Original_Contigs);
         // 分配一个存储浮点数的数组
         f32 *contigFracs = PushArrayP(arena, f32, Number_of_Original_Contigs);
-        ForLoop(Number_of_Original_Contigs) // 读取 contigs  ！！！！
+        ForLoop(Number_of_Original_Contigs) // 读取 contigs fraction (f32) and name
         {
 
             f32 frac;
@@ -4778,7 +4841,7 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
         while (lastPixel < Number_of_Pixels_1D)  // 处理数值计算导致的lastPixel小于Number_of_Pixels_1D的问题
         {
             Map_State->originalContigIds[lastPixel] = (u32)(Number_of_Original_Contigs - 1); //假设其为最后一个contig的像素点
-            Map_State->contigRelCoords[lastPixel++] = relCoord++;                            
+            Map_State->contigRelCoords[lastPixel++] = relCoord++;   
         }
 
         Contigs = PushStructP(arena, contigs);              // 声明一个存储contigs的内存块， 其返回Contigs作为这个块的指针，实际上此处为整个genome的信息
@@ -4790,14 +4853,16 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
         u32 nBytesPerText = 0;   //  程序将一整张图分成了32*32个小格子，每一个格子被称作texture
         ForLoop(Number_of_MipMaps)
         {
-            nBytesPerText += Pow2((2 * textureRes--));
+            nBytesPerText += Pow2((2 * textureRes--));  // sum([2**(2*i) for i in range(10, 10-Number_of_MipMaps, -1)])/2
         }
-        nBytesPerText >>= 1;
-        Bytes_Per_Texture = nBytesPerText;  // 一个texture 对应的字节数目  todo reading 
+        nBytesPerText >>= 1; // 除以 2 因为数据是经过压缩的 
+        Bytes_Per_Texture = nBytesPerText;  // 一个texture 对应的字节数目 
 
         File_Atlas = PushArrayP(arena, file_atlas_entry, (Number_of_Textures_1D + 1) * (Number_of_Textures_1D >> 1));   // 因为对称性 1+...+ 32 = 528 
 
-        u32 currLocation = sizeof(Magic) + 8 + nBytesHeaderComp;            // current localtion of the pointer = magic_check + (u32 compressed head length) +  (u32 decompressed head length) + compressed header length  
+        u32 currLocation = sizeof(Magic) + 8 + nBytesHeaderComp;     // current localtion of the pointer = magic_check + (u32 compressed head length) +  (u32 decompressed head length) + compressed header length  
+        
+        // locating the pointers to data of entries
         ForLoop((Number_of_Textures_1D + 1) * (Number_of_Textures_1D >> 1)) // loop through total number of the textures
         {
             /*
@@ -4893,7 +4958,7 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
                                         {   // successful decompress
 #pragma clang diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-align"
-                                            u32 *namePtr = (u32 *)dataPlusName;  // get a temp pointer
+                                            u32 *namePtr = (u32 *)dataPlusName;  // get a temp pointer，将原来的u08指针切换为u32指针，所指向的位置相同，只是不同的解释方式
 #pragma clang diagnostic pop
                                             ForLoop2(ArrayCount(gph->name))  // get the graph name
                                             {
@@ -4919,20 +4984,21 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
             }
         }
         
-        fclose(file); // ?? the data of the entry has not been read
+        fclose(file); // the positions and file pointers will be saved to texture_buffer_queue, which can be read in multi-thread mode
     }
 
-    // Load Textures
+    // Load Textures 
     {
-        InitialiseTextureBufferQueue(arena, Texture_Buffer_Queue, Bytes_Per_Texture, filePath);
+        InitialiseTextureBufferQueue(arena, Texture_Buffer_Queue, Bytes_Per_Texture, filePath); // 初始化所有的queue texture_buffer_queue, 一共有8个queue，每个queue有8个buffer
 
-        u32 nTextures = (Number_of_Textures_1D + 1) * (Number_of_Textures_1D >> 1);
-        u32 *packedTextureIndexes = PushArrayP(arena, u32, nTextures);
-        ThreadPoolAddTask(Thread_Pool, PopulateTextureLoadQueue, packedTextureIndexes);
+        u32 nTextures = (Number_of_Textures_1D + 1) * (Number_of_Textures_1D >> 1);     // number of textures (528)
+        // u32 *packedTextureIndexes = PushArrayP(arena, u32, nTextures);               // using a pointer of sequences of u32 as the texture index 
+        u32* packedTextureIndexes = (u32*) malloc(sizeof(u32) * nTextures);              // 替换为malloc调用内存的函数
+        ThreadPoolAddTask(Thread_Pool, PopulateTextureLoadQueue, packedTextureIndexes); // multi-thread for loading the texture entries
 
-        glActiveTexture(GL_TEXTURE0);
-        glGenTextures(1, &Contact_Matrix->textures);
-        glBindTexture(GL_TEXTURE_2D_ARRAY, Contact_Matrix->textures);
+        glActiveTexture(GL_TEXTURE0);   // 所有的子图加载在 texture 0 
+        glGenTextures(1, &Contact_Matrix->textures);   // 获取一个texture 存到
+        glBindTexture(GL_TEXTURE_2D_ARRAY, Contact_Matrix->textures); // 绑定到当前的texture
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
@@ -4941,69 +5007,111 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_LEVEL, (GLint)Number_of_MipMaps - 1);
 
         u32 resolution = Texture_Resolution;
-        ForLoop(Number_of_MipMaps)
-        {
-            glCompressedTexImage3D  (GL_TEXTURE_2D_ARRAY, (GLint)index, GL_COMPRESSED_RED_RGTC1, (GLsizei)resolution, (GLsizei)resolution, 
-                                    (GLsizei)nTextures, 0, (GLsizei)((resolution >> 1) * resolution * nTextures), 0);
+        ForLoop(Number_of_MipMaps) // 初始一个texture的一个维度有1024个像素点，放大后一个texture的一个维度只有32（1024 / 2**5）个像素点
+        {   // 初始化所有层级mipmap level的 gl_texture_2d_array
+            glCompressedTexImage3D  (
+                GL_TEXTURE_2D_ARRAY,       // 指定纹理目标 例如GL_TEXTURE_3D
+                (GLint)index,              // 指定纹理层级
+                GL_COMPRESSED_RED_RGTC1,   // texture数据的压缩格式  Unsigned normalized 1-component only.
+                (GLsizei)resolution, (GLsizei)resolution, (GLsizei)nTextures, // 纹理宽度， 高度， 深度
+                0,      // border
+                (GLsizei)((resolution >> 1) * resolution * nTextures),  // 每一个texture 的数据大小 （bytes），注意此处初始化了全部的 nTextures 个texture
+                0); // 指向数据的指针
             resolution >>= 1;
         }
-        u32 ptr = 0;
 
+        if (output_flag && (!all_texture_already_got)){ // 初始化输出结构体all_textures4output
+            // 申请存储 输出所有的texture的变量的空间
+            // 此处使用 malloc 进行内存申请
+            all_textures4output->texture_p = (u08**) malloc(nTextures * sizeof(void*)); // 申请 528 个指针存储528个texture的存储的地址
+            all_textures4output->n_bytes_per_texture = Bytes_Per_Texture;
+            all_textures4output->n_textures = nTextures;
+            all_textures4output->mipmap_num = Number_of_MipMaps;
+            all_textures4output->n_textures_1d = Number_of_Textures_1D;
+        }
+        
+        u32 ptr = 0;
         printf("Loading textures...\n");
         ForLoop(Number_of_Textures_1D)
         {
             ForLoop2(Number_of_Textures_1D - index)
             {
-                volatile texture_buffer *loadedTexture = 0;
+                volatile texture_buffer *loadedTexture = 0; // 使用volatile锁放弃存取优化。如果优化（不使用volatile），该值存取会被优化，可能会存放在寄存器中，而不是每次访问该值都会从内存中读取
                 do
-                {
-                    __atomic_load(&Current_Loaded_Texture, &loadedTexture, 0);
-                } while (!loadedTexture);
-                u08 *texture = loadedTexture->texture;
-
+                {   
+                    __atomic_load(&Current_Loaded_Texture, &loadedTexture, 0);  // 将current_loaded_textur 转移到loadedtexture ?? 为什么没有更新current_loaded_textur变量，只是反复赋值就可以走出循环？
+                } while (!loadedTexture); // check line 4327 in function `LoadTexture`, this is running in another thread, current_loaded_texture is updated, then the value is passed to loaded_texture. The the value is passed to 
+                u08 *texture = loadedTexture->texture; // 获取loadedtexture的texture的指针
+                
+                if (output_flag && (!all_texture_already_got)){ // 这样所有的texture数据都记录在 对象 all_textures4output 中
+                    // arena空间管理采用栈结构，因此最后申请的空间可能会被free，因为不熟悉arena的结构，采用malloc来管理内存
+                    // 此处使用 malloc 进行内存申请
+                    // 此处将值给到 all_textures4output->texture_p[ptr] 对应的值 而不是将指针给到要删除的变量
+                    all_textures4output->texture_p[ptr] = (u08*) malloc(Bytes_Per_Texture);
+                    ForLoop3(Bytes_Per_Texture) {all_textures4output->texture_p[ptr][index3] = texture[index3];};
+                    // FenceIn(all_textures4output->texture_p[ptr] = texture);  // 存储 texture 到 all_texture4output[ptr]
+                    // fprintf(stdout, "\tLoaded %d=%d/%d\n", ptr, Texture_Ptr, nTextures );
+                }
+                // 将得到的texture输入到GL函数中
                 resolution = Texture_Resolution;
                 for (   GLint level = 0;
                         level < (GLint)Number_of_MipMaps;
                         ++level )
                 {
-                    GLsizei nBytes = (GLsizei)(resolution * (resolution >> 1));
-                    
-                    glCompressedTexSubImage3D(  GL_TEXTURE_2D_ARRAY, level, 0, 0, (GLint)ptr, (GLsizei)resolution, (GLsizei)resolution, 1,
-                                                GL_COMPRESSED_RED_RGTC1, nBytes, texture);
+                    GLsizei nBytes = (GLsizei)(resolution * (resolution >> 1));  // 为什么每一个mipmap存储的像素点个数是 resolution ** 2 / 2 ，不应该是resolution**2吗
+                    // 此处将texture的数据压入到gl中，存储为gl_texture_2d_array的对象
+                    glCompressedTexSubImage3D(
+                         GL_TEXTURE_2D_ARRAY,        //  target texture. Must be GL_TEXTURE_3D or GL_TEXTURE_2D_ARRAY.
+                         level,                      //  level-of-detail number. Level 0 is the base image level. Level n is the nth mipmap reduction image. 
+                         0, 0, (GLint)Texture_Ptr,   //  a texel offset in the x, y, z direction within the texture array.  
+                         (GLsizei)resolution, (GLsizei)resolution, 1,   // Specifies the width, height, depth of the texture subimage.
+                         GL_COMPRESSED_RED_RGTC1,    // 压缩数据的格式，这就是为什么只用了一半的 （nBytes） bytes 的数据表示了 resolution * resolution 的图片
+                         nBytes,                     //  the number of unsigned bytes of image data starting at the address specified by data.
+                         texture                     //  a pointer to the compressed image data in memory.
+                         );   // 是否此处将texture给到 GL_TEXTURE_2D_ARRAY, check the doc on https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glCompressedTexSubImage3D.xhtml
 
                     resolution >>= 1;
                     texture += nBytes;
                 }
-                ++ptr;
 
-                printf("\r%3d/%3d (%1.2f%%) textures loaded from disk...", Texture_Ptr + 1, nTextures, 100.0 * (f64)((f32)(Texture_Ptr + 1) / (f32)((Number_of_Textures_1D >> 1) * (Number_of_Textures_1D + 1))));
+                printf("\r%3d/%3d (%1.2f%%) textures loaded from disk...", Texture_Ptr + 1, nTextures, 100.0 * (f64)((f32)(Texture_Ptr + 1) / (f32)((Number_of_Textures_1D >> 1) * (Number_of_Textures_1D + 1)))); // echo out 读取到了第Texture_Ptr个texture
                 fflush(stdout);
 
-                AddTextureBufferToQueue(Texture_Buffer_Queue, (texture_buffer *)loadedTexture);
-                FenceIn(Current_Loaded_Texture = 0);
-                __atomic_fetch_add(&Texture_Ptr, 1, 0);
+                AddTextureBufferToQueue(Texture_Buffer_Queue, (texture_buffer *)loadedTexture);  // texture_buffer_queue 是全部的读取任务队列，读取后的buffer重新添加到队列中，供下一次读取。解决了从队列中弹出任务后任务队列空了的疑问。读取文件的任务队列在别的地方还会被调用吗？
+                FenceIn(Current_Loaded_Texture = 0); // 将临时变量置空，重新读取到current_loaded_texture后会跳出上面的循环
+                __atomic_fetch_add(&Texture_Ptr, 1, 0); // 更新全局的 texture_ptr 
+                ptr ++ ;
             }
         }
 
+        all_texture_already_got = true;
         printf("\n");
-        CloseTextureBufferQueueFiles(Texture_Buffer_Queue);
-        FreeLastPushP(arena); // packedTextureIndexes
-        glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+        CloseTextureBufferQueueFiles(Texture_Buffer_Queue); // 关闭所有的buffer_texture中的文件流指针file，并且释放解压器内存
+        // FreeLastPushP(arena); // packedTextureIndexes   果然，如果使用push为all_textures4output申请内存则会在此处被释放从而造成内存错误
+        free(packedTextureIndexes); // packedTextureIndexes 返回  
+        glBindTexture(GL_TEXTURE_2D_ARRAY, 0);  // 给之前已经压入的GL_TEXTURE_2D_ARRAY解除绑定
     }
 
-    // Contact Matrix Vertex Data
-    {
-        glUseProgram(Contact_Matrix->shaderProgram);
+    
+    {   // Contact Matrix Vertex Data
+        glUseProgram(Contact_Matrix->shaderProgram);  // 在glad.h中 #define glUseProgram glad_glUseProgram  指定opengl渲染管线使用特定的着色器程序对象
 
-        Contact_Matrix->vaos = PushArrayP(arena, GLuint, Number_of_Textures_1D * Number_of_Textures_1D);
-        Contact_Matrix->vbos = PushArrayP(arena, GLuint, Number_of_Textures_1D * Number_of_Textures_1D);
+        // Contact_Matrix->vaos = PushArrayP(arena, GLuint, Number_of_Textures_1D * Number_of_Textures_1D);  //
+        // Contact_Matrix->vbos = PushArrayP(arena, GLuint, Number_of_Textures_1D * Number_of_Textures_1D);  //
+        Contact_Matrix->vaos = (GLuint*) malloc(sizeof(GLuint) * Number_of_Textures_1D * Number_of_Textures_1D );  // OpenGL顶点数组对象（VAO, vertex array object）
+        Contact_Matrix->vbos = (GLuint*) malloc(sizeof(GLuint) * Number_of_Textures_1D * Number_of_Textures_1D );  // 顶点缓冲区对象（VBO, vertex buffer object）的数组的指针 
 
         GLuint posAttrib = (GLuint)glGetAttribLocation(Contact_Matrix->shaderProgram, "position");
         GLuint texAttrib = (GLuint)glGetAttribLocation(Contact_Matrix->shaderProgram, "texcoord");
-
-        f32 x = 0.0f;
-        f32 y = 1.0f;
-        f32 quadSize = 1.0f / (f32)Number_of_Textures_1D;
+        
+        /*
+        从左上到右下开始遍历，见上述编号
+        */
+        f32 x = -0.5f;
+        f32 y = 0.5f;
+        f32 quadSize = 1.0f / (f32)Number_of_Textures_1D; // 每一个texturex所占的比例 (1 / 32)
+        f32 allCornerCoords[2][2] = {{0.0f, 1.0f}, {1.0f, 0.0f}};
+        
 
         u32 ptr = 0;
         ForLoop(Number_of_Textures_1D)
@@ -5012,122 +5120,164 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
             {
                 tex_vertex textureVertices[4];
 
-                glGenVertexArrays(1, Contact_Matrix->vaos + ptr);
-                glBindVertexArray(Contact_Matrix->vaos[ptr]);
+                glGenVertexArrays( // 生成对象的名称， 
+                    1,                            // 生成的个数
+                    Contact_Matrix->vaos + ptr);  // 存储位置的指针
+                glBindVertexArray(Contact_Matrix->vaos[ptr]);  // 绑定顶点名称
 
-                f32 allCornerCoords[2][2] = {{0.0f, 1.0f}, {1.0f, 0.0f}};
-                f32 *cornerCoords = allCornerCoords[index2 >= index ? 0 : 1];
+                f32 *cornerCoords = allCornerCoords[index2 >= index ? 0 : 1]; // 包含对角线的上三角的时候取第一行{0, 1}，否则取第二行{1, 0}  为了解决关于对角线对称
                 
                 u32 min = Min(index, index2);
                 u32 max = Max(index, index2);
                 
-                f32 u = (f32)((min * (Number_of_Textures_1D - 1)) -
-                    ((min & 1) ? (((min-1)>>1) * min) : 
-                     ((min>>1)*(min-1))) + max);
                 
-                textureVertices[0].x = x - 0.5f;
-                textureVertices[0].y = y - quadSize - 0.5f;
-                textureVertices[0].u = u;
-                textureVertices[0].s = cornerCoords[0];
-                textureVertices[0].t = cornerCoords[1];
+                /*
+                    对称性编号
+                    [[ 0  1  2  3  4  5  6  7  8  9]
+                     [ 1 10 11 12 13 14 15 16 17 18]
+                     [ 2 11 19 20 21 22 23 24 25 26]
+                     [ 3 12 20 27 28 29 30 31 32 33]
+                     [ 4 13 21 28 34 35 36 37 38 39]
+                     [ 5 14 22 29 35 40 41 42 43 44]
+                     [ 6 15 23 30 36 41 45 46 47 48]
+                     [ 7 16 24 31 37 42 46 49 50 51]
+                     [ 8 17 25 32 38 43 47 50 52 53]
+                     [ 9 18 26 33 39 44 48 51 53 54]]
+                */
+                f32 texture_index_symmetric = (f32)((min * (Number_of_Textures_1D - 1))
+                    - (((min-1) * min) >> 1 )
+                    + max) ;
+                
+                /*
+                    3 2
+                    0 1
+                */
+                textureVertices[0].x = x ;              // x -> [-0.5, 0.5]
+                textureVertices[0].y = y - quadSize ;   // y -> [-0.5, 0.5]
+                textureVertices[0].u = texture_index_symmetric;
+                textureVertices[0].s = cornerCoords[0]; // s表示texture的水平分量
+                textureVertices[0].t = cornerCoords[1]; // t表示texture的垂直分量
 
-                textureVertices[1].x = x - 0.5f + quadSize;
-                textureVertices[1].y = y - quadSize - 0.5f;
-                textureVertices[1].u = u;
+                textureVertices[1].x = x  + quadSize;
+                textureVertices[1].y = y - quadSize ;
+                textureVertices[1].u = texture_index_symmetric;
                 textureVertices[1].s = 1.0f;
                 textureVertices[1].t = 1.0f;
 
-                textureVertices[2].x = x - 0.5f + quadSize;
-                textureVertices[2].y = y - 0.5f;
-                textureVertices[2].u = u;
+                textureVertices[2].x = x  + quadSize;
+                textureVertices[2].y = y ;
+                textureVertices[2].u = texture_index_symmetric;
                 textureVertices[2].s = cornerCoords[1];
                 textureVertices[2].t = cornerCoords[0];
 
-                textureVertices[3].x = x - 0.5f;
-                textureVertices[3].y = y - 0.5f;
-                textureVertices[3].u = u;
+                textureVertices[3].x = x ;
+                textureVertices[3].y = y ;
+                textureVertices[3].u = texture_index_symmetric;
                 textureVertices[3].s = 0.0f;
                 textureVertices[3].t = 0.0f;
 
-                glGenBuffers(1, Contact_Matrix->vbos + ptr);
-                glBindBuffer(GL_ARRAY_BUFFER, Contact_Matrix->vbos[ptr]);
-                glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(tex_vertex), textureVertices, GL_STATIC_DRAW);
+                glGenBuffers(                    // 生成buffer的名字 存储在contact_matrix->vbos+ptr 对应的地址上
+                    1,                           // 个数
+                    Contact_Matrix->vbos + ptr); // 指针，存储生成的名字  
+                glBindBuffer(                    // 绑定到一个已经命名的buffer对象上
+                    GL_ARRAY_BUFFER,             // 绑定的对象，gl_array_buffer 一般是绑定顶点的信息
+                    Contact_Matrix->vbos[ptr]);  // 通过输入buffer的名字将其绑定到gl_array_buffer
+                glBufferData(                    // 创建、初始化存储数据的buffer
+                    GL_ARRAY_BUFFER,             // 绑定的对象，gl_array_buffer 一般是绑定顶点的信息
+                    4 * sizeof(tex_vertex),      // 对象的大小（bytes）
+                    textureVertices,             // 即将绑定到gl_array_buffer的数据的指针
+                    GL_STATIC_DRAW);             // 绑定后的数据是用于干什么的
 
-                glEnableVertexAttribArray(posAttrib);
-                glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, sizeof(tex_vertex), 0);
-                glEnableVertexAttribArray(texAttrib);
-                glVertexAttribPointer(texAttrib, 3, GL_FLOAT, GL_FALSE, sizeof(tex_vertex), (void *)(3 * sizeof(GLfloat)));
+                glEnableVertexAttribArray(posAttrib); // enable the generic vertex with index (posAttrib) 
+                glVertexAttribPointer(           // 定义一个数组存储所有的通用顶点属性
+                    posAttrib,                   // 即将修改属性的索引
+                    2,                           // 定义每个属性的参数的个数， 只能为1 2 3 4中的一个，初始值为4
+                    GL_FLOAT,                    // 定义该属性的数据类型，则数据为4个字节， 占用两个的话，则一共为8字节
+                    GL_FALSE,                    // normalized， 是否要在取用的时候规范化这些数
+                    sizeof(tex_vertex),          // stride  定义从一个信息的指针下一个信息指针的bytes的间隔， 一个信息包到下一个信息包的长度
+                    0);                          // const void* 指定当前与 GL_ARRAY_BUFFER 绑定的缓冲区数据头指针偏移多少个到 第一个通用顶点属性的第一个特征开始的位置。 初始值为 0。因为此处想要读取的信息为 x 和 y
+                glEnableVertexAttribArray(texAttrib); // 
+                glVertexAttribPointer(
+                    texAttrib, 
+                    3, 
+                    GL_FLOAT,   // 定义每个属性的数据类型
+                    GL_FALSE,   // GL_FALSE, GL_TRUE
+                    sizeof(tex_vertex), 
+                    (void *)(3 * sizeof(GLfloat))); // 偏移量为3，因为前三个为x, y and pad, 想要读取的数据为 s, t and u
 
                 glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Quad_EBO);
 
-                x += quadSize;
+                x += quadSize; // x 在每次增加 列数之后增加
                 ++ptr;
             }
 
-            y -= quadSize;
-            x = 0.0f;
+            y -= quadSize; // 增加行数之后y减小， 因此，从最左上角开始设置
+            x = -0.5f;      // 从第一列开始
         }
     }
 
-    // Texture Pixel Lookups
-    {
+    // Texture Pixel Lookups  texture像素查找
+    {   
         GLuint pixStart, pixStartTex, pixRearrage, pixRearrageTex;
        
         u32 nTex = (Number_of_Textures_1D + 1) * (Number_of_Textures_1D >> 1);
-        u32 nPix1D = Number_of_Textures_1D * Texture_Resolution;
+        u32 nPix1D = Number_of_Textures_1D * Texture_Resolution; // 32 * 1024 
 
-        glActiveTexture(GL_TEXTURE2);
+        glActiveTexture(GL_TEXTURE2);  // 调用 glActiveTexture 函数，可以选择当前活动的纹理单元，并且后续的纹理操作都会影响到该纹理单元
 
-        u32 *pixStartLookup = PushArrayP(arena, u32, 2 * nTex);
+        u32 *pixStartLookup = PushArrayP(arena, u32, 2 * nTex); // 申请空间 2 * 528 个 u32
         u32 ptr = 0;
-        ForLoop(Number_of_Textures_1D)
+        ForLoop(Number_of_Textures_1D) // 遍历每一个texture
         {
             ForLoop2(Number_of_Textures_1D - index)
             {
-                pixStartLookup[ptr++] = (u32)((index + index2) * Texture_Resolution);
-                pixStartLookup[ptr++] = (u32)(index * Texture_Resolution);
+                pixStartLookup[ptr++] = (u32)((index + index2) * Texture_Resolution); // 列 * 1024   双数索引是列，单数是行
+                pixStartLookup[ptr++] = (u32)(index * Texture_Resolution);            // 行 * 1024
             }
         }
 
-        glGenBuffers(1, &pixStart);
-        glBindBuffer(GL_TEXTURE_BUFFER, pixStart);
-        glBufferData(GL_TEXTURE_BUFFER, sizeof(u32) * 2 * nTex, pixStartLookup, GL_STATIC_DRAW);
+        glGenBuffers(1, &pixStart); // 生成一个缓冲区对象，并将其标识符存储到 pixStart 变量中。这样，pixStart 变量就可以用于引用这个生成的缓冲区对象
+        glBindBuffer(GL_TEXTURE_BUFFER, pixStart); // 缓冲区对象 pixStart 就会被绑定到当前的纹理缓冲区上，后续的操作会影响这个缓冲区对象
+        glBufferData(GL_TEXTURE_BUFFER, sizeof(u32) * 2 * nTex, pixStartLookup, GL_STATIC_DRAW);  // 将数据从 pixStartLookup 指向的内存区域拷贝到绑定到 GL_TEXTURE_BUFFER 目标的缓冲区对象中，大小为 sizeof(u32) * 2 * nTex 字节，并且告诉 OpenGL 这些数据是静态的，不会频繁地变化
 
-        glGenTextures(1, &pixStartTex);
-        glBindTexture(GL_TEXTURE_BUFFER, pixStartTex);
-        glTexBuffer(GL_TEXTURE_BUFFER, GL_RG32UI, pixStart);
+        glGenTextures(1, &pixStartTex);  // 生成一个纹理对象，并将其标识符存储到 pixStartTex 变量中
+        glBindTexture(GL_TEXTURE_BUFFER, pixStartTex); // 纹理对象 pixStartTex 就会被绑定到当前的纹理缓冲区上，后续的纹理操作（比如使用 glTexBuffer 函数将其与纹理缓冲区对象关联）将会影响到这个纹理对象
+        glTexBuffer(  // 纹理缓冲区对象与缓冲区对象关联的函数
+            GL_TEXTURE_BUFFER,  // 要关联到缓冲区的纹理目标，这里是 GL_TEXTURE_BUFFER，表示纹理缓冲区。
+            GL_RG32UI,     // 纹理缓冲区数据的格式， GL_RG32UI表示每个像素由两个u32组成，一个红色分量和一个绿色分量
+            pixStart);  //  缓冲区对象的标识符，这个缓冲区会与纹理缓冲区关联
 
-        Contact_Matrix->pixelStartLookupBuffer = pixStart;
-        Contact_Matrix->pixelStartLookupBufferTex = pixStartTex;
+        Contact_Matrix->pixelStartLookupBuffer = pixStart;       // 缓冲区对象标识符 
+        Contact_Matrix->pixelStartLookupBufferTex = pixStartTex; // 纹理对象标识符
 
-        FreeLastPushP(arena); // pixStartLookup
+        FreeLastPushP(arena); // pixStartLookup  释放存放像素点开始的空间
 
-        glActiveTexture(GL_TEXTURE3);
+        glActiveTexture(GL_TEXTURE3); // 激活第三个texture，以下代码会影响第三个texture
 
-        u32 *pixRearrageLookup = PushArrayP(arena, u32, nPix1D);
+        u32 *pixRearrageLookup = PushArrayP(arena, u32, nPix1D); // 申请 1024 * 32 个u32的空间
         ForLoop(nPix1D)
         {
-            pixRearrageLookup[index] = (u32)index;
+            pixRearrageLookup[index] = (u32)index;  // 每一个像素的索引
         }
 
-        glGenBuffers(1, &pixRearrage);
+        glGenBuffers(1, &pixRearrage); // 像素的索引添加到 texture 里面
         glBindBuffer(GL_TEXTURE_BUFFER, pixRearrage);
         glBufferData(GL_TEXTURE_BUFFER, sizeof(u32) * nPix1D, pixRearrageLookup, GL_DYNAMIC_DRAW);
 
-        glGenTextures(1, &pixRearrageTex);
+        glGenTextures(1, &pixRearrageTex); // 像素的索引从 buffer 关联到 texture 中
         glBindTexture(GL_TEXTURE_BUFFER, pixRearrageTex);
         glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, pixRearrage);
 
-        Contact_Matrix->pixelRearrangmentLookupBuffer = pixRearrage;
-        Contact_Matrix->pixelRearrangmentLookupBufferTex = pixRearrageTex;
+        Contact_Matrix->pixelRearrangmentLookupBuffer = pixRearrage; // buffer 的索引
+        Contact_Matrix->pixelRearrangmentLookupBufferTex = pixRearrageTex; // texture 的索引
 
-        FreeLastPushP(arena); // pixRearrageLookup
+        FreeLastPushP(arena); // pixRearrageLookup 释放存放像素点索引的数组
 
-        glUniform1ui(glGetUniformLocation(Contact_Matrix->shaderProgram, "pixpertex"), Texture_Resolution);
-        glUniform1f(glGetUniformLocation(Contact_Matrix->shaderProgram, "oopixpertex"), 1.0f / (f32)Texture_Resolution);
-        glUniform1ui(glGetUniformLocation(Contact_Matrix->shaderProgram, "ntex1dm1"), Number_of_Textures_1D - 1);
+        glUniform1ui(glGetUniformLocation(Contact_Matrix->shaderProgram, "pixpertex"), Texture_Resolution); // 将1024传递给 pixpertex，每个texture有多少个像素点
+        glUniform1f(glGetUniformLocation(Contact_Matrix->shaderProgram, "oopixpertex"), 1.0f / (f32)Texture_Resolution); // 将 1 / 1024 传递给 oopixpertex 
+        glUniform1ui(glGetUniformLocation(Contact_Matrix->shaderProgram, "ntex1dm1"), Number_of_Textures_1D - 1); // 将31传递给 ntex1dm1 
 
-        glActiveTexture(GL_TEXTURE0);
+        glActiveTexture(GL_TEXTURE0); //  关闭激活的texture 3
     }
 
     GLuint posAttribFlatShader = (GLuint)glGetAttribLocation(Flat_Shader->shaderProgram, "position");
@@ -8889,7 +9039,7 @@ MainArgs
     #ifdef DEBUG
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-    // TODO: CHECK THE PROBLEM
+    // TODO: CHECK THE PROBLEM, no idea of the exception 
     // glDebugMessageCallback( MessageCallback, 0 ); // Exception has occurred. EXC_BAD_ACCESS (code=1, address=0x0)
     #endif
     
