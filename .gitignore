@@ -1,0 +1,7 @@
+.vscode/
+app/
+ascii.dSYM/
+build_cmake/
+builddir/
+subprojects/
+.DS_Store

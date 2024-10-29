@@ -28,6 +28,7 @@ SOFTWARE.
 #define __STDC_FORMAT_MACROS
 #pragma clang diagnostic pop
 
+
 #ifdef _WIN32
 #define WINVER 0x0601 // Target Windows 7 as a Minimum Platform
 #define _WIN32_WINNT 0x0601
@@ -47,11 +48,15 @@ SOFTWARE.
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#ifdef _WIN32
-#include <intrin.h>
-#else  // problem is here
-#include <x86intrin.h>  // please use ```arch -x86_64 zsh```, before run the compiling
-#endif
+
+/*
+    尝试注释此处
+*/
+// #ifdef _WIN32
+// #include <intrin.h>
+// #else  // problem is here
+// #include <x86intrin.h>  // please use ```arch -x86_64 zsh```, before run the compiling
+// #endif
 
 #include "libdeflate.h"
 
@@ -147,11 +152,15 @@ typedef size_t memptr;
 会先执行第一个线程屏障 ThreadFence，然后执行你的代码，最后再执行第二个线程屏障 ThreadFence，
 确保插入的代码执行顺序正确。
 */
-#define FenceIn(x) ThreadFence; \ 
+#define FenceIn(x) ThreadFence; \
 	x; \
 	ThreadFence 
 
 typedef volatile u32 threadSig;
+
+/* 定义用于 color map 的变量 */
+extern f32 Color_Map_Data[][768];
+extern const char * Color_Map_Names[];
 
 #ifndef _WIN32
 typedef pthread_t thread;
@@ -273,7 +282,7 @@ thread_context
 #define MegaByte(x) 1024*KiloByte(x)
 #define GigaByte(x) 1024*MegaByte(x)
 
-#define Default_Memory_Alignment_Pow2 4
+#define Default_Memory_Alignment_Pow2 4  // 对齐的字节数为4
 
 struct memory_arena
 {
@@ -308,8 +317,9 @@ RestoreMemoryArenaFromSnapshot(memory_arena *arena, memory_arena_snapshot *snaps
 global_function
 u64
 GetAlignmentPadding(u64 base, u32 alignment_pow2)
-{
-	u64 alignment = (u64)Pow2(alignment_pow2);
+{ // 通常内存是由一个个字节组成的，cpu在存取数据时，并不是以字节为单位存储，而是以块为单位存取。块的大小为内存存取力度，频繁存取未对齐的数据会极大降低cpu的性能
+  // 如果一个int型（假设为32位系统）如果存放在偶地址开始的地方，那么一个读周期就可以读出这32bit，而如果存放在奇地址开始的地方，就需要2个读周期，并对两次读出的结果的高低字节进行拼凑才能得到该32bit数据
+	u64 alignment = (u64)Pow2(alignment_pow2); 
 	u64 result = ((base + alignment - 1) & ~(alignment - 1)) - base;
 
 	return(result);
@@ -318,7 +328,7 @@ GetAlignmentPadding(u64 base, u32 alignment_pow2)
 global_function
 u32
 AlignUp(u32 x, u32 alignment_pow2)
-{
+{ // 向上对齐
 	u32 alignment_m1 = Pow2(alignment_pow2) - 1;
 	u32 result = (x + alignment_m1) & ~alignment_m1;
 
@@ -328,28 +338,27 @@ AlignUp(u32 x, u32 alignment_pow2)
 global_function
 void
 CreateMemoryArena_(memory_arena *arena, u64 size, u32 alignment_pow2 = Default_Memory_Alignment_Pow2)
-{
+{ // 初始化当前的arena （调用时候输入是arena->next）
    u64 linkSize = sizeof(memory_arena);
-   linkSize += GetAlignmentPadding(linkSize, alignment_pow2);
+   linkSize += GetAlignmentPadding(linkSize, alignment_pow2); // 对齐
    u64 realSize = size + linkSize;
+   arena->currentSize = 0; // 定义当前arena的特征
+   arena->active = 1;      // 激活当前arena
+   arena->maxSize = size;  // 设置当前arena能存储的最大值，note：这三个的空间在初始化上一个arena的时候已经分配了
 
-#ifndef _WIN32
-   posix_memalign((void **)&arena->base, Pow2(alignment_pow2), realSize);
+#ifndef _WIN32 
+   posix_memalign((void **)&arena->base, Pow2(alignment_pow2), realSize); //如果不是在win32则使用该方法初始化，将内存块的地址给到arena->base， arena->next, arena->currentSize, arena->maxSize, arena->active的地址已经初始化上一个arena的时候分配了
 #else
 #include <memoryapi.h>
    (void)alignment_pow2;
    arena->base = (u08 *)VirtualAlloc(NULL, realSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-#endif
-   arena->currentSize = 0;
-   arena->maxSize = size;
+#endif 
 #pragma clang diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-align"	
-   arena->next = (memory_arena *)arena->base;
+   arena->next = (memory_arena *)arena->base; // 初始化出来的空间的前48个字节存储下一个arena的信息
 #pragma clang diagnostic pop
-   arena->base += linkSize;
-
-   arena->next->base = 0;
-   arena->active = 1;
+   arena->base += linkSize;  // 当前开始的地址, 实际开始存储信息的地址要排除arena自己所需的5个存储指针的内存（40 + 补齐值 8）
+   arena->next->base = 0; // 应该指向下一个arena的base，但是下一个还没有被分配，因此为0. 
 }
 
 #define CreateMemoryArena(arena, size, ...) CreateMemoryArena_(&arena, size, ##__VA_ARGS__)
@@ -395,35 +404,35 @@ PushSize_(memory_arena *arena, u64 size, u32 alignment_pow2 = Default_Memory_Ali
 {
    if (!arena->active && arena->next && arena->next->base && !arena->next->currentSize)
    {
-      arena->active = 1;
+      arena->active = 1; // 如果当前区域没有被激活，存在下一个分配区域，已经初始化但是并未使用，则将当前区域设置为激活
    }
    
-   u64 padding = GetAlignmentPadding((u64)(arena->base + arena->currentSize), alignment_pow2);
+   u64 padding = GetAlignmentPadding((u64)(arena->base + arena->currentSize), alignment_pow2); // 向上取4字节对齐，得到需要补充的字节数padding
 
    void *result;
-   if (!arena->active || ((size + arena->currentSize + padding + sizeof(u64)) > arena->maxSize))
+   if (!arena->active || ((size + arena->currentSize + padding + sizeof(u64)) > arena->maxSize)) // 如果当前没有被激活或者是当前申请的空间大于最大的容许值, 则激活下一个
    {
-      arena->active = 0;
-      if (arena->next)
+      arena->active = 0; // 设置当前为未激活 
+      if (arena->next)  // 如果存在下一个arena空间
       {
-	 if (arena->next->base)
-	 {
-	    result = PushSize_(arena->next, size, alignment_pow2);
-	 }
-	 else
-	 {
-	    u64 linkSize = sizeof(memory_arena);
-	    linkSize += GetAlignmentPadding(linkSize, alignment_pow2);
-	    u64 realSize = size + padding + sizeof(u64) + linkSize;
-	    realSize = Max(realSize, arena->maxSize);
-	    
-	    CreateMemoryArenaP(arena->next, realSize, alignment_pow2);
-	    result = PushSize_(arena->next, size, alignment_pow2);
-	 }
+        if (arena->next->base)  // 下一个arena已经被初始化
+        {
+            result = PushSize_(arena->next, size, alignment_pow2);  // 从下一个arena 申请size 
+        }
+        else
+        {
+            u64 linkSize = sizeof(memory_arena);  // 获取该struct的大小, 40
+            linkSize += GetAlignmentPadding(linkSize, alignment_pow2);  // padding  = 8 
+            u64 realSize = size + padding + sizeof(u64) + linkSize;
+            realSize = Max(realSize, arena->maxSize);
+            
+            CreateMemoryArenaP(arena->next, realSize, alignment_pow2);  // 初始化下一个arena，主要是初始化下一个arena的base的值，arena->next指向下一个arena，arena->next->base = arena->next + 48 即开始存储数据的位置，因为前40个存储了3个u64和两个指针，以及8个补全
+            result = PushSize_(arena->next, size, alignment_pow2);  // 初始化空间之后返回当前result的地址
+        }
       }
-      else
+      else // 如果不存在arena->next，这是不可能的，因为在初始化的时候arena->next指向了arena->base，因此不可能为空，如果确实发生则会报错
       {
-	 result = 0;
+	    result = 0;
 #if defined(__APPLE__) || defined(_WIN32)
 #ifdef PrintError
 	 PrintError("Push of %llu bytes failed, out of memory", size);
@@ -441,12 +450,12 @@ PushSize_(memory_arena *arena, u64 size, u32 alignment_pow2 = Default_Memory_Ali
       }
    }
    else
-   {
-      result = arena->base + arena->currentSize + padding;
-      arena->currentSize += (size + padding + sizeof(u64));
+   {  // 此处为递归函数的出口
+      result = arena->base + arena->currentSize + padding;  // 存储在同一个arena中
+      arena->currentSize += (size + padding + sizeof(u64)); // 更新大小
 #pragma clang diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-align"		
-      *((u64 *)(arena->base + arena->currentSize - sizeof(u64))) = (size + padding);
+      *((u64 *)(arena->base + arena->currentSize - sizeof(u64))) = (size + padding); // 多申请的8个字节表示
 #pragma clang diagnostic pop
    }
 
@@ -816,17 +825,17 @@ ThreadPoolAddWork(thread_pool *threadPool, void (*function)(void*), void *arg)
     thread_job *job;
     
     BinarySemaphoreWait(threadPool->jobQueue.hasFree);
-    while (!(job = GetFreeThreadJob(&threadPool->jobQueue)))
+    while (!(job = GetFreeThreadJob(&threadPool->jobQueue))) // while no free thread in the thread pool
     {
-	printf("Waiting for a free job...\n");
-	sleep(1);
-	BinarySemaphoreWait(threadPool->jobQueue.hasFree);
+        printf("Waiting for a free job...\n");
+        sleep(1);
+        BinarySemaphoreWait(threadPool->jobQueue.hasFree);
     }
     
     job->function = function;
     job->arg = arg;
 
-    JobQueuePush(&threadPool->jobQueue, job);
+    JobQueuePush(&threadPool->jobQueue, job); // give the job queue to 
 }
 
 global_function
@@ -1232,11 +1241,8 @@ FastHash32(void *buf, u64 len, u64 seed)
     return((u32)(h - (h >> 32)));
 }
 
-#endif
 
-global_function
-u32
-IsPrime(u32 n)
+global_function u32 IsPrime(u32 n)
 {  
    if (n <= 1)	return(0);
    if (n <= 3)	return(1);
@@ -1253,9 +1259,7 @@ IsPrime(u32 n)
    return(1);
 }  
 
-global_function
-u32
-NextPrime(u32 N) 
+global_function u32 NextPrime(u32 N) 
 { 
    if (N <= 1) return(2); 
 
@@ -1263,3 +1267,7 @@ NextPrime(u32 N)
 
    return(N); 
 } 
+
+#endif
+
+

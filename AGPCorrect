@@ -4,6 +4,15 @@ import sys
 import gzip
 from Bio import SeqIO
 from binascii import hexlify
+import copy
+import re
+
+
+def remove_after_last_plus_or_minus(s):
+    # 使用正则表达式匹配最后一个 + 或 - 及其后的所有字符
+    # 但只删除 + 或 - 之后的字符
+    return re.sub(r'([+-]).*$', r'\1', s)
+
 
 print(
     "="*20, "\n",
@@ -40,61 +49,80 @@ print(
     sep="\n",
 )
 
+# correct contig name
+contig_name_prefix = list(seqs.keys())[0].split('_')[0]
+lines_name_corrected = []
+with open(sys.argv[2], "r") as f:
+    for line in f:
+        line = line[:-1]  # delete the "\n"
+        if line.startswith("#") or line.endswith("proximity_ligation\n"): 
+            lines_name_corrected.append(line)
+            continue
+        line = remove_after_last_plus_or_minus(line).strip().split("\t")
+        if line[4] == "W":
+            line[-4] = f"{contig_name_prefix}_{line[-4].split("_")[1]}"
+            lines_name_corrected.append("\t".join(line))
+                
+
 # record all of the fragments
 seen = {}
-with open(sys.argv[2], "r") as f:
-    for line in f:
-        if not line.startswith("#"):
-            line = line.split("\t")
-            if line[4] == "W": # line[-4] is the name of the fragments
+for line in lines_name_corrected:
+    if not line.startswith("#") and len(line) > 10:
+        line = line.strip().split("\t")
+        if line[4] == "W": # line[-4] is the name of the fragments
+            try:
                 seen[line[-4]] = max(seen.setdefault(line[-4], 0), int(line[-2]))
+            except ValueError as s:
+                print(f"line: {line}")
+                raise ValueError(s)
 
-with open(sys.argv[2], "r") as f:
-    curr_scaff = None
-    maxn = 1
-    for line in f:
-        line = line[:-1]
-        if not line.startswith("#"):
-            line = line.split("\t")
+# =============================
+# correct the end of the frag according to the end length of the contig   
+# print the frags seen in the agp file
+curr_scaff = None
+maxn = 1
+for line in lines_name_corrected:
+    if not line.startswith("#") and len(line)>10:
+        line = line.strip().split("\t")
+        if curr_scaff != line[0]:
+            if curr_scaff:  # a new scaffold
+                print(f"{curr_scaff}: {correct} bp correction", file=sys.stderr)
+            curr_scaff = line[0]
+            correct = 0
 
-            if curr_scaff != line[0]:
-                if curr_scaff:  # a new scaffold
-                    print(f"{curr_scaff}: {correct} bp correction", file=sys.stderr)
-                curr_scaff = line[0]
-                correct = 0
+        line[1] = str(int(line[1]) + correct)   # update the global coordinate of the begining of the frag
 
-            line[1] = str(int(line[1]) + correct)
+        
+        if line[4] == "W" and (this_l := int(line[-2])) == seen[line[-4]]:  # end of this frag # if this frag is the end of one contig
+            # length of this fragment is the end
+            acc_l = seqs[line[-4]]
+            correct += (acc_l - this_l)
 
-            if line[4] == "W" and ((this_l := int(line[-2])) == seen[line[-4]]):
-                # length of this fragment is the end
-                correct += (acc_l := seqs[line[-4]]) - this_l
-
-                if int(line[-3]) >= acc_l:
-                    sys.exit(
-                        "Error with line: {}\n{} > {}".format(
-                            "\t".join(line), line[-3], acc_l
-                        )
+            if int(line[-3]) >= acc_l:  # raise if the begining exceeds the accurate end of the original contig
+                sys.exit(
+                    "Error with line: {}\n{} > {}".format(
+                        "\t".join(line), line[-3], acc_l
                     )
+                )
+            line[-2] = str(acc_l)  # correct the end of the fragment according to the accurate len
 
-                line[-2] = str(acc_l)
+        line[2] = str(int(line[2]) + correct)  # correct the scaffold's coordinate
 
-            line[2] = str(int(line[2]) + correct)
+        print("\t".join(line), file=f_output)  # output the line into the output file
+        maxn = max(maxn, int(line[0].split("_")[-1]))
+    else:
+        if line.startswith("# DESCRIPTION"):
+            line = line.replace("\n", "") + "\tModified by PretextView_AGPCorrect"
+        print(line, file=f_output)
 
-            print("\t".join(line), file=f_output)
-            maxn = max(maxn, int(line[0].split("_")[-1]))
-        else:
-            if line.startswith("# DESCRIPTION"):
-                line += "\tModified by PretextView_AGPCorrect"
-            print(line, file=f_output)
+if curr_scaff:
+    print(f"{curr_scaff}: {correct} bp correction", file=sys.stderr)
 
-    if curr_scaff:
-        print(f"{curr_scaff}: {correct} bp correction", file=sys.stderr)
-
-# print the file scaffold which no in seen 
+# print the contigs which not in seen 
 maxn += 1
 print(
     *(
-        "\t".join(f"Scaffold_{maxn + k}", "1", str(n), "1", "W", s, "1", str(n), "+")
+        "\t".join([f"Scaffold_{maxn + k}", "1", str(n), "1", "W", s, "1", str(n), "+"])
         for k, (s, n) in enumerate(
             (s, n) for s, n in seqs.items() if s not in set(seen.keys())
         )
