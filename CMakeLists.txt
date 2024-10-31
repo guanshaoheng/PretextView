@@ -12,12 +12,24 @@ set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
 set(CMAKE_BUILD_TYPE Debug)  # 设置调试版本
 
 
-set(source_file PretextView.cpp glad.c )
+set(source_file PretextView.cpp glad.c)
 include_directories(
     include
+    src
     subprojects/glfw/include
     subprojects/libdeflate
 )
+
+
+add_subdirectory(subprojects/glfw)
+add_subdirectory(subprojects/libdeflate)
+
+set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
+find_package(Torch REQUIRED)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
+
+add_library(aisort STATIC src/aisort.cpp )
+target_link_libraries(aisort PRIVATE ${TORCH_LIBRARIES})
 
 add_executable(
     ${target_name} 
@@ -35,25 +47,16 @@ if (APPLE)
         else()
             message(STATUS "${library} found: ${${library}_LIB}")  
         endif()
-        target_link_libraries(${target_name} ${${library}_LIB} )
+        target_link_libraries(${target_name} PRIVATE ${${library}_LIB} )
     endforeach()
 endif()
 
+target_link_libraries(${target_name} PRIVATE glfw libdeflate_static "${TORCH_LIBRARIES}" aisort)  
 
-find_library ( GLFW_LIBRARY glfw PATHS subprojects/glfw/build/src )  # find_library ( VARIABLE_NAME lib_name(without lib as sufix, without .so .dll or .dylib as extension) PATHS paths (optional to search for the library) ) 
-if (NOT GLFW_LIBRARY)
-    message(FATAL_ERROR "glfw not found")
-else()
-    message(STATUS "glfw found: ${GLFW_LIBRARY}")
-endif()
 
-find_library ( DEFLATE_LIBRARY deflate PATHS subprojects/libdeflate ) 
-if (NOT DEFLATE_LIBRARY)
-    message(FATAL_ERROR "libdeflate not found")
-else()
-    message(STATUS "libdeflate found: ${DEFLATE_LIBRARY}")
-endif()
- 
-
-target_link_libraries(${target_name} ${DEFLATE_LIBRARY} ${GLFW_LIBRARY})
-
+# set the shared/dynamic library path for the installed binary
+set_target_properties(
+    ${target_name} 
+    PROPERTIES 
+    INSTALL_RPATH "${CMAKE_INSTALL_RPATH};${CMAKE_INSTALL_PREFIX}/lib;${CMAKE_SOURCE_DIR}/subprojects/libtorch/lib")  
+install(TARGETS ${target_name} DESTINATION bin)
