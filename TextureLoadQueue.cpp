@@ -20,25 +20,23 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#ifndef HEADER_H  // 防止重定义错误
 #include "Header.h"
-#endif
 
 
 #define Number_Of_Texture_Buffers_Per_Queue 8
 #define Number_Of_Texture_Buffer_Queues 8
 
-// 定义缓冲区结构体
+// 
 struct texture_buffer 
 {
-    u08 *texture;                            // 存储纹理数据的指针
-    u08 *compressionBuffer;                  // 存储压缩数据的指针
-    libdeflate_decompressor *decompressor;   // 解压器指针
-    FILE *file;                              // 文件指针，用于读取数据
+    u08 *texture;                            // decompressed texture
+    u08 *compressionBuffer;                  // compressed texture
+    libdeflate_decompressor *decompressor;   // decompressor
+    FILE *file;                              // file pointer
     u32 homeIndex;                           // 纹理缓冲区索引
-    u16 x;                                   // 缓冲区宽度
-    u16 y;                                   // 缓冲区高度
-    texture_buffer *prev;                    // 前一个缓冲区的指针，用于构建双向链表
+    u16 x;                                   // raw number of the texture
+    u16 y;                                   // column number 
+    texture_buffer *prev;                    // previous buffer
 };
 
 // 定义单一纹理缓冲区队列
