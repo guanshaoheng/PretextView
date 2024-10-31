@@ -35,7 +35,7 @@ SOFTWARE.
 #include <windows.h>
 #include <Knownfolders.h>
 #include <Shlobj.h>
-#endif
+#endif // _WIN32
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -49,8 +49,12 @@ SOFTWARE.
 #include <fcntl.h>
 
 
+// use the cpp std library
+#include <iostream>
+#include <memory>
+
 /*
-    尝试注释此处
+    original version not commented here
 */
 // #ifdef _WIN32
 // #include <intrin.h>
@@ -96,8 +100,8 @@ typedef size_t memptr;
 
 #define f32_max MAXFLOAT
 
-#define Min(x, y) (x < y ? x : y)
-#define Max(x, y) (x > y ? x : y)
+#define my_Min(x, y) (x < y ? x : y)
+#define my_Max(x, y) (x > y ? x : y)
 
 #define Abs(x) (x > 0 ? x : -x)
 
@@ -139,13 +143,13 @@ typedef size_t memptr;
 #define __sync_fetch_and_add(x, y) _InterlockedExchangeAdd(x, y)
 #define __sync_fetch_and_sub(x, y) _InterlockedExchangeAdd(x, -y)
 #define __atomic_store(x, y, z) _InterlockedCompareExchange(x, *y, *x)
-#endif
+#endif // _WIN32
 
 #ifndef _WIN32
 #define ThreadFence __asm__ volatile("" ::: "memory")
 #else
 #define ThreadFence _mm_mfence()
-#endif
+#endif // _WIN32
 
 /*
 定义了一个名为 FenceIn 的宏，它的作用是在一个代码块中插入线程屏障（Thread Fence），
@@ -197,11 +201,11 @@ typedef CONDITION_VARIABLE cond;
 #define WaitOnCond(cond, mutex) SleepConditionVariableCS(&cond, &mutex, INFINITE) 
 #define SignalCondition(x) WakeConditionVariable(&x)
 #define BroadcastCondition(x) WakeAllConditionVariable(&x)
-#endif
+#endif // _WIN32
 
 #if defined(__AVX2__) && !defined(NoAVX)
 #define UsingAVX
-#endif
+#endif // __AVX2__
 
 // https://www.flipcode.com/archives/Fast_log_Function.shtml
 global_function
@@ -276,7 +280,7 @@ thread_context
 #define Assert(x) assert(x)
 #else
 #define Assert(x)
-#endif
+#endif // DEBUG
 
 #define KiloByte(x) 1024*x
 #define MegaByte(x) 1024*KiloByte(x)
@@ -352,7 +356,7 @@ CreateMemoryArena_(memory_arena *arena, u64 size, u32 alignment_pow2 = Default_M
 #include <memoryapi.h>
    (void)alignment_pow2;
    arena->base = (u08 *)VirtualAlloc(NULL, realSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-#endif 
+#endif  // _WIN32
 #pragma clang diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-align"	
    arena->next = (memory_arena *)arena->base; // 初始化出来的空间的前48个字节存储下一个arena的信息
@@ -424,7 +428,7 @@ PushSize_(memory_arena *arena, u64 size, u32 alignment_pow2 = Default_Memory_Ali
             u64 linkSize = sizeof(memory_arena);  // 获取该struct的大小, 40
             linkSize += GetAlignmentPadding(linkSize, alignment_pow2);  // padding  = 8 
             u64 realSize = size + padding + sizeof(u64) + linkSize;
-            realSize = Max(realSize, arena->maxSize);
+            realSize = my_Max(realSize, arena->maxSize);
             
             CreateMemoryArenaP(arena->next, realSize, alignment_pow2);  // 初始化下一个arena，主要是初始化下一个arena的base的值，arena->next指向下一个arena，arena->next->base = arena->next + 48 即开始存储数据的位置，因为前40个存储了3个u64和两个指针，以及8个补全
             result = PushSize_(arena->next, size, alignment_pow2);  // 初始化空间之后返回当前result的地址
@@ -438,14 +442,14 @@ PushSize_(memory_arena *arena, u64 size, u32 alignment_pow2 = Default_Memory_Ali
 	 PrintError("Push of %llu bytes failed, out of memory", size);
 #else
 	 fprintf(stderr, "Push of %llu bytes failed, out of memory.\n", size);
-#endif
+#endif // PrintError
 #else
 #ifdef PrintError
 	 PrintError("Push of %lu bytes failed, out of memory", size);
 #else
 	 fprintf(stderr, "Push of %lu bytes failed, out of memory.\n", size);
-#endif
-#endif	
+#endif // PrintError
+#endif	// __APPLE__ || _WIN32
 	 *((volatile u32 *)0) = 0;
       }
    }
@@ -648,7 +652,7 @@ global_function
 void *
 #else
 DWORD WINAPI
-#endif
+#endif // _WIN32
 ThreadFunc(void *in)
 {
     thread_context *context = (thread_context *)in;
@@ -712,7 +716,7 @@ ThreadInit(memory_arena *arena, thread_pool *pool, thread_context **context, u32
     LaunchThread((*context)->th, ThreadFunc, *context);
 #ifndef _WIN32
     DetachThread((*context)->th);
-#endif
+#endif // _WIN32
 }
 
 #define Number_Thread_Jobs 1024
@@ -816,7 +820,7 @@ ThreadPoolInit(memory_arena *arena, u32 nThreads)
 #ifdef _WIN32
 #include <ctime>
 #define sleep(x) Sleep(1000 * x)
-#endif
+#endif // _WIN32
 
 global_function
 void
@@ -1228,7 +1232,7 @@ FastHash64(void *buf, u64 len, u64 seed)
     HashMix(h);
     return(h);
 } 
-#endif
+#endif // _WIN32
 
 global_function
 u32
@@ -1268,6 +1272,6 @@ global_function u32 NextPrime(u32 N)
    return(N); 
 } 
 
-#endif
+#endif // HEADER_H
 
 
