@@ -18,11 +18,13 @@ include_directories(
     src
     subprojects/glfw/include
     subprojects/libdeflate
+    subprojects/glm
 )
 
 
 add_subdirectory(subprojects/glfw)
 add_subdirectory(subprojects/libdeflate)
+add_subdirectory(subprojects/glm)
 
 set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
 find_package(Torch REQUIRED)
@@ -33,8 +35,15 @@ target_link_libraries(aisort PRIVATE ${TORCH_LIBRARIES})
 
 add_executable(
     ${target_name} 
-    ${source_file} 
-    )
+    PretextView.cpp )
+target_compile_definitions(${target_name} PRIVATE PV=${PROJECT_VERSION})
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_definitions(${target_name} PRIVATE DEBUG)
+endif()
+
+add_library(glad STATIC glad.c)
+add_library(shaders STATIC src/shaders.cpp)
+
 
 # 先添加这些库才能添加glfw静态库 （如果是添加动态库无所谓）
 # 定义需要的库列表，寻找这些库并且将这些库添加到make的目标中
@@ -51,7 +60,7 @@ if (APPLE)
     endforeach()
 endif()
 
-target_link_libraries(${target_name} PRIVATE glfw libdeflate_static "${TORCH_LIBRARIES}" aisort)  
+target_link_libraries(${target_name} PRIVATE glfw libdeflate_static ${TORCH_LIBRARIES} aisort glm glad shaders)  
 
 
 # set the shared/dynamic library path for the installed binary
