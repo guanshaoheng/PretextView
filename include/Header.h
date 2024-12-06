@@ -23,6 +23,8 @@ SOFTWARE.
 #ifndef HEADER_H
 #define HEADER_H
 
+#include "utilsPretextView.h"
+
 #pragma clang diagnostic push
 #pragma GCC diagnostic ignored "-Wreserved-id-macro"
 #define __STDC_FORMAT_MACROS
@@ -64,74 +66,6 @@ SOFTWARE.
 
 #include "libdeflate.h"
 
-typedef int8_t s08;
-typedef int16_t s16;
-typedef int32_t s32;
-typedef int64_t s64;
-
-// using u08=uint8_t; // 
-typedef uint8_t u08;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-
-typedef float f32;
-typedef double f64;
-
-typedef size_t memptr;
-
-#define global_function static
-#define global_variable static
-
-#define s08_max INT8_MAX
-#define s16_max INT16_MAX
-#define s32_max INT32_MAX
-#define s64_max INT64_MAX
-
-#define s08_min INT8_MIN
-#define s16_min INT16_MIN
-#define s32_min INT32_MIN
-#define s64_min INT64_MIN
-
-#define u08_max UINT8_MAX
-#define u16_max UINT16_MAX
-#define u32_max UINT32_MAX
-#define u64_max UINT64_MAX
-
-#define f32_max MAXFLOAT
-
-#define my_Min(x, y) (x < y ? x : y)
-#define my_Max(x, y) (x > y ? x : y)
-
-#define Abs(x) (x > 0 ? x : -x)
-
-#define u08_n (u08_max + 1)
-
-#define Square(x) (x * x)
-
-#define Pow10(x) (IntPow(10, x))
-#define Pow2(N) (1 << N)
-
-#define PI 3.141592653589793238462643383279502884195
-#define TwoPI 6.283185307179586476925286766559005768391
-#define Sqrt2 1.414213562373095048801688724209698078569
-#define SqrtHalf 0.7071067811865475244008443621048490392845
-
-#define ArrayCount(array) (sizeof(array) / sizeof(array[0]))
-#define ForLoop(n) for (u32 index = 0; index < (n); ++index)
-#define ForLoop64(n) for (u64 index = 0; index < (n); ++index)
-#define ForLoop2(n) for (u32 index2 = 0; index2 < (n); ++index2)
-#define ForLoop3(n) for (u32 index3 = 0; index3 < (n); ++index3)
-#define ForLoopN(i, n) for (u32 i = 0; i < (n); ++i)
-#define TraverseLinkedList(startNode, type) for (type *(node) = (startNode); node; node = node->next)
-#define TraverseLinkedList2(startNode, type) for (type *(node2) = (startNode); node2; node2 = node2->next)
-#define TraverseLinkedList3(startNode, type) for (type *(node3) = (startNode); node3; node3 = node3->next)
-
-#define ArgCount argc
-#define ArgBuffer argv
-#define Main s32 main()
-#define MainArgs s32 main(s32 ArgCount, const char *ArgBuffer[])
-#define EndMain return(0)
 
 #ifndef _WIN32
 #include <pthread.h>

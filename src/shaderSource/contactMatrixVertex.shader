@@ -3,6 +3,7 @@ in vec2 position;  // x, y
 in vec3 texcoord;  // s, t, u
 out vec3 Texcoord;
 uniform mat4 matrix;
+
 void main()
 {
     Texcoord = texcoord;
