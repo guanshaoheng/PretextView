@@ -8,3 +8,12 @@
 [submodule "subprojects/glm"]
 	path = subprojects/glm
 	url = https://github.com/g-truc/glm.git
+[submodule "subprojects/imgui"]
+	path = subprojects/imgui
+	url = https://github.com/ocornut/imgui.git
+[submodule "subprojects/OpenBLAS"]
+	path = subprojects/OpenBLAS
+	url = https://github.com/OpenMathLib/OpenBLAS.git
+[submodule "subprojects/pytorch_scatter"]
+	path = subprojects/pytorch_scatter
+	url = https://github.com/rusty1s/pytorch_scatter.git

@@ -34,20 +34,11 @@ SOFTWARE.
     #include <errno.h>
 #endif // DEBUG
 
-#pragma clang diagnostic push
-#pragma GCC diagnostic ignored "-Wreserved-id-macro"
-#include <glad/glad.h>
-#pragma clang diagnostic pop
 
-#pragma clang diagnostic push
-#pragma GCC diagnostic ignored "-Wdocumentation"
-#pragma GCC diagnostic ignored "-Wdocumentation-unknown-command"
-#pragma GCC diagnostic ignored "-Wreserved-id-macro"
-#include <GLFW/glfw3.h>
-#pragma clang diagnostic pop
+#include "utilsPretextView.h"
 
 #include "TextureLoadQueue.cpp"  // 
-#include "ColorMapData.cpp"      //  导入 color map 的设定
+#include "ColorMapData.cpp"      // add color maps 
 
 #pragma clang diagnostic push
 #pragma GCC diagnostic ignored "-Wfloat-equal"
@@ -87,327 +78,74 @@ SOFTWARE.
 #pragma GCC diagnostic ignored "-Wdouble-promotion"
 #pragma GCC diagnostic ignored "-Wpadded"
 #pragma GCC diagnostic ignored "-Wimplicit-int-conversion"
-#define STB_IMAGE_IMPLEMENTATION
+
 #define STBI_ONLY_PNG
 #ifndef DEBUG
 #define STBI_ASSERT(x)
 #endif
-#include "stb_image.h"
+#ifndef STB_IMAGE_IMPLEMENTATION
+    #define STB_IMAGE_IMPLEMENTATION
+    #include "stb_image.h"
+#endif // STB_IMAGE_IMPLEMENTATION
+
+#ifndef STB_IMAGE_WRITE_IMPLEMENTATION
+    #define STB_IMAGE_WRITE_IMPLEMENTATION
+    #include "stb_image_write.h"
+#endif // STB_IMAGE_WRITE_IMPLEMENTATION
+
 #pragma clang diagnostic pop
 
-#pragma clang diagnostic push
-#pragma GCC diagnostic ignored "-Wpadded"
-#pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
-#pragma GCC diagnostic ignored "-Wfloat-equal"
-#pragma GCC diagnostic ignored "-Wcovered-switch-default"
-#pragma GCC diagnostic ignored "-Wswitch-enum"
-#pragma GCC diagnostic ignored "-Wreserved-id-macro"
-#pragma GCC diagnostic ignored "-Wcomma"
-#pragma GCC diagnostic ignored "-Wextra-semi-stmt"
-#pragma GCC diagnostic ignored "-Wsign-conversion"
-#pragma GCC diagnostic ignored "-Wformat-nonliteral"
-#pragma GCC diagnostic ignored "-Wdouble-promotion"
-#pragma GCC diagnostic ignored "-Wimplicit-int-float-conversion"
-#define NK_PRIVATE
-#define NK_INCLUDE_FIXED_TYPES
-#define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
-#define NK_INCLUDE_FONT_BAKING
-#define NK_INCLUDE_STANDARD_IO
-#define NK_ZERO_COMMAND_MEMORY
-#define NK_INCLUDE_DEFAULT_ALLOCATOR
-#define NK_IMPLEMENTATION
-#define NK_INCLUDE_STANDARD_VARARGS
-//#define NK_KEYSTATE_BASED_INPUT
-#ifndef DEBUG
-#define NK_ASSERT(x)
-#endif
-#include "nuklear.h"
-#pragma clang diagnostic pop
 
 #include "Resources.cpp"
 
+#include "genomeData.h"
+#include "showWindowData.h"
+
+
+// Contact_Matrix->shaderProgram
 global_variable
-const
-GLchar *
-VertexSource_Texture = R"glsl(
-    #version 330
-    in vec2 position;
-    in vec3 texcoord;
-    out vec3 Texcoord;
-    uniform mat4 matrix;
-    void main()
-    {
-        Texcoord = texcoord;
-        gl_Position = matrix * vec4(position, 0.0, 1.0);
-    }
-)glsl";
+std::string
+VertexSource_Texture = readShaderSource((char*)"src/shaderSource/contactMatrixVertex.shader");
+
+// Contact_Matrix->shaderProgram
+global_variable
+std::string
+FragmentSource_Texture = readShaderSource((char*)"src/shaderSource/contactMatrixFragment.shader");
 
 global_variable
-const
-GLchar *
-FragmentSource_Texture = R"glsl(
-    #version 330
-    in vec3 Texcoord;
-    out vec4 outColor;
-    uniform sampler2DArray tex;
-    uniform usamplerBuffer pixstartlookup;
-    uniform usamplerBuffer pixrearrangelookup;
-    uniform uint pixpertex;
-    uniform uint ntex1dm1;
-    uniform float oopixpertex;
-    uniform samplerBuffer colormap;
-    uniform vec3 controlpoints;
-    float bezier(float t)  // 斜线方程
-    {
-        float tsq = t * t;
-        float omt = 1.0 - t;
-        float omtsq = omt * omt; // (1-t)^2
-        // (1-t)^2 * x + 2*t* (1-t)^2 * y + t^2 * z
-        return((omtsq * controlpoints.x) + (2.0 * t * omt * controlpoints.y) + (tsq * controlpoints.z));
-    }
-    float linearTextureID(vec2 coords)
-    {
-        float min;
-        float max;
-        
-        if (coords.x > coords.y)
-        {
-            min = coords.y;
-            max = coords.x;
-        }
-        else
-        {
-            min = coords.x;
-            max = coords.y;
-        }
-
-        int i = int(min);
-        return ((min * ntex1dm1) -
-        ((i & 1) == 1 ? (((i-1)>>1) * min) : 
-         ((i>>1)*(min-1))) + max);
-    }
-    // https://community.khronos.org/t/mipmap-level-calculation-using-dfdx-dfdy/67480
-    float mip_map_level(in vec2 texture_coordinate)
-    {
-        // The OpenGL Graphics System: A Specification 4.2
-        //  - chapter 3.9.11, equation 3.21
-
-
-        vec2  dx_vtc        = dFdx(texture_coordinate);
-        vec2  dy_vtc        = dFdy(texture_coordinate);
-        float delta_max_sqr = max(dot(dx_vtc, dx_vtc), dot(dy_vtc, dy_vtc));
-
-        return 0.5 * log2(delta_max_sqr);
-    }
-    vec3 pixLookup(vec3 inCoords)
-    {
-        vec2 pix = floor(inCoords.xy * pixpertex);
-        
-        vec2 over = inCoords.xy - (pix * oopixpertex);
-        vec2 pixStart = texelFetch(pixstartlookup, int(inCoords.z)).xy;
-        
-        pix += pixStart;
-        
-        pix = vec2(texelFetch(pixrearrangelookup, int(pix.x)).x, texelFetch(pixrearrangelookup, int(pix.y)).x);
-        
-        if (pix.y > pix.x)
-        {
-            pix = vec2(pix.y, pix.x);
-            over = vec2(over.y, over.x);
-        }
-        
-        vec2 tileCoord = pix * oopixpertex;
-        vec2 tileCoordFloor = floor(tileCoord);
-        
-        float z = linearTextureID(tileCoordFloor);
-        
-        pix = tileCoord - tileCoordFloor;
-        pix = clamp(pix + over, vec2(0, 0), vec2(1, 1));
-        
-        return(vec3(pix, z));
-    }
-    // https://www.codeproject.com/Articles/236394/Bi-Cubic-and-Bi-Linear-Interpolation-with-GLSL/
-    float BiLinear( vec3 inCoord, vec2 texSize, float lod )
-    {
-        vec2 texelSize = 1.0 / texSize;
-
-        vec3 coord = pixLookup(inCoord);
-        
-        float p0q0 = textureLod(tex, coord, lod).r;
-        float p1q0 = textureLod(tex, pixLookup(inCoord + vec3(texelSize.x, 0, 0)), lod).r;
-
-        float p0q1 = textureLod(tex, pixLookup(inCoord + vec3(0, texelSize.y, 0)), lod).r;
-        float p1q1 = textureLod(tex, pixLookup(inCoord + vec3(texelSize, 0)), lod).r;
-
-        float a = fract( inCoord.x * texSize.x ); // Get Interpolation factor for X direction.
-                        // Fraction near to valid data.
-	float b = fract( inCoord.y * texSize.y );// Get Interpolation factor for Y direction.
-        
-	float pInterp_q0 = mix( p0q0, p1q0, a ); // Interpolates top row in X direction.
-        float pInterp_q1 = mix( p0q1, p1q1, a ); // Interpolates bottom row in X direction.
-
-        return mix( pInterp_q0, pInterp_q1, b ); // Interpolate in Y direction.
-    }
-    void main()
-    {
-        float mml = mip_map_level(Texcoord.xy * textureSize(tex, 0).xy);
-        
-        float floormml = floor(mml);
-
-        float f1 = BiLinear(Texcoord, textureSize(tex, 0).xy, floormml);
-	float f2 = BiLinear(Texcoord, textureSize(tex, 0).xy, floormml + 1);
-
-        float value = bezier(mix(f1, f2, fract(mml)));
-	int idx = int(round(value * 0xFF));
-        outColor = vec4(texelFetch(colormap, idx).rgb, 1.0);
-    }
-)glsl";
+std::string
+VertexSource_Flat = readShaderSource((char*)"src/shaderSource/flatVertex.shader");
 
 global_variable
-const
-GLchar *
-VertexSource_Flat = R"glsl(
-    #version 330
-    in vec2 position;
-    uniform mat4 matrix;
-    void main()
-    {
-        gl_Position = matrix * vec4(position, 0.0, 1.0);
-    }
-)glsl";
+std::string
+FragmentSource_Flat = readShaderSource((char*)"src/shaderSource/flatFragment.shader");
 
 global_variable
-const
-GLchar *
-FragmentSource_Flat = R"glsl(
-    #version 330
-    out vec4 outColor;
-    uniform vec4 color;
-    void main()
-    {
-        outColor = color;
-    }
-)glsl";
+std::string
+VertexSource_EditablePlot = readShaderSource((char*)"src/shaderSource/editVertex.shader");
 
 global_variable
-const
-GLchar *
-VertexSource_EditablePlot = R"glsl(
-    #version 330
-    in float position;
-    uniform usamplerBuffer pixrearrangelookup;
-    uniform samplerBuffer yvalues;
-    uniform float ytop;
-    uniform float yscale;
-    void main()
-    {
-        float x = position;
-        float realx = texelFetch(pixrearrangelookup, int(x)).x;
-        x /= textureSize(pixrearrangelookup);
-        x -= 0.5;
-        float y = texelFetch(yvalues, int(realx)).x;
-        y *= yscale;
-        y += ytop;
-
-        gl_Position = vec4(x, y, 0.0, 1.0);
-    }
-)glsl";
-
-global_variable
-const
-GLchar *
-FragmentSource_EditablePlot = R"glsl(
-    #version 330
-    out vec4 outColor;
-    uniform vec4 color;
-    void main()
-    {
-        outColor = color;
-    }
-)glsl";
+std::string
+FragmentSource_EditablePlot = readShaderSource((char*)"src/shaderSource/editFragment.shader");
 
 // https://blog.tammearu.eu/posts/gllines/
 global_variable
-const
-GLchar *
-GeometrySource_EditablePlot = R"glsl(
-    #version 330
-    layout (lines) in;
-    layout (triangle_strip, max_vertices = 4) out;
+std::string
+GeometrySource_EditablePlot = readShaderSource((char*)"src/shaderSource/editGeometry.shader");
 
-    uniform mat4 matrix;
-    uniform float linewidth;
+global_variable
+std::string
+VertexSource_UI = readShaderSource((char*)"src/shaderSource/uiVertex.shader");
 
-    void main()
-    {
-        vec3 start = gl_in[0].gl_Position.xyz;
-        vec3 end = gl_in[1].gl_Position.xyz;
-        vec3 lhs = cross(normalize(end-start), vec3(0.0, 0.0, -1.0));  // get a line prependicular to (end - start) on the xy plane
-
-        lhs *= linewidth*0.0007;
-
-        gl_Position = matrix * vec4(start+lhs, 1.0);  // offset the line to add width
-        EmitVertex();
-        gl_Position = matrix * vec4(start-lhs, 1.0);
-        EmitVertex();
-        gl_Position = matrix * vec4(end+lhs, 1.0);
-        EmitVertex();
-        gl_Position = matrix * vec4(end-lhs, 1.0);
-        EmitVertex();
-        EndPrimitive();
-    }
-)glsl";
+global_variable
+std::string
+FragmentSource_UI = readShaderSource((char*)"src/shaderSource/uiFragment.shader");
 
 #define UI_SHADER_LOC_POSITION 0
 #define UI_SHADER_LOC_TEXCOORD 1
 #define UI_SHADER_LOC_COLOR 2
 
-global_variable
-const
-GLchar *
-VertexSource_UI = R"glsl(
-    #version 330
-    layout (location = 0) in vec2 position;
-    layout (location = 1) in vec2 texcoord;
-    out vec2 Texcoord;
-    layout (location = 2) in vec4 color;
-    out vec4 Color;
-    uniform mat4 matrix;
-    void main()
-    {
-        Texcoord = texcoord;
-        Color = color;
-        gl_Position = matrix * vec4(position, 0.0, 1.0);
-    }
-)glsl";
 
-global_variable
-const
-GLchar *
-FragmentSource_UI = R"glsl(
-    #version 330
-    in vec2 Texcoord;
-    in vec4 Color;
-    out vec4 outColor;
-    uniform sampler2D tex;
-    void main()
-    {
-        outColor = texture(tex, Texcoord) * Color;
-    }
-)glsl";
-
-struct
-tex_vertex
-{
-    f32 x, y, pad;
-    f32 s, t, u;
-};
-
-struct
-vertex
-{
-    f32 x, y;
-};
 
 global_variable
 memory_arena
@@ -428,18 +166,6 @@ Window_Width, Window_Height, FrameBuffer_Width, FrameBuffer_Height;
 global_variable
 struct nk_vec2
 Screen_Scale;
-
-enum
-theme
-{
-    THEME_BLACK,
-    THEME_WHITE,
-    THEME_RED,
-    THEME_BLUE,
-    THEME_DARK,
-    
-    THEME_COUNT
-};
 
 global_variable
 theme
@@ -495,95 +221,6 @@ GLFWChangeWindowSize(GLFWwindow *win, s32 width, s32 height)
     UpdateScreenScale();
 }
 
-struct
-contact_matrix
-{
-    GLuint textures;       // 存储一个或多个OpenGL纹理对象的句柄
-    GLuint pixelStartLookupBuffer;
-    GLuint pixelRearrangmentLookupBuffer;
-    GLuint pixelStartLookupBufferTex;
-    GLuint pixelRearrangmentLookupBufferTex;
-    GLint pad;
-    GLuint *vaos;          // 指向顶点数组对象数组
-    GLuint *vbos;          // 指向顶点缓冲区对象数组
-    GLuint shaderProgram;  // 着色器编号
-    GLint matLocation;
-};
-
-struct
-flat_shader
-{
-    GLuint shaderProgram;
-    GLint matLocation;
-    GLint colorLocation;
-    u32 pad;
-};
-
-struct
-ui_shader
-{
-    GLuint shaderProgram;
-    GLint matLocation;
-};
-
-struct
-editable_plot_shader
-{
-    GLuint shaderProgram;
-    GLuint yValuesBuffer;
-    GLuint yValuesBufferTex;
-    GLint matLocation;
-    GLint colorLocation;
-    GLint yScaleLocation;
-    GLint yTopLocation;
-    GLint lineSizeLocation;
-};
-
-struct
-quad_data
-{
-    GLuint *vaos;
-    GLuint *vbos;
-    u32 nBuffers;
-    u32 pad;
-};
-
-struct
-color_maps
-{
-    GLuint *maps;
-    u32 currMap;
-    u32 nMaps;
-    GLint cpLocation;
-    GLfloat controlPoints[3];
-    struct nk_image *mapPreviews;
-};
-
-struct 
-nk_glfw_vertex
-{
-    f32 position[2];
-    f32 uv[2];
-    nk_byte col[4];
-};
-
-struct
-device
-{
-    u08 *lastContextMemory;
-    struct nk_buffer cmds;
-    struct nk_draw_null_texture null;
-    GLuint vbo, vao, ebo;
-    GLuint prog;
-    GLuint vert_shdr;
-    GLuint frag_shdr;
-    GLint attrib_pos;
-    GLint attrib_uv;
-    GLint attrib_col;
-    GLint uniform_tex;
-    GLint uniform_proj;
-    GLuint font_tex;
-};
 
 global_variable
 device *
@@ -691,93 +328,30 @@ global_variable
 texture_buffer_queue *
 Texture_Buffer_Queue;
 
-struct
-pointi
-{
-    s32 x;
-    s32 y;
-};
-
-struct
-pointui
-{
-    u32 x, y;
-};
-
-struct
-pointd
-{
-    f64 x;
-    f64 y;
-};
-
-struct
-point2f
-{
-    f32 x;
-    f32 y;
-};
-
-struct
-quad
-{
-    point2f corner[2];
-};
-
-struct
-point3f
-{
-    f32 x;
-    f32 y;
-    f32 z;
-};
 
 global_variable
 pointd
 Mouse_Move;
 
-struct
-tool_tip
-{
-    pointui pixels;       // point coordinate defined in unsigned integers
-    point2f worldCoords;  // coors of the word defined in f32
-};
 
 global_variable
 tool_tip Tool_Tip_Move; 
 
-struct
-edit_pixels
-{
-    pointui pixels;
-    point2f worldCoords;
-    pointui selectPixels;
-    u08 editing : 1;
-    u08 selecting : 1;
-    u08 scaffSelecting : 1;
-    u08 snap : 1;
-};
 
 global_variable
 edit_pixels
 Edit_Pixels;
 
+
 global_variable
 point3f
 Camera_Position;
+
 
 global_variable
 FONScontext *
 FontStash_Context;
 
-struct
-ui_colour_element_bg
-{
-    u32 on;
-    nk_colorf fg;
-    nk_colorf bg;
-    f32 size;
-};
 
 #define Grey_Background {0.569f, 0.549f, 0.451f, 1.0f}
 #define Yellow_Text_Float {0.941176471f, 0.725490196f, 0.058823529f, 1.0f}
@@ -814,13 +388,6 @@ global_variable
 u08
 MetaData_Always_Visible = 1;
 
-struct
-ui_colour_element
-{
-    u32 on;
-    nk_colorf bg;
-    f32 size;
-};
 
 global_variable
 ui_colour_element *
@@ -840,41 +407,15 @@ ui_colour_element *
 QuadTrees;
 #endif
 
-struct
-edit_mode_colours
-{
-    nk_colorf preSelect;
-    nk_colorf select;
-    nk_colorf invSelect;
-    nk_colorf fg;
-    nk_colorf bg;
-};
 
 global_variable
 edit_mode_colours *
 Edit_Mode_Colours;
 
-struct
-waypoint_mode_data
-{
-    nk_colorf base;
-    nk_colorf selected;
-    nk_colorf text;
-    nk_colorf bg;
-    f32 size;
-};
 
 global_variable
 waypoint_mode_data *
 Waypoint_Mode_Data;
-
-struct
-meta_mode_data
-{
-    nk_colorf text;
-    nk_colorf bg;
-    f32 size;
-};
 
 global_variable
 meta_mode_data *
@@ -887,16 +428,6 @@ MetaData_Mode_Data;
 global_variable
 u32
 UI_On = 0;
-
-enum
-global_mode
-{
-    mode_normal = 0,
-    mode_edit = 1,
-    mode_waypoint_edit = 2,
-    mode_scaff_edit = 3,
-    mode_meta_edit = 4
-};
 
 global_variable
 global_mode
@@ -941,11 +472,11 @@ Loading = 0;
 
 global_function
 s32
-RearrangeMap(u32 pixelFrom, u32 pixelTo, s32 delta, u08 snap = 0);
+RearrangeMap(u32 pixelFrom, u32 pixelTo, s32 delta, u08 snap = 0, bool update_contigs_flag=true);
 
 global_function
 void
-InvertMap(u32 pixelFrom, u32 pixelTo);
+InvertMap(u32 pixelFrom, u32 pixelTo, bool update_contigs_flag=true);
 
 global_variable
 u32
@@ -963,14 +494,6 @@ global_variable
 u32
 Scaff_Painting_Id = 0;
 
-struct
-original_contig
-{
-    u32 name[16];
-    u32 *contigMapPixels;
-    u32 nContigs;
-    u32 pad;
-};
 
 global_variable
 original_contig *
@@ -980,25 +503,8 @@ global_variable
 u32
 Number_of_Original_Contigs;
 
-struct
-contig
-{
-    u64 *metaDataFlags;
-    u32 originalContigId;
-    u32 length;
-    u32 startCoord;
-    u32 scaffId;
-    u32 pad;
-};
 
-struct
-contigs
-{
-    u08 *contigInvertFlags;
-    contig *contigs;
-    u32 numberOfContigs;
-    u32 pad;
-};
+
 
 global_variable
 contigs *
@@ -1014,11 +520,6 @@ IsContigInverted(u32 index)
 
 #define Max_Number_of_Contigs 4096
 
-struct
-meta_data
-{
-    u32 tags[64][16];
-};
 
 global_variable
 meta_data *
@@ -1032,64 +533,19 @@ global_variable
 u08
 MetaData_Edit_State = 0;
 
-struct
-map_state
-{
-    u32 *contigIds;
-    u32 *originalContigIds;
-    u32 *contigRelCoords;
-    u32 *scaffIds;
-    u64 *metaDataFlags;
-};
+
 
 global_variable
 map_state *
 Map_State;
 
 
-// 定义一个 struct 存储所有的textures, 从而将所有的texture输出到python中
-struct allTextures4output{
-u08** texture_p;  // 定义一个指针存储所有的texture
-u32 n_bytes_per_texture;
-u32 mipmap_num;
-u32 n_textures;
-u32 n_textures_1d; 
-};
-
-global_variable
-allTextures4output*
-all_textures4output = (allTextures4output*) malloc(sizeof(allTextures4output*));
-global_variable bool all_texture_already_got = false;
-
-
-global_function 
-u32 
-texture_id_cal(const u16& x, const u16& y){
-    /*
-        (Number_of_Textures_1D+Number_of_Textures_1D-x-1) * x  /2 + y - x
-        = (2*Number_of_Textures_1D - x +  1 ) * x /2 + y - x + 1
-        = (2*Number_of_Textures_1D - x -  1 ) * x /2 + y  + 1
-        
-    */
-    // return ((( (Number_of_Textures_1D<<1 )- 3*id[0] - 1) * id[0])>>1) + id[1] + 1 ;
-    return ((( (Number_of_Textures_1D<<1 )- x - 1) * x)>>1)  + y  ;  // 注意数据溢出， u16 最大为 2**16-1 
-
-    // u32 index_ = (u32) ((( (Number_of_Textures_1D<<1 )- x - 1) * x)>>1)  + y  ;  // 注意数据溢出， u16 最大为 2**16-1 
-    // u32 tmpx=x;
-    // u32 n = (u32) Number_of_Textures_1D;
-    // u32 index = (u32) (y-x);
-    // while (tmpx>0){
-    //     index += n--;
-    //     tmpx--;
-    // }
-
-    // if (index_ != index){
-    //     fprintf(stderr, "Please check index_(%d) != index(%d)", index_, index);
-    //     exit(1);
-}
-
+#include "copy_texture.h"
 // define the struct to store the ai model mask
-std::unique_ptr<Ai_Model_Mask> ai_model_mask_ptr = std::make_unique<Ai_Model_Mask>();
+std::unique_ptr<AiModel> ai_model = nullptr;
+
+
+
 
 
 global_function
@@ -1113,24 +569,26 @@ UpdateContigsFromMapState()  // todo reading 从map的状态更新contigs
     {
         if (contigPtr == Max_Number_of_Contigs) break;  // 确保 contigPtr 不超出最大contig的数值
 
-        ++length;
+        ++length; // current fragment length
 
         pixelIdx = index + 1;   // 像素点编号， 加一因为第一个已经用来初始化了
         u32 id = Map_State->originalContigIds[pixelIdx];  // 像素点的 contig id
         u32 coord = Map_State->contigRelCoords[pixelIdx]; // 像素点的局部坐标
         
         if (id != lastId || (inverted && coord != (lastCoord - 1)) || (!inverted && coord != (lastCoord + 1))) // 如果不是一个连续片段
-        {
-            (Original_Contigs + lastId)->contigMapPixels[(Original_Contigs + lastId)->nContigs++] = pixelIdx - 1 - (length >> 1); // original contig 的第nContigs个片段对应的像素片段的中点
+        {   
+            Original_Contigs[lastId].contigMapPixels[Original_Contigs[lastId].nContigs] = pixelIdx - 1 - (length >> 1);   // update Original_Contigs: contigMapPixels
+            Original_Contigs[lastId].nContigs++; // update Original_Contigs: nContigs, contigMapPixels
 
-            contig *cont = Contigs->contigs + contigPtr++; // 获取上一个contig的指针， 并且给contigPtr + 1
-            cont->originalContigId = lastId; // 更新这个片段的id
-            cont->length = length;           // 更新长度
-            cont->startCoord = startCoord;   // 更新开头为当前片段在该contig上的局部坐标 endCoord = startCoord + length - 1
-            cont->metaDataFlags = Map_State->metaDataFlags + pixelIdx - 1; // 将该片段的标签修改为上一个
+            contig *last_cont = Contigs->contigs + contigPtr; // 获取上一个contig的指针， 并且给contigPtr + 1
+            contigPtr++;
+            last_cont->originalContigId = lastId; // 更新这个片段的id
+            last_cont->length = length;           // 更新长度
+            last_cont->startCoord = startCoord;   // 更新开头为当前片段在该contig上的局部坐标 endCoord = startCoord + length - 1
+            last_cont->metaDataFlags = Map_State->metaDataFlags + pixelIdx - 1; // 将该片段的标签修改为上一个
 
             u32 thisScaffID = Map_State->scaffIds[pixelIdx - 1]; // 上一个像素点对应的 scaffid
-            cont->scaffId = thisScaffID ? ((thisScaffID == lastScaffID) ? (scaffId) : (++scaffId)) : 0;  // 如果存在scaffid则（判断是不是同一个scaff，如果是则继续用scaffid，否则++scaffid），否则为0  
+            last_cont->scaffId = thisScaffID ? ((thisScaffID == lastScaffID) ? (scaffId) : (++scaffId)) : 0;  // 如果存在scaffid则（判断是不是同一个scaff，如果是则继续用scaffid，否则++scaffid），否则为0  
             lastScaffID = thisScaffID; // 更新
 
 
@@ -2518,27 +1976,6 @@ ColourGenerator(u32 index, f32 *rgb)
     rgb[2] = 0.5f * (sinf((f32)index * BlueFreq) + 1.0f);
 }
 
-struct
-graph
-{
-    u32 name[16];
-    u32 *data;
-    GLuint vbo;
-    GLuint vao;
-    editable_plot_shader *shader;
-    f32 scale;
-    f32 base;
-    f32 lineSize;
-    u16 on;
-    u16 nameOn;
-    nk_colorf colour;
-};
-
-enum
-extension_type
-{
-    extension_graph,
-};
 
 global_variable
 char
@@ -2547,21 +1984,7 @@ Extension_Magic_Bytes[][4] =
     {'p', 's', 'g', 'h'}
 };
 
-struct
-extension_node
-{
-    extension_type type;
-    u32 pad;
-    void *extension;
-    extension_node *next;
-};
 
-struct
-extension_sentinel
-{
-    extension_node *head;
-    extension_node *tail;
-};
 
 global_variable
 extension_sentinel
@@ -2580,8 +2003,8 @@ AddExtension(extension_node *node)
     }
     else
     {
-        Extensions.tail->next = node;
-        Extensions.tail = node;
+        Extensions.tail->next = node; // append the last to the end
+        Extensions.tail = node;       // set the last to the new node just appended
     }
 }
 
@@ -2609,6 +2032,23 @@ Render() {
         mat[13] = -2.0f * Camera_Position.y * Camera_Position.z;
         mat[15] = 1.0f;
 
+        /*
+        template<typename T>
+        GLM_FUNC_QUALIFIER mat<4, 4, T, defaultp> orthoRH_NO(T left, T right, T bottom, T top, T zNear, T zFar)
+        {
+            mat<4, 4, T, defaultp> Result(1);
+            Result[0][0] = static_cast<T>(2) / (right - left);  // 0 
+            Result[1][1] = static_cast<T>(2) / (top - bottom);  // 5
+            Result[2][2] = - static_cast<T>(2) / (zFar - zNear);// 10
+            Result[3][0] = - (right + left) / (right - left);   // 12 
+            Result[3][1] = - (top + bottom) / (top - bottom);   // 13
+            Result[3][2] = - (zFar + zNear) / (zFar - zNear);   // 14
+            return Result;
+        }
+        glm::mat4 projection_mat = glm::ortho(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
+        */
+
+        // apply the transformation
         glUseProgram(Contact_Matrix->shaderProgram);
         glUniformMatrix4fv(Contact_Matrix->matLocation, 1, GL_FALSE, mat);
         glUseProgram(Flat_Shader->shaderProgram);
@@ -2635,13 +2075,10 @@ Render() {
         glUseProgram(Contact_Matrix->shaderProgram);
         glBindTexture(GL_TEXTURE_2D_ARRAY, Contact_Matrix->textures);
         u32 ptr = 0;
-        ForLoop(Number_of_Textures_1D)
+        while (ptr < Number_of_Textures_1D * Number_of_Textures_1D)
         {
-            ForLoop2(Number_of_Textures_1D)
-            {
-                glBindVertexArray(Contact_Matrix->vaos[ptr++]);
-                glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
-            }
+            glBindVertexArray(Contact_Matrix->vaos[ptr++]); // bind the vertices and then draw the quad
+            glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
         }
     }
 
@@ -2830,6 +2267,7 @@ Render() {
         f32 lineWidth = Grid->size / sqrtf(Camera_Position.z);
         f32 position = 0.0f;
 
+        // left border
         vert[0].x = -0.5f;
         vert[0].y = -0.5f;
         vert[1].x = lineWidth - 0.5f;
@@ -2854,7 +2292,8 @@ Render() {
             x = position - (0.5f * (lineWidth + 1.0f));
 
             if (x > px)
-            {
+            {   
+                // contig vertical line
                 vert[0].x = x;
                 vert[0].y = -0.5f;
                 vert[1].x = x + lineWidth;
@@ -2870,7 +2309,7 @@ Render() {
                 glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
             }
         }
-
+        // right border
         vert[0].x = 0.5f - lineWidth;
         vert[0].y = -0.5f;
         vert[1].x = 0.5f;
@@ -2886,7 +2325,7 @@ Render() {
         glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
 
         position = 0.0f;
-
+        // top border
         vert[0].x = -0.5f;
         vert[0].y = 0.5f - lineWidth;
         vert[1].x = 0.5f;
@@ -2911,7 +2350,8 @@ Render() {
             y = 1.0f - position + (0.5f * (lineWidth - 1.0f));
 
             if (y < py)
-            {
+            {   
+                // contig horizontal line
                 vert[0].x = -0.5f;
                 vert[0].y = y - lineWidth;
                 vert[1].x = 0.5f;
@@ -2927,7 +2367,7 @@ Render() {
                 glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
             }
         }
-
+        // bottom border
         vert[0].x = -0.5f;
         vert[0].y = -0.5f;
         vert[1].x = 0.5f;
@@ -3000,8 +2440,11 @@ Render() {
         f32 h2 = height * 0.5f;
         f32 hz = height * Camera_Position.z;
 
-        auto ModelXToScreen = [hz, w2](f32 xin)->f32 { return(((xin - Camera_Position.x) * hz) + w2); };
-        auto ModelYToScreen = [hz, h2](f32 yin)->f32 { return(h2 - ((yin - Camera_Position.y) * hz)); };
+        // coverting model coords (world space) to screen coords
+        auto ModelXToScreen = [hz, w2](f32 xin)->f32 { 
+            return (xin - Camera_Position.x) * hz + w2; };
+        auto ModelYToScreen = [hz, h2](f32 yin)->f32 { 
+            return h2 - (yin - Camera_Position.y) * hz; };
 
         // Text Projection Matrix
         {
@@ -3057,8 +2500,7 @@ Render() {
             }
         }
 
-        // Contig Labels
-        if (File_Loaded && Contig_Name_Labels->on)
+        if (File_Loaded && Contig_Name_Labels->on) // Contig Labels
         {
             glUseProgram(Flat_Shader->shaderProgram);
             glUniform4fv(Flat_Shader->colorLocation, 1, (GLfloat *)&Contig_Name_Labels->bg);
@@ -3106,14 +2548,10 @@ Render() {
 
                         glUseProgram(Flat_Shader->shaderProgram);
 
-                        vert[0].x = x - w2t;
-                        vert[0].y = y + lh;
-                        vert[1].x = x + w2t;
-                        vert[1].y = y + lh;
-                        vert[2].x = x + w2t;
-                        vert[2].y = y;
-                        vert[3].x = x - w2t;
-                        vert[3].y = y;
+                        vert[0].x = x - w2t; vert[0].y = y + lh;
+                        vert[1].x = x + w2t; vert[1].y = y + lh;
+                        vert[2].x = x + w2t; vert[2].y = y;
+                        vert[3].x = x - w2t; vert[3].y = y;
 
                         glBindBuffer(GL_ARRAY_BUFFER, Label_Box_Data->vbos[ptr]);
                         glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -3163,14 +2601,10 @@ Render() {
 
                         glUseProgram(Flat_Shader->shaderProgram);
 
-                        vert[0].x = x - w2t;
-                        vert[0].y = y + lh;
-                        vert[1].x = x + w2t;
-                        vert[1].y = y + lh;
-                        vert[2].x = x + w2t;
-                        vert[2].y = y;
-                        vert[3].x = x - w2t;
-                        vert[3].y = y;
+                        vert[0].x = x - w2t; vert[0].y = y + lh;
+                        vert[1].x = x + w2t; vert[1].y = y + lh;
+                        vert[2].x = x + w2t; vert[2].y = y;
+                        vert[3].x = x - w2t; vert[3].y = y;
 
                         glBindBuffer(GL_ARRAY_BUFFER, Label_Box_Data->vbos[ptr]);
                         glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -3188,9 +2622,8 @@ Render() {
             ChangeSize((s32)width, (s32)height);
         }
 
-        // Scale bars
         #define MaxTicksPerScaleBar 128
-        if (File_Loaded && Scale_Bars->on)
+        if (File_Loaded && Scale_Bars->on) // Scale bars
         {
             glUseProgram(Flat_Shader->shaderProgram);
             glUniform4fv(Flat_Shader->colorLocation, 1, (GLfloat *)&Scale_Bars->bg);
@@ -3319,9 +2752,8 @@ Render() {
             ChangeSize((s32)width, (s32)height);
         }
         
-        // Waypoint Edit Mode  
-        // TODO - add the cross line to the waypoint
-        if (File_Loaded && (Waypoint_Edit_Mode || Waypoints_Always_Visible))
+        // Finished - add the cross line to the waypoint
+        if (File_Loaded && (Waypoint_Edit_Mode || Waypoints_Always_Visible))  // Waypoint Edit Mode  
         {
             u32 ptr = 0;
             vertex vert[4];
@@ -3907,7 +3339,7 @@ Render() {
         }
 
         // Edit Mode
-        if (File_Loaded && Edit_Mode && !UI_On)
+        if (File_Loaded && Edit_Mode && !UI_On) // Edit Mode
         {
             u32 ptr = 0;
             vertex vert[4];
@@ -3921,8 +3353,13 @@ Render() {
             glViewport(0, 0, (s32)width, (s32)height);
 
             f32 color[4];
-            f32 *source = (f32 *)(Edit_Pixels.editing ? (Global_Edit_Invert_Flag ? &Edit_Mode_Colours->invSelect : 
-                        &Edit_Mode_Colours->select) : &Edit_Mode_Colours->preSelect);
+            f32* source;
+            if (Edit_Pixels.editing) // edit color 
+            {
+                if (Global_Edit_Invert_Flag) source = (f32*)&Edit_Mode_Colours->invSelect;
+                else source = (f32*)&Edit_Mode_Colours->select;
+            } 
+            else source = (f32*)&Edit_Mode_Colours->preSelect; // pre-edit color
             ForLoop(4)
             {
                 color[index] = source[index];
@@ -3933,146 +3370,126 @@ Render() {
             glUniform4fv(Flat_Shader->colorLocation, 1, color);
 
             f32 lineWidth = 0.005f / Camera_Position.z;
-
-            vert[0].x = ModelXToScreen(Edit_Pixels.worldCoords.x - lineWidth);
-            vert[0].y = ModelYToScreen(lineWidth - Edit_Pixels.worldCoords.x);
-            vert[1].x = ModelXToScreen(Edit_Pixels.worldCoords.x - lineWidth);
-            vert[1].y = ModelYToScreen(-lineWidth - Edit_Pixels.worldCoords.x);
-            vert[2].x = ModelXToScreen(Edit_Pixels.worldCoords.x + lineWidth);
-            vert[2].y = ModelYToScreen(-lineWidth - Edit_Pixels.worldCoords.x);
-            vert[3].x = ModelXToScreen(Edit_Pixels.worldCoords.x + lineWidth);
-            vert[3].y = ModelYToScreen(lineWidth - Edit_Pixels.worldCoords.x);
-
-            glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
-            glBindVertexArray(Edit_Mode_Data->vaos[ptr++]);
-            glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
-
-            vert[0].x = ModelXToScreen(Edit_Pixels.worldCoords.y - lineWidth);
-            vert[0].y = ModelYToScreen(lineWidth - Edit_Pixels.worldCoords.y);
-            vert[1].x = ModelXToScreen(Edit_Pixels.worldCoords.y - lineWidth);
-            vert[1].y = ModelYToScreen(-lineWidth - Edit_Pixels.worldCoords.y);
-            vert[2].x = ModelXToScreen(Edit_Pixels.worldCoords.y + lineWidth);
-            vert[2].y = ModelYToScreen(-lineWidth - Edit_Pixels.worldCoords.y);
-            vert[3].x = ModelXToScreen(Edit_Pixels.worldCoords.y + lineWidth);
-            vert[3].y = ModelYToScreen(lineWidth - Edit_Pixels.worldCoords.y);
-
-            glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
-            glBindVertexArray(Edit_Mode_Data->vaos[ptr++]);
-            glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
-
-            f32 min = my_Min(Edit_Pixels.worldCoords.x, Edit_Pixels.worldCoords.y);
-            f32 max = my_Max(Edit_Pixels.worldCoords.x, Edit_Pixels.worldCoords.y);
-
-            if (Global_Edit_Invert_Flag)
-            {
-                f32 spacing = 0.002f / Camera_Position.z;
-                f32 arrowWidth = 0.01f / Camera_Position.z;
-
-                vert[0].x = ModelXToScreen(min + spacing);
-                vert[0].y = ModelYToScreen(arrowWidth + spacing - min);
-                vert[1].x = ModelXToScreen(min + spacing + arrowWidth);
-                vert[1].y = ModelYToScreen(spacing - min);
-                vert[2].x = ModelXToScreen(min + spacing + arrowWidth);
-                vert[2].y = ModelYToScreen(arrowWidth + spacing - min);
-                vert[3].x = ModelXToScreen(min + spacing + arrowWidth);
-                vert[3].y = ModelYToScreen((2.0f * arrowWidth) + spacing - min);
+            
+            { // draw the two squared dots at the beginning and end of the selected fragment
+                vert[0].x = ModelXToScreen(Edit_Pixels.worldCoords.x - lineWidth);
+                vert[0].y = ModelYToScreen(lineWidth - Edit_Pixels.worldCoords.x);
+                vert[1].x = ModelXToScreen(Edit_Pixels.worldCoords.x - lineWidth);
+                vert[1].y = ModelYToScreen(-lineWidth - Edit_Pixels.worldCoords.x);
+                vert[2].x = ModelXToScreen(Edit_Pixels.worldCoords.x + lineWidth);
+                vert[2].y = ModelYToScreen(-lineWidth - Edit_Pixels.worldCoords.x);
+                vert[3].x = ModelXToScreen(Edit_Pixels.worldCoords.x + lineWidth);
+                vert[3].y = ModelYToScreen(lineWidth - Edit_Pixels.worldCoords.x);
 
                 glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
                 glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
                 glBindVertexArray(Edit_Mode_Data->vaos[ptr++]);
                 glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
 
-                vert[0].x = ModelXToScreen(min + spacing + arrowWidth);
-                vert[0].y = ModelYToScreen((1.25f * arrowWidth) + spacing - min);
-                vert[1].x = ModelXToScreen(min + spacing + arrowWidth);
-                vert[1].y = ModelYToScreen((0.75f * arrowWidth) + spacing - min);
-                vert[2].x = ModelXToScreen(max - spacing);
-                vert[2].y = ModelYToScreen((0.75f * arrowWidth) + spacing - min);
-                vert[3].x = ModelXToScreen(max - spacing);
-                vert[3].y = ModelYToScreen((1.25f * arrowWidth) + spacing - min);
+                vert[0].x = ModelXToScreen(Edit_Pixels.worldCoords.y - lineWidth);
+                vert[0].y = ModelYToScreen(lineWidth - Edit_Pixels.worldCoords.y);
+                vert[1].x = ModelXToScreen(Edit_Pixels.worldCoords.y - lineWidth);
+                vert[1].y = ModelYToScreen(-lineWidth - Edit_Pixels.worldCoords.y);
+                vert[2].x = ModelXToScreen(Edit_Pixels.worldCoords.y + lineWidth);
+                vert[2].y = ModelYToScreen(-lineWidth - Edit_Pixels.worldCoords.y);
+                vert[3].x = ModelXToScreen(Edit_Pixels.worldCoords.y + lineWidth);
+                vert[3].y = ModelYToScreen(lineWidth - Edit_Pixels.worldCoords.y);
 
                 glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
                 glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
                 glBindVertexArray(Edit_Mode_Data->vaos[ptr++]);
                 glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
             }
+            
+            f32 min = my_Min(Edit_Pixels.worldCoords.x, Edit_Pixels.worldCoords.y);
+            f32 max = my_Max(Edit_Pixels.worldCoords.x, Edit_Pixels.worldCoords.y);
 
-            color[3] = alpha;
-            glUniform4fv(Flat_Shader->colorLocation, 1, color);
-
-            vert[0].x = ModelXToScreen(min);
-            vert[0].y = ModelYToScreen(0.5f);
-            vert[1].x = ModelXToScreen(min);
-            vert[1].y = ModelYToScreen(-min);
-            vert[2].x = ModelXToScreen(max);
-            vert[2].y = ModelYToScreen(-min);
-            vert[3].x = ModelXToScreen(max);
-            vert[3].y = ModelYToScreen(0.5f);
-
-            glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
-            glBindVertexArray(Edit_Mode_Data->vaos[ptr++]);
-            glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
-
-            vert[0].x = ModelXToScreen(-0.5f);
-            vert[0].y = ModelYToScreen(-min);
-            vert[1].x = ModelXToScreen(-0.5f);
-            vert[1].y = ModelYToScreen(-max);
-            vert[2].x = ModelXToScreen(min);
-            vert[2].y = ModelYToScreen(-max);
-            vert[3].x = ModelXToScreen(min);
-            vert[3].y = ModelYToScreen(-min);
-
-            glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
-            glBindVertexArray(Edit_Mode_Data->vaos[ptr++]);
-            glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
-
-            vert[0].x = ModelXToScreen(min);
-            vert[0].y = ModelYToScreen(-max);
-            vert[1].x = ModelXToScreen(min);
-            vert[1].y = ModelYToScreen(-0.5f);
-            vert[2].x = ModelXToScreen(max);
-            vert[2].y = ModelYToScreen(-0.5f);
-            vert[3].x = ModelXToScreen(max);
-            vert[3].y = ModelYToScreen(-max);
-
-            glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
-            glBindVertexArray(Edit_Mode_Data->vaos[ptr++]);
-            glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
-
-            vert[0].x = ModelXToScreen(max);
-            vert[0].y = ModelYToScreen(-min);
-            vert[1].x = ModelXToScreen(max);
-            vert[1].y = ModelYToScreen(-max);
-            vert[2].x = ModelXToScreen(0.5f);
-            vert[2].y = ModelYToScreen(-max);
-            vert[3].x = ModelXToScreen(0.5f);
-            vert[3].y = ModelYToScreen(-min);
-
-            glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
-            glBindVertexArray(Edit_Mode_Data->vaos[ptr++]);
-            glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
-
-            vert[0].x = ModelXToScreen(min);
-            vert[0].y = ModelYToScreen(-min);
-            vert[1].x = ModelXToScreen(min);
-            vert[1].y = ModelYToScreen(-max);
-            vert[2].x = ModelXToScreen(max);
-            vert[2].y = ModelYToScreen(-max);
-            vert[3].x = ModelXToScreen(max);
-            vert[3].y = ModelYToScreen(-min);
-
-            glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
-            glBindVertexArray(Edit_Mode_Data->vaos[ptr++]);
-            glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
-
+            if (Global_Edit_Invert_Flag) // draw the two arrows
             {
+                f32 spacing = 0.002f / Camera_Position.z;
+                f32 arrowWidth = 0.01f / Camera_Position.z;
+                f32 arrowHeight = arrowWidth * 0.65f;
+                f32 recHeight = arrowHeight * 0.65f;
+
+                // draw the the triangle part 
+                vert[0].x = ModelXToScreen(min + spacing);              vert[0].y = ModelYToScreen(arrowHeight + spacing - min);
+                vert[1].x = ModelXToScreen(min + spacing + arrowWidth); vert[1].y = ModelYToScreen(spacing - min);
+                vert[2].x = ModelXToScreen(min + spacing + arrowWidth); vert[2].y = ModelYToScreen(arrowHeight + spacing - min);
+                vert[3].x = ModelXToScreen(min + spacing + arrowWidth); vert[3].y = ModelYToScreen((2.0f * arrowHeight) + spacing - min);
+                
+                glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
+                glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
+                glBindVertexArray(Edit_Mode_Data->vaos[ptr++]);
+                glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
+
+                // draw the rectangle part
+                vert[0].x = ModelXToScreen(min + spacing + arrowWidth); vert[0].y = ModelYToScreen((arrowHeight + 0.5f * recHeight) + spacing - min);
+                vert[1].x = ModelXToScreen(min + spacing + arrowWidth); vert[1].y = ModelYToScreen((arrowHeight - 0.5f * recHeight) + spacing - min);
+                vert[2].x = ModelXToScreen(max - spacing);              vert[2].y = ModelYToScreen((arrowHeight - 0.5f * recHeight) + spacing - min);
+                vert[3].x = ModelXToScreen(max - spacing);              vert[3].y = ModelYToScreen((arrowHeight + 0.5f * recHeight) + spacing - min);
+                glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
+                glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
+                glBindVertexArray(Edit_Mode_Data->vaos[ptr++]);
+                glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
+            }
+
+            { // draw the interacted area
+                
+                color[3] = alpha;
+                glUniform4fv(Flat_Shader->colorLocation, 1, color);
+
+                // upper vertical part
+                vert[0].x = ModelXToScreen(min); vert[0].y = ModelYToScreen(0.5f);
+                vert[1].x = ModelXToScreen(min); vert[1].y = ModelYToScreen(-min);
+                vert[2].x = ModelXToScreen(max); vert[2].y = ModelYToScreen(-min);
+                vert[3].x = ModelXToScreen(max); vert[3].y = ModelYToScreen(0.5f);
+                glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
+                glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
+                glBindVertexArray(Edit_Mode_Data->vaos[ptr++]);
+                glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
+
+                // left horizontal part
+                vert[0].x = ModelXToScreen(-0.5f); vert[0].y = ModelYToScreen(-min);
+                vert[1].x = ModelXToScreen(-0.5f); vert[1].y = ModelYToScreen(-max);
+                vert[2].x = ModelXToScreen(min);   vert[2].y = ModelYToScreen(-max);
+                vert[3].x = ModelXToScreen(min);   vert[3].y = ModelYToScreen(-min);
+                glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
+                glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
+                glBindVertexArray(Edit_Mode_Data->vaos[ptr++]);
+                glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
+
+                // lower vertical part
+                vert[0].x = ModelXToScreen(min); vert[0].y = ModelYToScreen(-max);
+                vert[1].x = ModelXToScreen(min); vert[1].y = ModelYToScreen(-0.5f);
+                vert[2].x = ModelXToScreen(max); vert[2].y = ModelYToScreen(-0.5f);
+                vert[3].x = ModelXToScreen(max); vert[3].y = ModelYToScreen(-max);
+                glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
+                glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
+                glBindVertexArray(Edit_Mode_Data->vaos[ptr++]);
+                glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
+
+                // right horizontal part
+                vert[0].x = ModelXToScreen(max);  vert[0].y = ModelYToScreen(-min);
+                vert[1].x = ModelXToScreen(max);  vert[1].y = ModelYToScreen(-max);
+                vert[2].x = ModelXToScreen(0.5f); vert[2].y = ModelYToScreen(-max);
+                vert[3].x = ModelXToScreen(0.5f); vert[3].y = ModelYToScreen(-min);
+                glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
+                glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
+                glBindVertexArray(Edit_Mode_Data->vaos[ptr++]);
+                glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
+
+                // ceter part
+                vert[0].x = ModelXToScreen(min); vert[0].y = ModelYToScreen(-min);
+                vert[1].x = ModelXToScreen(min); vert[1].y = ModelYToScreen(-max);
+                vert[2].x = ModelXToScreen(max); vert[2].y = ModelYToScreen(-max);
+                vert[3].x = ModelXToScreen(max); vert[3].y = ModelYToScreen(-min);
+                glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
+                glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
+                glBindVertexArray(Edit_Mode_Data->vaos[ptr++]);
+                glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
+            }
+
+            { // draw the text by the selected (pre-select) fragment
                 f32 lh = 0.0f;   
                 
                 fonsClearState(FontStash_Context);
@@ -4167,14 +3584,10 @@ Render() {
                     char *text = (char *)"Snap Mode On";
                     textWidth = fonsTextBounds(FontStash_Context, 0, 0, text, 0, NULL);
                     glUseProgram(Flat_Shader->shaderProgram);
-                    vert[0].x = ModelXToScreen(min) - spacing - textWidth;
-                    vert[0].y = ModelYToScreen(-min) + spacing;
-                    vert[1].x = ModelXToScreen(min) - spacing - textWidth;
-                    vert[1].y = ModelYToScreen(-min) + spacing + lh;
-                    vert[2].x = ModelXToScreen(min) - spacing;
-                    vert[2].y = ModelYToScreen(-min) + spacing + lh;
-                    vert[3].x = ModelXToScreen(min) - spacing;
-                    vert[3].y = ModelYToScreen(-min) + spacing;
+                    vert[0].x = ModelXToScreen(min) - spacing - textWidth; vert[0].y = ModelYToScreen(-min) + spacing;
+                    vert[1].x = ModelXToScreen(min) - spacing - textWidth; vert[1].y = ModelYToScreen(-min) + spacing + lh;
+                    vert[2].x = ModelXToScreen(min) - spacing;             vert[2].y = ModelYToScreen(-min) + spacing + lh;
+                    vert[3].x = ModelXToScreen(min) - spacing;             vert[3].y = ModelYToScreen(-min) + spacing;
 
                     glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
                     glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -4185,35 +3598,34 @@ Render() {
                     fonsDrawText(FontStash_Context, ModelXToScreen(min) - spacing - textWidth, ModelYToScreen(-min) + spacing, text, 0);
                 }
 
-                {
+                { // draw the help text in the bottom right corner
                     fonsSetFont(FontStash_Context, Font_Bold);
                     fonsSetSize(FontStash_Context, 24.0f * Screen_Scale.x);
                     fonsVertMetrics(FontStash_Context, 0, 0, &lh);
 
-                    textBoxHeight = lh;
-                    textBoxHeight *= 6.0f;
-                    textBoxHeight += 5.0f;
+                    std::vector<char*> helpTexts = {
+                        (char *)"Edit Mode",
+                        (char *)"E: exit, Q: undo, W: redo",
+                        (char *)"Left Click: pickup, place",
+                        (char *)"S: toggle snap mode",
+                        (char *)"Middle Click / Spacebar: pickup whole sequence or (hold Shift): scaffold",
+                        (char *)"Middle Click / Spacebar (while editing): invert sequence"
+                    };
+
+                    textBoxHeight = (f32)helpTexts.size() * (lh + 1.0f) - 1.0f;
                     spacing = 10.0f;
 
-                    char *helpText1 = (char *)"Edit Mode";
-                    char *helpText2 = (char *)"E: exit, Q: undo, W: redo";
-                    char *helpText3 = (char *)"Left Click: pickup, place";
-                    char *helpText4 = (char *)"S: toggle snap mode";
-                    char *helpText5 = (char *)"Middle Click / Spacebar: pickup whole sequence or (hold Shift): scaffold";
-                    char *helpText6 = (char *)"Middle Click / Spacebar (while editing): invert sequence";
-
-                    textWidth = fonsTextBounds(FontStash_Context, 0, 0, helpText5, 0, NULL);
+                    textWidth = 0.f; 
+                    for (auto* i :helpTexts){
+                        textWidth = my_Max(textWidth, fonsTextBounds(FontStash_Context, 0, 0, i, 0, NULL));
+                    } 
 
                     glUseProgram(Flat_Shader->shaderProgram);
 
-                    vert[0].x = width - spacing - textWidth;
-                    vert[0].y = height - spacing - textBoxHeight;
-                    vert[1].x = width - spacing - textWidth;
-                    vert[1].y = height - spacing;
-                    vert[2].x = width - spacing;
-                    vert[2].y = height - spacing;
-                    vert[3].x = width - spacing;
-                    vert[3].y = height - spacing - textBoxHeight;
+                    vert[0].x = width - spacing - textWidth; vert[0].y = height - spacing - textBoxHeight;
+                    vert[1].x = width - spacing - textWidth; vert[1].y = height - spacing;
+                    vert[2].x = width - spacing;             vert[2].y = height - spacing;
+                    vert[3].x = width - spacing;             vert[3].y = height - spacing - textBoxHeight;
 
                     glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
                     glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -4221,17 +3633,16 @@ Render() {
                     glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
 
                     glUseProgram(UI_Shader->shaderProgram);
-                    fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight, helpText1, 0);
-                    f32 textY = 1.0f + lh;
-                    fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight + textY, helpText2, 0);
-                    textY += (1.0f + lh);
-                    fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight + textY, helpText3, 0);
-                    textY += (1.0f + lh);
-                    fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight + textY, helpText4, 0);
-                    textY += (1.0f + lh);
-                    fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight + textY, helpText5, 0);
-                    textY += (1.0f + lh);
-                    fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight + textY, helpText6, 0);
+
+                    for (int i = 0; i < helpTexts.size(); i++)
+                    {
+                        fonsDrawText(
+                            FontStash_Context, 
+                            width - spacing - textWidth, 
+                            height - spacing - textBoxHeight + (i * (lh + 1.0f)), 
+                            helpTexts[i], 
+                            0);
+                    }
                 }
             }
         }
@@ -4335,12 +3746,6 @@ Render() {
     }
 }
 
-struct
-file_atlas_entry
-{
-    u32 base;  // start
-    u32 nBytes;
-};
 
 global_variable
 file_atlas_entry *
@@ -4368,11 +3773,11 @@ LoadTexture(void *in)
         ========================
     */
     // u32 linearIndex =  (buffer->x * (Number_of_Textures_1D - 1)) - ((buffer->x * (buffer->x-1)) >> 1) + buffer->y;  // get the index accoding to index in x and y diretion 
-    u32 linearIndex = texture_id_cal(buffer->x, buffer->y); 
+    u32 linearIndex = texture_id_cal((u32)buffer->x, (u32)buffer->y, (u32)Number_of_Textures_1D); 
 
     file_atlas_entry *entry = File_Atlas + linearIndex;  // set a tempory pointer 
-    u32 nBytes = entry->nBytes; // base is the beginning, nBytes is the size 
-    fseek(buffer->file, entry->base, SEEK_SET); // move from the begining to the start of this texture numbered as linearIndex
+    u32 nBytes = entry->nBytes;                          // base is the beginning, nBytes is the size 
+    fseek(buffer->file, entry->base, SEEK_SET);          // move from the begining to the start of this texture numbered as linearIndex
 
     fread(buffer->compressionBuffer, 1, nBytes, buffer->file);  // read texture to the buffer
 
@@ -4405,9 +3810,9 @@ PopulateTextureLoadQueue(void *in) // 填充已经初始化过的 所有的queue
 {
     u32 *packedTextureIndexes = (u32 *)in;  // 将空指针转化为u32
     u32 ptr = 0;
-    ForLoop(Number_of_Textures_1D)
+    ForLoop(Number_of_Textures_1D) // row number
     {
-        for (u32 index2 = index; index2 < Number_of_Textures_1D; index2++ ) // for better understanding
+        for (u32 index2 = index; index2 < Number_of_Textures_1D; index2++ ) // column number
         {
             packedTextureIndexes[ptr] = (index << 16) | (index2); // first 16 bits is the raw number and the second 16 bits is the column number, there will be problem if number of texture in one dimension is larger than 2^16, but it is not possible ... just for a reminder
             ThreadPoolAddTask(Thread_Pool, LoadTexture, (void *)(packedTextureIndexes + ptr++)); // 填充当前的任务队列，输入为对应的texture的行、列编号
@@ -4415,108 +3820,6 @@ PopulateTextureLoadQueue(void *in) // 填充已经初始化过的 所有的queue
     }
 }
 
-global_function
-void
-PrintShaderInfoLog(GLuint shader)
-{
-    s32 infoLogLen = 0;
-    s32 charsWritten = 0;
-    GLchar *infoLog;
-
-    glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &infoLogLen);
-
-    if (infoLogLen > 0)
-    {
-        infoLog = PushArray(Working_Set, GLchar, (u32)infoLogLen);
-        glGetShaderInfoLog(shader, infoLogLen, &charsWritten, infoLog);
-        fprintf(stderr, "%s\n", infoLog);
-        FreeLastPush(Working_Set);
-    }
-}
-
-global_function
-GLuint
-CreateShader(const GLchar *fragmentShaderSource, const GLchar *vertexShaderSource, const GLchar *geometryShaderSource = 0)
-{
-    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    GLuint geometryShader = geometryShaderSource ? glCreateShader(GL_GEOMETRY_SHADER) : 0;
-
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-    if (geometryShader) glShaderSource(geometryShader, 1, &geometryShaderSource, NULL);
-
-    GLint compiled;
-
-    glCompileShader(vertexShader);
-    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &compiled);
-
-    if (compiled == GL_FALSE)
-    {
-        PrintShaderInfoLog(vertexShader);
-        glDeleteShader(vertexShader);
-        glDeleteShader(fragmentShader);
-        exit(1);
-    }
-
-    glCompileShader(fragmentShader);
-    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &compiled);
-
-    if (compiled == GL_FALSE)
-    {
-        PrintShaderInfoLog(fragmentShader);
-        glDeleteShader(vertexShader);
-        glDeleteShader(fragmentShader);
-        exit(1);
-    }
-
-    if (geometryShader)
-    {
-        glCompileShader(geometryShader);
-        glGetShaderiv(geometryShader, GL_COMPILE_STATUS, &compiled);
-
-        if (compiled == GL_FALSE)
-        {
-            PrintShaderInfoLog(geometryShader);
-            glDeleteShader(vertexShader);
-            glDeleteShader(fragmentShader);
-            glDeleteShader(geometryShader);
-            exit(1);
-        }
-    }
-
-    GLuint shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    if (geometryShader) glAttachShader(shaderProgram, geometryShader);
-    glLinkProgram(shaderProgram);
-
-    GLint isLinked;
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &isLinked);
-    if(isLinked == GL_FALSE)
-    {
-        GLint maxLength;
-        glGetProgramiv(shaderProgram, GL_INFO_LOG_LENGTH, &maxLength);
-        if(maxLength > 0)
-        {
-            char *pLinkInfoLog = PushArray(Working_Set, char, (u32)maxLength);
-            glGetProgramInfoLog(shaderProgram, maxLength, &maxLength, pLinkInfoLog);
-            fprintf(stderr, "Failed to link shader: %s\n", pLinkInfoLog);
-            FreeLastPush(Working_Set);
-        }
-
-        glDetachShader(shaderProgram, vertexShader);
-        glDetachShader(shaderProgram, fragmentShader);
-        if (geometryShader) glDetachShader(shaderProgram, geometryShader);
-        glDeleteShader(vertexShader);
-        glDeleteShader(fragmentShader);
-        if (geometryShader) glDeleteShader(geometryShader);
-        glDeleteProgram(shaderProgram);
-        exit(1);
-    }
-
-    return(shaderProgram);
-}
 
 global_function
 void
@@ -4639,8 +3942,9 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
     {
         reload = 1;
     }
-    else
-    {
+    else // clear all the memory, in gl and the arena
+    {   
+
         glDeleteTextures(1, &Contact_Matrix->textures);
 
         glDeleteVertexArrays((GLsizei)(Number_of_Textures_1D * Number_of_Textures_1D), Contact_Matrix->vaos);
@@ -4698,7 +4002,18 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
 
         Extensions = {};
 
-        ResetMemoryArenaP(arena);
+        // delete the memory collected by new
+        if (Contact_Matrix->vaos) 
+        {
+            delete[] Contact_Matrix->vaos; 
+            Contact_Matrix->vaos = nullptr;
+        }
+        if (Contact_Matrix->vbos) 
+        {
+            delete[] Contact_Matrix->vbos; 
+            Contact_Matrix->vbos = nullptr;
+        }
+        ResetMemoryArenaP(arena); // release all the memory allocated, avoid memory leak
     }
 
     // File Contents
@@ -4737,7 +4052,7 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
             nBytesHeaderComp,  
             FastHash64(intBuff, sizeof(intBuff), 0xbafd06832de619c2)
             );
-        fprintf(stdout, "The headerHash is calculated accordig to the compressed head, the hash number is (%llu) and the cache file name is (%s)\n", *headerHash, (u08*) headerHash);
+        // fprintf(stdout, "The headerHash is calculated accordig to the compressed head, the hash number is (%llu) and the cache file name is (%s)\n", *headerHash, (u08*) headerHash);
         if (
             libdeflate_deflate_decompress(
             Decompressor,                     // 指向 解压缩器 
@@ -5014,13 +4329,13 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
         fclose(file); // the positions and file pointers will be saved to texture_buffer_queue, which can be read in multi-thread mode
     }
 
-    // Load Textures 
+    // Load Textures: reading from file and pushing into glTexture with index Contact_Matrix->textures
     {
         InitialiseTextureBufferQueue(arena, Texture_Buffer_Queue, Bytes_Per_Texture, filePath); // 初始化所有的queue texture_buffer_queue, 一共有8个queue，每个queue有8个buffer
 
         u32 nTextures = (Number_of_Textures_1D + 1) * (Number_of_Textures_1D >> 1);     // number of textures (528)
         // u32 *packedTextureIndexes = PushArrayP(arena, u32, nTextures);               // using a pointer of sequences of u32 as the texture index 
-        u32* packedTextureIndexes = new u32[nTextures]; // (u32*) malloc(sizeof(u32) * nTextures);              // 替换为malloc调用内存的函数
+        u32* packedTextureIndexes = new u32[nTextures]; // (u32*) malloc(sizeof(u32) * nTextures);              // this is released so new is ok
         ThreadPoolAddTask(Thread_Pool, PopulateTextureLoadQueue, packedTextureIndexes); // multi-thread for loading the texture entries
 
         glActiveTexture(GL_TEXTURE0);   // 所有的子图加载在 texture 0 
@@ -5056,8 +4371,8 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
                 volatile texture_buffer *loadedTexture = 0; // 使用volatile锁放弃存取优化。如果优化（不使用volatile），该值存取会被优化，可能会存放在寄存器中，而不是每次访问该值都会从内存中读取
                 while (!loadedTexture)
                 {   
-                    __atomic_load(&Current_Loaded_Texture, &loadedTexture, 0);  // 将current_loaded_textur 转移到loadedtexture ?? 为什么没有更新current_loaded_textur变量，只是反复赋值就可以走出循环？
-                }  // check line 4327 in function `LoadTexture`, this is running in another thread, current_loaded_texture is updated, then the value is passed to loaded_texture. The the value is passed to 
+                    __atomic_load(&Current_Loaded_Texture, &loadedTexture, 0);  // current_loaded_texture is a global variable saved the texture buffer with index Texture_Ptr (loading texture process is running in another thread)
+                }  
                 u08 *texture = loadedTexture->texture; // 获取loadedtexture的texture的指针
                 
                 // push the texture data (number_of_mipmaps) to the gl_texture_2d_array
@@ -5092,22 +4407,20 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
             }
         }
 
-        all_texture_already_got = true;
         printf("\n");
         CloseTextureBufferQueueFiles(Texture_Buffer_Queue); // 关闭所有的buffer_texture中的文件流指针file，并且释放解压器内存
-        // FreeLastPushP(arena); // packedTextureIndexes   果然，如果使用push为all_textures4output申请内存则会在此处被释放从而造成内存错误
-        free(packedTextureIndexes); // packedTextureIndexes 返回  
+        delete[] packedTextureIndexes; // packedTextureIndexes 返回  
         glBindTexture(GL_TEXTURE_2D_ARRAY, 0);  // 给之前已经压入的GL_TEXTURE_2D_ARRAY解除绑定
     }
 
     
-    {   // Contact Matrix Vertex Data
-        glUseProgram(Contact_Matrix->shaderProgram);  // 在glad.h中 #define glUseProgram glad_glUseProgram  指定opengl渲染管线使用特定的着色器程序对象
+    {   // Define Contact Matrix Vertex Data (vao, vbo) 
+        glUseProgram(Contact_Matrix->shaderProgram);  
 
         // Contact_Matrix->vaos = PushArrayP(arena, GLuint, Number_of_Textures_1D * Number_of_Textures_1D);  //
         // Contact_Matrix->vbos = PushArrayP(arena, GLuint, Number_of_Textures_1D * Number_of_Textures_1D);  //
-        Contact_Matrix->vaos = (GLuint*) malloc(sizeof(GLuint) * Number_of_Textures_1D * Number_of_Textures_1D );  // OpenGL顶点数组对象（VAO, vertex array object）
-        Contact_Matrix->vbos = (GLuint*) malloc(sizeof(GLuint) * Number_of_Textures_1D * Number_of_Textures_1D );  // 顶点缓冲区对象（VBO, vertex buffer object）的数组的指针 
+        Contact_Matrix->vaos =  new GLuint[ Number_of_Textures_1D * Number_of_Textures_1D]; //  (GLuint*) malloc(sizeof(GLuint) * Number_of_Textures_1D * Number_of_Textures_1D );  // TODO make sure the memory is freed before the re-allocation
+        Contact_Matrix->vbos = new GLuint[ Number_of_Textures_1D * Number_of_Textures_1D]; // (GLuint*) malloc(sizeof(GLuint) * Number_of_Textures_1D * Number_of_Textures_1D );
 
         GLuint posAttrib = (GLuint)glGetAttribLocation(Contact_Matrix->shaderProgram, "position");
         GLuint texAttrib = (GLuint)glGetAttribLocation(Contact_Matrix->shaderProgram, "texcoord");
@@ -5117,8 +4430,8 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
         */
         f32 x = -0.5f;
         f32 y = 0.5f;
-        f32 quadSize = 1.0f / (f32)Number_of_Textures_1D; // 每一个texturex所占的比例 (1 / 32)
-        f32 allCornerCoords[2][2] = {{0.0f, 1.0f}, {1.0f, 0.0f}};
+        f32 quadSize = 1.0f / (f32)Number_of_Textures_1D; // 1.0 / 32.f = 0.03125
+        f32 allCornerCoords[2][2] = {{0.0f, 1.0f}, {1.0f, 0.0f}}; 
         
 
         u32 ptr = 0;
@@ -5162,27 +4475,27 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
                 */
                 textureVertices[0].x = x ;              // x -> [-0.5, 0.5]
                 textureVertices[0].y = y - quadSize ;   // y -> [-0.5, 0.5]
-                textureVertices[0].u = texture_index_symmetric;
                 textureVertices[0].s = cornerCoords[0]; // s表示texture的水平分量
                 textureVertices[0].t = cornerCoords[1]; // t表示texture的垂直分量
+                textureVertices[0].u = texture_index_symmetric;
 
                 textureVertices[1].x = x  + quadSize;
                 textureVertices[1].y = y - quadSize ;
-                textureVertices[1].u = texture_index_symmetric;
                 textureVertices[1].s = 1.0f;
                 textureVertices[1].t = 1.0f;
+                textureVertices[1].u = texture_index_symmetric;
 
                 textureVertices[2].x = x  + quadSize;
                 textureVertices[2].y = y ;
-                textureVertices[2].u = texture_index_symmetric;
                 textureVertices[2].s = cornerCoords[1];
                 textureVertices[2].t = cornerCoords[0];
+                textureVertices[2].u = texture_index_symmetric;
 
                 textureVertices[3].x = x ;
                 textureVertices[3].y = y ;
-                textureVertices[3].u = texture_index_symmetric;
                 textureVertices[3].s = 0.0f;
                 textureVertices[3].t = 0.0f;
+                textureVertices[3].u = texture_index_symmetric;
 
                 glGenBuffers(                    // 生成buffer的名字 存储在contact_matrix->vbos+ptr 对应的地址上
                     1,                           // 个数
@@ -5195,8 +4508,9 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
                     4 * sizeof(tex_vertex),      // 对象的大小（bytes）
                     textureVertices,             // 即将绑定到gl_array_buffer的数据的指针
                     GL_STATIC_DRAW);             // 绑定后的数据是用于干什么的
-
-                glEnableVertexAttribArray(posAttrib); // enable the generic vertex with index (posAttrib) 
+                
+                // tell GL how to interpret the data in the GL_ARRAY_BUFFER
+                glEnableVertexAttribArray(posAttrib); 
                 glVertexAttribPointer(           // 定义一个数组存储所有的通用顶点属性
                     posAttrib,                   // 即将修改属性的索引
                     2,                           // 定义每个属性的参数的个数， 只能为1 2 3 4中的一个，初始值为4
@@ -5215,12 +4529,12 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
 
                 glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Quad_EBO);
 
-                x += quadSize; // x 在每次增加 列数之后增加
-                ++ptr;
+                x += quadSize; // next column
+                ++ptr;         // ptr for current texture
             }
 
-            y -= quadSize; // 增加行数之后y减小， 因此，从最左上角开始设置
-            x = -0.5f;      // 从第一列开始
+            y -= quadSize;  // next row
+            x = -0.5f;      // from column 0
         }
     }
 
@@ -5228,7 +4542,7 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
     {   
         GLuint pixStart, pixStartTex, pixRearrage, pixRearrageTex;
        
-        u32 nTex = (Number_of_Textures_1D + 1) * (Number_of_Textures_1D >> 1);
+        u32 nTex = (Number_of_Textures_1D + 1) * (Number_of_Textures_1D >> 1); // (32 + 1) * 32 / 2 = 528 
         u32 nPix1D = Number_of_Textures_1D * Texture_Resolution; // 32 * 1024 
 
         glActiveTexture(GL_TEXTURE2);  // 调用 glActiveTexture 函数，可以选择当前活动的纹理单元，并且后续的纹理操作都会影响到该纹理单元
@@ -5262,24 +4576,24 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
 
         glActiveTexture(GL_TEXTURE3); // 激活第三个texture，以下代码会影响第三个texture
 
-        u32 *pixRearrageLookup = PushArrayP(arena, u32, nPix1D); // 申请 1024 * 32 个u32的空间
+        u32 *pixRearrageLookup = PushArrayP(arena, u32, nPix1D); // allocte 1024 * 32 u32 memory
         ForLoop(nPix1D)
         {
-            pixRearrageLookup[index] = (u32)index;  // 每一个像素的索引
+            pixRearrageLookup[index] = (u32)index;  // assign the index to the pixRearrageLookup
         }
 
-        glGenBuffers(1, &pixRearrage); // 像素的索引添加到 texture 里面
-        glBindBuffer(GL_TEXTURE_BUFFER, pixRearrage);
-        glBufferData(GL_TEXTURE_BUFFER, sizeof(u32) * nPix1D, pixRearrageLookup, GL_DYNAMIC_DRAW);
+        glGenBuffers(1, &pixRearrage);  // generate a buffer object
+        glBindBuffer(GL_TEXTURE_BUFFER, pixRearrage); // bind as a texture buffer for the current buffer
+        glBufferData(GL_TEXTURE_BUFFER, sizeof(u32) * nPix1D, pixRearrageLookup, GL_DYNAMIC_DRAW); // copy the data from pixRearrageLookup to the buffer object, and tell OpenGL that the data is dynamic and will change frequently
 
-        glGenTextures(1, &pixRearrageTex); // 像素的索引从 buffer 关联到 texture 中
+        glGenTextures(1, &pixRearrageTex); 
         glBindTexture(GL_TEXTURE_BUFFER, pixRearrageTex);
         glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, pixRearrage);
 
-        Contact_Matrix->pixelRearrangmentLookupBuffer = pixRearrage; // buffer 的索引
+        Contact_Matrix->pixelRearrangmentLookupBuffer = pixRearrage; // 32 * 1024 u32, this is a ascending order of 0 to 1024 * 32
         Contact_Matrix->pixelRearrangmentLookupBufferTex = pixRearrageTex; // texture 的索引
 
-        FreeLastPushP(arena); // pixRearrageLookup 释放存放像素点索引的数组
+        FreeLastPushP(arena); // free pixRearrageLookup as it has already been copied to the buffer object with index pixRearrage
 
         glUniform1ui(glGetUniformLocation(Contact_Matrix->shaderProgram, "pixpertex"), Texture_Resolution); // 将1024传递给 pixpertex，每个texture有多少个像素点
         glUniform1f(glGetUniformLocation(Contact_Matrix->shaderProgram, "oopixpertex"), 1.0f / (f32)Texture_Resolution); // 将 1 / 1024 传递给 oopixpertex 
@@ -5365,7 +4679,7 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
                         gph->on = 0;
 
                         gph->shader = PushStructP(arena, editable_plot_shader);
-                        gph->shader->shaderProgram = CreateShader(FragmentSource_EditablePlot, VertexSource_EditablePlot, GeometrySource_EditablePlot);
+                        gph->shader->shaderProgram = CreateShader(FragmentSource_EditablePlot.c_str(), VertexSource_EditablePlot.c_str(), GeometrySource_EditablePlot.c_str());
 
                         glUseProgram(gph->shader->shaderProgram);
                         glBindFragDataLocation(gph->shader->shaderProgram, 0, "outColor");
@@ -5779,7 +5093,7 @@ Setup()
     // Contact Matrix Shader
     {
         Contact_Matrix = PushStruct(Working_Set, contact_matrix);
-        Contact_Matrix->shaderProgram = CreateShader(FragmentSource_Texture, VertexSource_Texture);
+        Contact_Matrix->shaderProgram = CreateShader(FragmentSource_Texture.c_str(), VertexSource_Texture.c_str());
 
         glUseProgram(Contact_Matrix->shaderProgram);
         glBindFragDataLocation(Contact_Matrix->shaderProgram, 0, "outColor");
@@ -5851,7 +5165,7 @@ Setup()
     // Flat Color Shader
     {
         Flat_Shader = PushStruct(Working_Set, flat_shader);
-        Flat_Shader->shaderProgram = CreateShader(FragmentSource_Flat, VertexSource_Flat);
+        Flat_Shader->shaderProgram = CreateShader(FragmentSource_Flat.c_str(), VertexSource_Flat.c_str());
 
         glUseProgram(Flat_Shader->shaderProgram);
         glBindFragDataLocation(Flat_Shader->shaderProgram, 0, "outColor");
@@ -5863,7 +5177,7 @@ Setup()
     // Fonts
     {
         UI_Shader = PushStruct(Working_Set, ui_shader);
-        UI_Shader->shaderProgram = CreateShader(FragmentSource_UI, VertexSource_UI);
+        UI_Shader->shaderProgram = CreateShader(FragmentSource_UI.c_str(), VertexSource_UI.c_str());
         glUseProgram(UI_Shader->shaderProgram);
         glBindFragDataLocation(UI_Shader->shaderProgram, 0, "outColor");
         glUniform1i(glGetUniformLocation(UI_Shader->shaderProgram, "tex"), 0);
@@ -5901,7 +5215,7 @@ Setup()
     }
 
     GLuint posAttribFlatShader = (GLuint)glGetAttribLocation(Flat_Shader->shaderProgram, "position");
-    auto PushGenericBuffer = [posAttribFlatShader] (quad_data **quadData, u32 numberOfBuffers)
+    auto PushGenericBuffer = [posAttribFlatShader] (quad_data **quadData, u32 numberOfBuffers) -> void
     {
         *quadData = PushStruct(Working_Set, quad_data);
 
@@ -6013,28 +5327,32 @@ Setup()
     //Loading_Arena = PushSubArena(Working_Set, MegaByte(128));
 }
 
-#if 0
+
 global_function
 void
-TakeScreenShot()
+TakeScreenShot(int nchannels = 4)
 {
     s32 viewport[4];
     glGetIntegerv (GL_VIEWPORT, viewport);
 
-    u08 *imageBuffer = PushArray(Working_Set, u08, (u32)(3 * viewport[2] * viewport[3]));
+    u08 *imageBuffer = PushArray(Working_Set, u08, (u32)(nchannels * viewport[2] * viewport[3]));
     glReadPixels (  0, 0, viewport[2], viewport[3],
-            GL_RGB, GL_UNSIGNED_BYTE, imageBuffer);
+            nchannels==4 ? GL_RGBA : GL_RGB, GL_UNSIGNED_BYTE, 
+            imageBuffer);
 
     stbi_flip_vertically_on_write(1);
-    stbi_write_png("PretextView_ScreenShot.png", viewport[2], viewport[3], 3, imageBuffer, 3 * viewport[2]); //TODO change png compression to use libdeflate zlib impl
-
+    stbi_write_png("PretextView_ScreenShot.png", viewport[2], viewport[3], nchannels, imageBuffer, nchannels * viewport[2]); //TODO change png compression to use libdeflate zlib impl
     FreeLastPush(Working_Set);
 }
-#endif
+
 
 global_function
 void
-InvertMap(u32 pixelFrom, u32 pixelTo)
+InvertMap(
+    u32 pixelFrom, // from pixel
+    u32 pixelTo,   // end pixel
+    bool update_contigs_flag
+    )
 {
     if (pixelFrom > pixelTo)
     {
@@ -6048,20 +5366,20 @@ InvertMap(u32 pixelFrom, u32 pixelTo)
     Assert(pixelFrom < nPixels);
     Assert(pixelTo < nPixels);
     
-    u32 copySize = (pixelTo - pixelFrom + 1) >> 1;
+    u32 copySize = (pixelTo - pixelFrom + 1) >> 1; 
     
-    u32 *tmpBuffer = PushArray(Working_Set, u32, copySize);
-    u32 *tmpBuffer2 = PushArray(Working_Set, u32, copySize);
-    u32 *tmpBuffer3 = PushArray(Working_Set, u32, copySize);
-    u32 *tmpBuffer4 = PushArray(Working_Set, u32, copySize);
-    u64 *tmpBuffer5 = PushArray(Working_Set, u64, copySize);
+    u32 *tmpBuffer =  new u32[copySize];
+    u32 *tmpBuffer2 = new u32[copySize];
+    u32 *tmpBuffer3 = new u32[copySize];
+    u32 *tmpBuffer4 = new u32[copySize];
+    u64 *tmpBuffer5 = new u64[copySize];
 
     glBindBuffer(GL_TEXTURE_BUFFER, Contact_Matrix->pixelRearrangmentLookupBuffer);
-    u32 *buffer = (u32 *)glMapBufferRange(GL_TEXTURE_BUFFER, 0, nPixels * sizeof(u32), GL_MAP_READ_BIT | GL_MAP_WRITE_BIT);
+    u32 *buffer = (u32 *)glMapBufferRange(GL_TEXTURE_BUFFER, 0, nPixels * sizeof(u32), GL_MAP_READ_BIT | GL_MAP_WRITE_BIT);  // map buffer to read and write
 
     if (buffer)
     {
-        ForLoop(copySize)
+        ForLoop(copySize) // put the first half in the buffer
         {
             tmpBuffer[index] = buffer[pixelFrom + index];
             tmpBuffer2[index] = Map_State->contigRelCoords[pixelFrom + index];
@@ -6070,7 +5388,7 @@ InvertMap(u32 pixelFrom, u32 pixelTo)
             tmpBuffer5[index] = Map_State->metaDataFlags[pixelFrom + index];
         }
 
-        ForLoop(copySize)
+        ForLoop(copySize)  // set the first half to the second half
         {
             buffer[pixelFrom + index] = buffer[pixelTo - index];
             Map_State->contigRelCoords[pixelFrom + index] = Map_State->contigRelCoords[pixelTo - index];
@@ -6079,7 +5397,7 @@ InvertMap(u32 pixelFrom, u32 pixelTo)
             Map_State->metaDataFlags[pixelFrom + index] = Map_State->metaDataFlags[pixelTo - index];
         }
 
-        ForLoop(copySize)
+        ForLoop(copySize)  // set the second half from the buffer
         {
             buffer[pixelTo - index] = tmpBuffer[index];
             Map_State->contigRelCoords[pixelTo - index] = tmpBuffer2[index];
@@ -6095,13 +5413,14 @@ InvertMap(u32 pixelFrom, u32 pixelTo)
 
     glUnmapBuffer(GL_TEXTURE_BUFFER);
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
-    FreeLastPush(Working_Set); // tmpBuffer
-    FreeLastPush(Working_Set); // tmpBuffer2
-    FreeLastPush(Working_Set); // tmpBuffer3
-    FreeLastPush(Working_Set); // tmpBuffer4
-    FreeLastPush(Working_Set); // tmpBuffer5
 
-    UpdateContigsFromMapState();
+    delete[] tmpBuffer ;
+    delete[] tmpBuffer2;
+    delete[] tmpBuffer3;
+    delete[] tmpBuffer4;
+    delete[] tmpBuffer5;
+
+    if (update_contigs_flag) UpdateContigsFromMapState(); // update the contigs from the buffer
 
     map_edit edit;
     edit.finalPix1 = (u32)pixelTo;
@@ -6110,11 +5429,18 @@ InvertMap(u32 pixelFrom, u32 pixelTo)
     MoveWayPoints(&edit);
 }
 
+
 global_function
 s32
-RearrangeMap(u32 pixelFrom, u32 pixelTo, s32 delta, u08 snap)
+RearrangeMap(       // NOTE: VERY IMPORTANT 
+    u32 pixelFrom,  // start of the fragment
+    u32 pixelTo,    // end of the fragment
+    s32 delta,      // movement of the distance
+    u08 snap,       // if true, the fragment will snap to the nearest contig
+    bool update_contigs_flag // if true, update the contigs from the map state
+    )       
 {
-    if (pixelFrom > pixelTo)
+    if (pixelFrom > pixelTo)  // Swap, make sure pixelFrom is less than pixelTo
     {
         u32 tmp = pixelFrom;
         pixelFrom = pixelTo;
@@ -6137,38 +5463,40 @@ RearrangeMap(u32 pixelFrom, u32 pixelTo, s32 delta, u08 snap)
     {
         u32 result;
 
-        if (index >= nPixels && index < (2 * nPixels))
-        {
-            result = index - nPixels;
-        }
-        else if (index >= (2 * nPixels))
+        Assert(index >= 0 && index < 3 * nPixels);
+
+        if (index >= (2 * nPixels))
         {
             result = index - (2 * nPixels);
+        }
+        else if (index >= nPixels)
+        {
+            result = index - nPixels;
         }
         else
         {
             result = index;
         }
 
-        Assert(result >= 0 && result < nPixels);
-
         return(result);
     };
 
-    u32 forward = delta > 0;
+    u32 forward = delta > 0;  //  move direction 
 
-    if (snap)
+    if (snap) // can not put the selected frag into one frag.
     {
-        if (forward)
+        if (forward) // move to the end
         {
             u32 target = GetRealBufferLocation(pixelTo + (u32)delta);
-            u32 targetContigId = Map_State->contigIds[target] + (target == Number_of_Pixels_1D - 1 ? 1 : 0);
-            if (targetContigId)
+            u32 targetContigId = Map_State->contigIds[target] + (target == Number_of_Pixels_1D - 1 ? 1 : 0); // why is the last pixel +1?
+            if (targetContigId) // only if the target is not the selected contig
             {
                 contig *targetContig = Contigs->contigs + targetContigId - 1;
                 
                 u32 targetCoord = IsContigInverted(targetContigId - 1) ? (targetContig->startCoord - targetContig->length + 1) : (targetContig->startCoord + targetContig->length - 1);
-                while (delta > 0 && (Map_State->contigIds[target] != targetContigId - 1 || Map_State->contigRelCoords[target] != targetCoord))
+                while (delta > 0 && 
+                    (Map_State->contigIds[target] != targetContigId - 1 || 
+                        Map_State->contigRelCoords[target] != targetCoord))
                 {
                     --target;
                     --delta;
@@ -6179,11 +5507,11 @@ RearrangeMap(u32 pixelFrom, u32 pixelTo, s32 delta, u08 snap)
                 delta = 0;
             }
         }
-        else
+        else // move to the start
         {
             u32 target = GetRealBufferLocation((u32)((s32)pixelFrom + delta));
             u32 targetContigId = Map_State->contigIds[target];
-            if (targetContigId < (Contigs->numberOfContigs - 1))
+            if (targetContigId < (Contigs->numberOfContigs - 1)) // only if the target is not the selected contig
             {
                 contig *targetContig = Contigs->contigs + (target ? targetContigId + 1 : 0);
                 u32 targetCoord = targetContig->startCoord;
@@ -6193,54 +5521,52 @@ RearrangeMap(u32 pixelFrom, u32 pixelTo, s32 delta, u08 snap)
                     ++delta;
                 }
             }
-            else
-            {
-                delta = 0;
-            }
+            else delta = 0;
         }
     }
 
     if (delta)
     {
-        u32 startCopyFromRange;
-        u32 startCopyToRange;
+        u32 startCopyFromRange; // location start to copy 
+        u32 startCopyToRange;   // location start to put the copied data
 
-        if (forward)
+        if (forward) // move to the end
         {
             startCopyFromRange = pixelTo + 1;
             startCopyToRange = pixelFrom;
         }
-        else
+        else  // move to the start
         {
             startCopyFromRange = (u32)((s32)pixelFrom + delta);
             startCopyToRange = (u32)((s32)pixelTo + delta) + 1;
         }
 
-        u32 copySize = delta > 0 ? (u32)delta : (u32)-delta;
+        u32 copySize = std::abs(delta);
 
-        u32 *tmpBuffer = PushArray(Working_Set, u32, copySize);
-        u32 *tmpBuffer2 = PushArray(Working_Set, u32, copySize);
-        u32 *tmpBuffer3 = PushArray(Working_Set, u32, copySize);
-        u32 *tmpBuffer4 = PushArray(Working_Set, u32, copySize);
-        u64 *tmpBuffer5 = PushArray(Working_Set, u64, copySize);
+        u32 *tmpBuffer =  new u32[copySize];
+        u32 *tmpBuffer2 = new u32[copySize];  // original contig ids
+        u32 *tmpBuffer3 = new u32[copySize];  // original contig coords
+        u32 *tmpBuffer4 = new u32[copySize];  // scaff ids
+        u64 *tmpBuffer5 = new u64[copySize];  // meta data flags
 
-        glBindBuffer(GL_TEXTURE_BUFFER, Contact_Matrix->pixelRearrangmentLookupBuffer);
-        u32 *buffer = (u32 *)glMapBufferRange(GL_TEXTURE_BUFFER, 0, nPixels * sizeof(u32), GL_MAP_READ_BIT | GL_MAP_WRITE_BIT);
+        glBindBuffer(GL_TEXTURE_BUFFER, Contact_Matrix->pixelRearrangmentLookupBuffer); // pixel rearrange buffer
+        u32 *buffer = (u32 *)glMapBufferRange(GL_TEXTURE_BUFFER, 0, nPixels * sizeof(u32), GL_MAP_READ_BIT | GL_MAP_WRITE_BIT); // map the buffer
 
         if (buffer)
         {
-            ForLoop(copySize)
+            ForLoop(copySize) // copySize is abs(delta)
             {
-                tmpBuffer[index] = buffer[GetRealBufferLocation(index + startCopyFromRange)];
+                tmpBuffer[index] = buffer[GetRealBufferLocation(index + startCopyFromRange)]; // TODO understand how is the texture buffer data getting exchanged
                 tmpBuffer2[index] = Map_State->originalContigIds[GetRealBufferLocation(index + startCopyFromRange)];
                 tmpBuffer3[index] = Map_State->contigRelCoords[GetRealBufferLocation(index + startCopyFromRange)];
                 tmpBuffer4[index] = Map_State->scaffIds[GetRealBufferLocation(index + startCopyFromRange)];
                 tmpBuffer5[index] = Map_State->metaDataFlags[GetRealBufferLocation(index + startCopyFromRange)];
             }
-
-            if (forward)
+            
+            // copy the selected fragment to the new location
+            if (forward) //  move to the ends
             {
-                ForLoop(nPixelsInRange)
+                ForLoop(nPixelsInRange) // (pixelTo - pixelFrom + 1)
                 {
                     buffer[GetRealBufferLocation(pixelTo + (u32)delta - index)] = buffer[GetRealBufferLocation(pixelTo - index)];
                     Map_State->originalContigIds[GetRealBufferLocation(pixelTo + (u32)delta - index)] = Map_State->originalContigIds[GetRealBufferLocation(pixelTo - index)];
@@ -6249,7 +5575,7 @@ RearrangeMap(u32 pixelFrom, u32 pixelTo, s32 delta, u08 snap)
                     Map_State->metaDataFlags[GetRealBufferLocation(pixelTo + (u32)delta - index)] = Map_State->metaDataFlags[GetRealBufferLocation(pixelTo - index)];
                 }
             }
-            else
+            else // move to the start
             {
                 ForLoop(nPixelsInRange)
                 {
@@ -6261,6 +5587,7 @@ RearrangeMap(u32 pixelFrom, u32 pixelTo, s32 delta, u08 snap)
                 }
             }
 
+            // copy the influenced fragment (delta) to the new location
             ForLoop(copySize)
             {
                 buffer[GetRealBufferLocation(index + startCopyToRange)] = tmpBuffer[index];
@@ -6277,13 +5604,19 @@ RearrangeMap(u32 pixelFrom, u32 pixelTo, s32 delta, u08 snap)
 
         glUnmapBuffer(GL_TEXTURE_BUFFER);
         glBindBuffer(GL_TEXTURE_BUFFER, 0);
-        FreeLastPush(Working_Set); // tmpBuffer
-        FreeLastPush(Working_Set); // tmpBuffer2
-        FreeLastPush(Working_Set); // tmpBuffer3
-        FreeLastPush(Working_Set); // tmpBuffer4
-        FreeLastPush(Working_Set); // tmpBuffer5
+        delete[] tmpBuffer ;
+        delete[] tmpBuffer2;
+        delete[] tmpBuffer3;
+        delete[] tmpBuffer4;
+        delete[] tmpBuffer5;
+        // FreeLastPush(Working_Set); // tmpBuffer
+        // FreeLastPush(Working_Set); // tmpBuffer2
+        // FreeLastPush(Working_Set); // tmpBuffer3
+        // FreeLastPush(Working_Set); // tmpBuffer4
+        // FreeLastPush(Working_Set); // tmpBuffer5
 
-        UpdateContigsFromMapState();
+
+        if (update_contigs_flag) UpdateContigsFromMapState();
         
         map_edit edit;
         edit.finalPix1 = (u32)GetRealBufferLocation((u32)((s32)pixelFrom + delta));
@@ -6294,6 +5627,113 @@ RearrangeMap(u32 pixelFrom, u32 pixelTo, s32 delta, u08 snap)
 
     return(delta);
 }
+
+
+void AutoCurationFromFragsOrder(
+    const FragsOrder* frags_order_,
+    contigs* contigs_,
+    map_state* map_state_) 
+{   
+    u32 num_frags = contigs_->numberOfContigs;
+    if (num_frags != frags_order_->get_num_frags()) 
+    {
+        fprintf(stderr, "Number of contigs(%d) and fragsOrder.num_frags(%d) do not match.\n", num_frags, frags_order_->get_num_frags());
+        return;
+    }
+
+    // check the difference between the contigs, order and the new frags order
+    u32 start_loc = 0;
+    std::vector<s32> current_order(num_frags);
+    const std::vector<s32> predicted_order = frags_order_->get_order_without_chromosomeInfor(); // start from 1
+    for (s32 i = 0; i < num_frags; ++i) current_order[i] = i+1; // start from 1
+    auto move_current_order_element = [&current_order, &num_frags](u32 from, u32 to)
+    {   
+        if (from >= num_frags || to >= num_frags)
+        {
+            fprintf(stderr, "Invalid from(%d) or to(%d), index should betwee [0, %d].\n", from, to, num_frags-1);
+            return;
+        }
+        if (from == to) return;
+        s32 tmp = current_order[from];
+        if (from > to) 
+        {   
+            for (u32 i = from; i > to; --i) current_order[i] = current_order[i-1];
+        }
+        else  // to > from 
+        {
+            for (u32 i = from; i < to; ++i) current_order[i] = current_order[i+1];
+        }
+        current_order[to] = tmp;
+    };
+    
+    // update the map state based on the new order
+    for (u32 i = 0; i < num_frags; ++i) 
+    {
+        if (predicted_order[i] == current_order[i])  // leave the contig unchanged
+        {   
+            start_loc += contigs_->contigs[i].length;
+            continue;
+        }
+
+        // only invert
+        if (predicted_order[i] == -current_order[i])
+        {
+            u32 pixelFrom = start_loc, pixelEnd= start_loc + contigs_->contigs[i].length - 1;
+            InvertMap(pixelFrom, pixelEnd);
+            AddMapEdit(0, {start_loc, start_loc + contigs_->contigs[i].length - 1}, true);
+            current_order[i] = -current_order[i];
+            start_loc += contigs_->contigs[i].length;
+            printf("[AI curation]: Invert contig %d.\n", predicted_order[i]);
+            continue;
+        }
+        else if (predicted_order[i] != current_order[i] && predicted_order[i] != -current_order[i])  // move the contig to the new position
+        {
+            bool is_curated_inverted = predicted_order[i] < 0;
+
+            // find the pixel range of the contig to move
+            u32 pixelFrom = 0, tmp_i = 0; // tmp_i is the index of the current contig, which is going to be processed
+            while (std::abs(predicted_order[i])!=std::abs(current_order[tmp_i]))
+            {   
+                if (tmp_i >= num_frags)
+                {
+                    fprintf(stderr, "Error: contig %d not found in the current order.\n", current_order[i]);
+                    assert(0);
+                }
+                pixelFrom += contigs_->contigs[tmp_i].length; // length updated based on the current order
+                ++tmp_i;
+            }
+            u32 pixelEnd = pixelFrom + contigs_->contigs[tmp_i].length - 1;
+            if (is_curated_inverted)
+            {
+                InvertMap(pixelFrom, pixelEnd);
+                current_order[tmp_i] = -current_order[tmp_i];
+            }
+            s32 delta = start_loc - pixelFrom;
+            RearrangeMap(pixelFrom, pixelEnd, delta, false);
+            AddMapEdit(delta, {(u32)((s32)pixelFrom + delta), (u32)((s32)pixelEnd + delta)}, is_curated_inverted);
+
+            // update the current order, insert the contig to the new position
+            move_current_order_element(tmp_i, i); // move element from tmp_i to i
+            start_loc += contigs_->contigs[i].length; // update start_loc after move fragments
+            if (is_curated_inverted)
+            {
+                printf("[AI curation]: Invert and Move contig %d to %d\n", predicted_order[i], i);
+            }
+            else printf("[AI curation]: Move contig %d to %d.\n", predicted_order[i], i);
+            continue;
+        }
+        else 
+        {
+            fprintf(stderr, "Unknown error, predicted_order[%d] = %d, current[%d] = %d.\n", i, predicted_order[i], i, current_order[i]);
+            continue;
+        }
+    }
+    UpdateContigsFromMapState();
+    printf("[AI curatioin]: finished.\n");
+
+    return ;
+}
+
 
 global_function
 u32
@@ -7656,6 +7096,7 @@ IconLoad(u08 *buffer, u32 bufferSize)
     return nk_image_id((s32)tex);
 }
 
+global_function
 void GLAPIENTRY
 MessageCallback( GLenum source,
                  GLenum type,
@@ -7665,7 +7106,13 @@ MessageCallback( GLenum source,
                  const GLchar* message,
                  const void* userParam )
 {
-  fprintf( stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+    #ifdef DEBUG
+        (void)source;
+        (void)id;
+        (void)length;
+        (void)userParam;
+    #endif
+    fprintf( stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
            ( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
             type, severity, message );
 }
@@ -7682,10 +7129,6 @@ MessageCallback( GLenum source,
 //     const GLchar* message,
 //     const void* userParam )
 // {
-//     (void)source;
-//     (void)id;
-//     (void)length;
-//     (void)userParam;
 //     fprintf( stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
 //             ( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
 //             type, severity, message );
@@ -7713,94 +7156,98 @@ global_function
 void
 SetSaveStatePaths()
 {
-    if (!SaveState_Path)
-    {
-        char buff_[64];
-        char *buff = (char *)buff_;
+    if (SaveState_Path)
+    {   
+        printf("SaveState_Path already set: %s\n", SaveState_Path);
+        return;
+    }
+    
+    char buff_[64];
+    char *buff = (char *)buff_;
 #ifndef _WIN32
-        char sep = '/';
-        const char *path = getenv("XDG_CONFIG_HOME");
-        char *folder;
-        char *folder2;
-        if (path)
+    char sep = '/';
+    const char *path = getenv("XDG_CONFIG_HOME");
+    char *folder;
+    char *folder2;
+    if (path)
+    {
+        folder = (char *)"PretextView";
+        folder2 = 0;
+    }
+    else
+    {
+        path = getenv("HOME");
+        if (!path) path = getpwuid(getuid())->pw_dir;
+        folder = (char *)".config";
+        folder2 = (char *)"PretextView";
+    }
+
+    if (path)
+    {
+        while ((*buff++ = *path++)) {}
+        *(buff - 1) = sep;
+        while ((*buff++ = *folder++)) {}
+
+        mkdir((char *)buff_, 0700);
+        struct stat st = {};
+
+        u32 goodPath = 0;
+
+        if (!stat((char *)buff_, &st))
         {
-            folder = (char *)"PretextView";
-            folder2 = 0;
-        }
-        else
-        {
-            path = getenv("HOME");
-            if (!path) path = getpwuid(getuid())->pw_dir;
-            folder = (char *)".config";
-            folder2 = (char *)"PretextView";
-        }
-
-        if (path)
-        {
-            while ((*buff++ = *path++)) {}
-            *(buff - 1) = sep;
-            while ((*buff++ = *folder++)) {}
-
-            mkdir((char *)buff_, 0700);
-            struct stat st = {};
-
-            u32 goodPath = 0;
-
-            if (!stat((char *)buff_, &st))
+            if (folder2)
             {
-                if (folder2)
-                {
-                    *(buff - 1) = sep;
-                    while ((*buff++ = *folder2++)) {}
+                *(buff - 1) = sep;
+                while ((*buff++ = *folder2++)) {}
 
-                    mkdir((char *)buff_, 0700);
-                    if (!stat((char *)buff_, &st))
-                    {
-                        goodPath = 1;
-                    }
-                }
-                else
+                mkdir((char *)buff_, 0700);
+                if (!stat((char *)buff_, &st))
                 {
                     goodPath = 1;
                 }
-            } 
-            
-            if (goodPath)
-            {
-                u32 n = StringLength((u08 *)buff_);
-                SaveState_Path = PushArray(Working_Set, u08, n + 18);
-                CopyNullTerminatedString((u08 *)buff_, SaveState_Path);
-                SaveState_Path[n] = (u08)sep;
-                SaveState_Name = SaveState_Path + n + 1;
-                SaveState_Path[n + 17] = 0;
             }
-        }
-#else
-        PWSTR path = 0;
-        char sep = '\\';
-        HRESULT hres = SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, 0, &path);
-        if (SUCCEEDED(hres))
+            else
+            {
+                goodPath = 1;
+            }
+        } 
+        
+        if (goodPath)
         {
-            PWSTR pathPtr = path;
-            while ((*buff++ = *pathPtr++)) {}
-            *(buff - 1) = sep;
-            char *folder = (char *)"PretextView";
-            while ((*buff++ = *folder++)) {}
-
-            if (CreateDirectory((char *)buff_, NULL) || ERROR_ALREADY_EXISTS == GetLastError())
-            {
-                u32 n = StringLength((u08*)buff_);
-                SaveState_Path = PushArray(Working_Set, u08, n + 18);
-                CopyNullTerminatedString((u08*)buff_, SaveState_Path);
-                SaveState_Path[n] = (u08)sep;
-                SaveState_Name = SaveState_Path + n + 1;
-                SaveState_Path[n + 17] = 0;
-            }
+            u32 n = StringLength((u08 *)buff_);
+            SaveState_Path = PushArray(Working_Set, u08, n + 18);
+            CopyNullTerminatedString((u08 *)buff_, SaveState_Path);
+            SaveState_Path[n] = (u08)sep;
+            SaveState_Name = SaveState_Path + n + 1;
+            SaveState_Path[n + 17] = 0;
         }
-
-        if (path) CoTaskMemFree(path);
-#endif
     }
+#else
+    PWSTR path = 0;
+    char sep = '\\';
+    HRESULT hres = SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, 0, &path);
+    if (SUCCEEDED(hres))
+    {
+        PWSTR pathPtr = path;
+        while ((*buff++ = *pathPtr++)) {}
+        *(buff - 1) = sep;
+        char *folder = (char *)"PretextView";
+        while ((*buff++ = *folder++)) {}
+
+        if (CreateDirectory((char *)buff_, NULL) || ERROR_ALREADY_EXISTS == GetLastError())
+        {
+            u32 n = StringLength((u08*)buff_);
+            SaveState_Path = PushArray(Working_Set, u08, n + 18);
+            CopyNullTerminatedString((u08*)buff_, SaveState_Path);
+            SaveState_Path[n] = (u08)sep;
+            SaveState_Name = SaveState_Path + n + 1;
+            SaveState_Path[n + 17] = 0;
+        }
+    }
+
+    if (path) CoTaskMemFree(path);
+#endif
+    
 }
 
 global_variable
@@ -8245,7 +7692,7 @@ LoadState(u64 headerHash, char *path)
 {
     if (!path && !SaveState_Path)
     {
-        SetSaveStatePaths();
+        SetSaveStatePaths(); // set the SaveState_Path, and assign the pointer to SaveState_Name
     }
     
     if (path || SaveState_Path)
@@ -8305,6 +7752,9 @@ LoadState(u64 headerHash, char *path)
                 u08 c = 'a' + x;
                 *(SaveState_Name + index) = c;
             }
+
+            printf("SaveState_Name: %s\n", SaveState_Name);
+            printf("SaveState_Path: %s\n", SaveState_Path);
 
             if ((file = fopen((const char *)SaveState_Path, "rb")))
             {
@@ -8585,8 +8035,8 @@ LoadState(u64 headerHash, char *path)
                         ((u08 *)&d)[2] = *fileContents++;
                         ((u08 *)&d)[3] = *fileContents++;
 
-                        u32 byte = (index + 1) >> 3;
-                        u32 bit = (index + 1) & 7;
+                        u32 byte = (index + 1) >> 3; // find the byte, 1 byte saves 8 invert_flag of edits
+                        u32 bit = (index + 1) & 7; // find the bit in the byte
                         u32 invert  = contigFlags[byte] & (1 << bit);
 
                         pointui startPixels = {x, y};
@@ -8954,6 +8404,7 @@ GenerateAGP(char *path, u08 overwrite, u08 formatSingletons, u08 preserveOrder)
     }
 }
 
+
 global_function
 void
 SortMapByMetaTags()
@@ -8991,14 +8442,14 @@ MainArgs {
     u32 initWithFile = 0;   // initialization with .map file or not 
     u08 currFile[256];      // save the name of file inputed 
     u08 *currFileName = 0;
-    #ifdef DEBUG
-    printf("%s\n", currFileName);  
-    #endif
     u64 headerHash = 0;
     if (ArgCount >= 2)
     {
         initWithFile = 1;
         CopyNullTerminatedString((u08 *)ArgBuffer[1], currFile);  // copy the filepath to currfile
+        #ifdef DEBUG
+            printf("Read from file: %s\n", currFile);  
+        #endif
     }
 
     Mouse_Move.x = -1.0;  // intialize the mouse position
@@ -9041,7 +8492,7 @@ MainArgs {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_SAMPLES, 8);
 
-    GLFWwindow* window = glfwCreateWindow(1920, 1080, "PretextView", NULL, NULL);  // 1080 1080  TODO add a button to change the size of the window
+    GLFWwindow* window = glfwCreateWindow(1080, 1080, "PretextView", NULL, NULL);  // 1080 1080  TODO add a button to change the size of the window
     if (!window)
     {
         glfwTerminate();
@@ -9072,6 +8523,8 @@ MainArgs {
     glBlendEquation(GL_FUNC_ADD);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    printf("OpenGL version supported by this platform (%s): \n", glGetString(GL_VERSION));
+
     #ifdef DEBUG
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
@@ -9089,7 +8542,7 @@ MainArgs {
     GLFWcursor *arrowCursor = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
     GLFWcursor *crossCursor = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
 
-    Setup(); 
+    Setup();
 
     if (initWithFile)
     {
@@ -9104,6 +8557,18 @@ MainArgs {
     {
         UI_On = 1;
     }
+
+    // if (1)
+    // {   
+    //     bool show_flag = true;
+    //     auto tmp = new TexturesArray4AI(32, 1024, (char*)"123", Contigs);
+    //     tmp->copy_buffer_to_textures(Contact_Matrix->textures, show_flag);
+    //     delete tmp;
+    //     if (show_flag)
+    //     {
+    //         glfwSetWindowShouldClose(window, false);
+    //     }
+    // }
 
     // file browser
     struct file_browser browser;
@@ -9131,15 +8596,18 @@ MainArgs {
     }
     
     Redisplay = 1;
-    while (!glfwWindowShouldClose(window)) {
-        if (Redisplay) {
+    while (!glfwWindowShouldClose(window)) 
+    {
+        if (Redisplay) 
+        {
             Render();
             glfwSwapBuffers(window);
             Redisplay = 0;
             if (currFileName) SaveState(headerHash);
         }
 
-        if (Loading) {
+        if (Loading) 
+        {
             if (currFileName) SaveState(headerHash);
             LoadFile((const char *)currFile, Loading_Arena, (char **)&currFileName, &headerHash);
             if (currFileName)
@@ -9152,7 +8620,8 @@ MainArgs {
             Redisplay = 1;
         }
 
-        if (UI_On) {
+        if (UI_On) 
+        {
             glfwSetCursor(window, arrowCursor);
             f64 x, y;
             nk_input_begin(NK_Context);
@@ -9579,34 +9048,29 @@ MainArgs {
                     {   
                         printf("AISort button clicked\n");
                         // check if the ai model is loaded
-                        if (!ai_model_mask_ptr->is_model_loaded) {
-                            printf("AI Model not loaded\n");
+                        if (!ai_model) 
+                        {
                             printf("Loading AI Model...\n");
-                            ai_model_mask_ptr->init_model();
-                            if (ai_model_mask_ptr->model_valid()) {
-                                printf("AI Model tested: valid\n");
-                            }
-                            else {
-                                printf("AI Model loaded but tested: not valid.\n");
-                                exit(EXIT_FAILURE);
-                            }
+                            ai_model = std::make_unique<AiModel>();
                         }
-                        
-                        // prepare the compressed_hic for the ai model
-                        printf("Preparing compressed hic for AI Model...\n");
-                        f32* compressed_hic = cal_compressed_hic();
-                        std::vector<int> curated_frag_order = ai_model_mask_ptr->model_ptr->cal_curated_fragments_order(
-                            ai_model_mask_ptr->model_ptr->predict_likelihood(
-                                ai_model_mask_ptr->model_ptr->organize_compressed_hic_into_graph((float32_t*)compressed_hic, {10})
-                            )
-                        );
+
+                        // prepare the graph data 
+                        auto texture_array_4_ai = TexturesArray4AI(Number_of_Textures_1D, Texture_Resolution, (char*)currFileName, Contigs);
+                        texture_array_4_ai.copy_buffer_to_textures(Contact_Matrix->textures);
+                        texture_array_4_ai.cal_compressed_hic(Contigs, Extensions);
+                        GraphData* graph_data;
+                        texture_array_4_ai.cal_graphData(graph_data);
+                        FragsOrder frags_order(graph_data->frags->num); // intilize the frags_order with the number of fragments including the filtered out ones
+                        ai_model->cal_curated_fragments_order( graph_data, frags_order);
+                        delete graph_data;
 
                         // TODO apply the curated_frag_order to the map
-                        printf("The curated order: ");
-                        for (auto i :curated_frag_order) { 
-                            printf("%d ", i);
-                        }
-                        printf("\n");
+                        AutoCurationFromFragsOrder(
+                            &frags_order, 
+                            Contigs,
+                            Map_State
+                        );
+                        std::cout << std::endl;
                     }
 
                     f32 ratio[] = {0.23f, 0.32f, NK_UNDEFINED};
@@ -10052,6 +9516,17 @@ MainArgs {
     nk_buffer_free(&NK_Device->cmds);
     glfwDestroyWindow(window);
     glfwTerminate();
+
+    // free the memory allocated for the shader sources
+    fprintf(stdout, "Memory freed for shader sources.\n");
+    
+    // do we need to free anything else? 
+    // for example the allocated memory arena
+    // and memory allocated  by new or malloc
+    delete[] Contact_Matrix->vaos;
+    delete[] Contact_Matrix->vbos;
+    ResetMemoryArenaP(Loading_Arena);
+    fprintf(stdout, "Memory freed for the arena.\n");
 
     EndMain;
 }

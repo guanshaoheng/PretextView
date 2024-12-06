@@ -32,6 +32,16 @@ unzip libtorch.zip -d "$DEST_DIR"
 rm libtorch.zip
 echo "libtorch has been downloaded and extracted to $DEST_DIR"
 
+# current, no Eigen is needed
+# # Eigen: download and compile 
+# wget -P subprojects https://gitlab.com/libeigen/eigen/-/archive/3.3.9/eigen-3.3.9.tar.gz
+# tar -xzvf subprojects/eigen-3.3.9.tar.gz -C subprojects
+# rm subprojects/eigen-3.3.9.tar.gz
+# mv subprojects/eigen-3.3.9 subprojects/eigen
+# cd subprojects/eigen
+# mkdir build && cd build
+# cmake .. -DCMAKE_INSTALL_PREFIX=../install_local && cmake --build . --config Release -j 6 && cmake --install .
+
 
 # Finished: there are still problem for installation as the app can not find the LC_RPATH, need to fix this
 rm -rf build_cmake app  

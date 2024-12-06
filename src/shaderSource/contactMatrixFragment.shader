@@ -10,7 +10,7 @@ uniform uint ntex1dm1;         // number of textures in 1D minus 1 = 31
 uniform float oopixpertex;     // 1.0 / pixpertex
 uniform vec3 controlpoints;    // 0.0, 0.5, 1.0 
 
-float bezier(float t)  // 斜线方程
+float bezier(float t)  // bezier function to adjust the color map
 {
     float tsq = t * t;
     float omt = 1.0 - t;
@@ -63,7 +63,10 @@ vec3 pixLookup(vec3 inCoords)
     
     pix += pixStart;
     
-    pix = vec2(texelFetch(pixrearrangelookup, int(pix.x)).x, texelFetch(pixrearrangelookup, int(pix.y)).x);
+    pix = vec2(
+        texelFetch(pixrearrangelookup, int(pix.x)).x, 
+        texelFetch(pixrearrangelookup, int(pix.y)).x
+        );
     
     if (pix.y > pix.x)
     {
@@ -71,13 +74,13 @@ vec3 pixLookup(vec3 inCoords)
         over = vec2(over.y, over.x);
     }
     
-    vec2 tileCoord = pix * oopixpertex;
+    vec2 tileCoord = pix * oopixpertex; //  pix / 1024
     vec2 tileCoordFloor = floor(tileCoord);
     
     float z = linearTextureID(tileCoordFloor);
     
     pix = tileCoord - tileCoordFloor;
-    pix = clamp(pix + over, vec2(0, 0), vec2(1, 1));
+    pix = clamp(pix + over, vec2(0, 0), vec2(1, 1));  // clamp(x, minVal, maxVal)
     
     return(vec3(pix, z));
 }
@@ -113,6 +116,7 @@ void main()
     float f2 = BiLinear(Texcoord, textureSize(tex, 0).xy, floormml + 1);
 
     float value = bezier(mix(f1, f2, fract(mml)));
-    int idx = int(round(value * 0xFF));
+    int idx = int(round(value * 255)); // covert to from [0 - 1] to [0 - 255]
     outColor = vec4(texelFetch(colormap, idx).rgb, 1.0);
+    // outColor = texelFetch(colormap, idx);
 }
