@@ -27,3 +27,7 @@ meson.original copy.build
 
 todos.md
 
+*.png
+
+.gitignore
+
