@@ -16,6 +16,7 @@ struct Frag4compress {
     u32* length;
     bool* inversed;
     u32 total_length;
+    u64* metaDataFlags;
 
     Frag4compress(const contigs* Contigs)
         : total_length(0)
@@ -35,6 +36,7 @@ struct Frag4compress {
         startCoord = new u32[num]; // TODO (shaoheng): it is wired that if I use std::vector<u32> here, the debugger will be stuck where I call the constructor. Sometimes it can work with std::vector, but sometimes it cannot.
         length = new u32[num];
         inversed = new bool[num];
+        metaDataFlags = new u64[num];
         total_length = 0;
 
         // Initialize the startCoord, length, and inversed
@@ -47,6 +49,7 @@ struct Frag4compress {
             inversed[i] = false; // todo (shaoheng) add the inversed information
             startCoord[i] = startCoord[i-1] + length[i-1];
             length[i] = Contigs->contigs[i].length;
+            metaDataFlags[i] = (Contigs->contigs[i].metaDataFlags == nullptr)?0:*(Contigs->contigs[i].metaDataFlags);
             total_length += length[i];
         }
     }
@@ -68,6 +71,11 @@ private:
         {
             delete[] inversed;
             inversed = nullptr;
+        }
+        if (metaDataFlags)
+        {
+            delete[] metaDataFlags;
+            metaDataFlags = nullptr;
         }
         total_length = 0;
     }

@@ -35,17 +35,38 @@ public:
         this->set_data(likelihood_tensor, graph);
     }
 
-    LikelihoodTable(Frag4compress* frags, const Matrix3D<f32>* compressed_hic, const f32 threshold=10.f/32769.f)
+    LikelihoodTable(
+        Frag4compress* frags, 
+        const Matrix3D<f32>* compressed_hic, 
+        const f32 threshold=10.f/32769.f, 
+        const u32 exclude_tag_num=0, 
+        const u32* exclude_tag_idx=nullptr)
         :num_frags(frags->num), frags(frags), data(nullptr)
-    {
+    {   
+        if (exclude_tag_num > 0 && exclude_tag_idx == nullptr)
+        {
+            fprintf(stderr, "The exclude_tag_num(%d) > 0, but the exclude_tag_idx is nullptr\n", exclude_tag_num);
+            assert(0);
+        }
+
+        auto is_exclude_tag = [&](u32 idx) -> bool
+        {   
+            if (exclude_tag_num==0) return false;
+            for (u32 i = 0; i < exclude_tag_num; i++)
+            {
+                if (frags->metaDataFlags[idx] & (1<<exclude_tag_idx[i])) return true;
+            }
+            return false;
+        };
+
         data = new f32[num_frags * num_frags * 4];
         for (u32 i = 0; i<num_frags * num_frags * 4; i++) data[i] = -1.f;
         for (u32 i = 0; i<num_frags; i++)
         {   
-            if ((f32)frags->length[i]/(f32)frags->total_length <= threshold) continue;
+            if ( (f32)frags->length[i]/(f32)frags->total_length <= threshold || is_exclude_tag(i) ) continue;
             for (u32 j = 0; j < num_frags; j++)
             {   
-                if ((f32)frags->length[j]/(f32)frags->total_length <= threshold) continue;
+                if ( (f32)frags->length[j]/(f32)frags->total_length <= threshold || is_exclude_tag(j)) continue;
                 (*this)(i, j, 0) = (*compressed_hic)(i, j, 0);
                 (*this)(i, j, 1) = (*compressed_hic)(i, j, 1);
                 (*this)(i, j, 2) = (*compressed_hic)(i, j, 3);

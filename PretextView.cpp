@@ -524,7 +524,7 @@ IsContigInverted(u32 index)
 
 global_variable
 meta_data *
-Meta_Data;
+Meta_Data; // meta data for each contig
 
 global_variable
 u32
@@ -534,6 +534,17 @@ global_variable
 u08
 MetaData_Edit_State = 0;
 
+global_variable
+const char *
+Default_Tags[] = 
+{
+    "Haplotig",
+    "Unloc",
+    "X",
+    "Y",
+    "Z",
+    "W"
+};
 
 
 global_variable
@@ -584,7 +595,7 @@ UpdateContigsFromMapState()  // todo reading 从map的状态更新contigs
             last_cont->originalContigId = lastId; // 更新这个片段的id
             last_cont->length = length;           // 更新长度
             last_cont->startCoord = startCoord;   // 更新开头为当前片段在该contig上的局部坐标 endCoord = startCoord + length - 1
-            last_cont->metaDataFlags = Map_State->metaDataFlags + pixelIdx - 1; // 将该片段的标签修改为上一个
+            last_cont->metaDataFlags = Map_State->metaDataFlags + pixelIdx - 1; // Finished (shaoheng): memory problem: assign the pointer to the cont->metaDataFlags, the original is nullptr, the let this ptr point to the last pixel of the contig
 
             u32 thisScaffID = Map_State->scaffIds[pixelIdx - 1]; // 上一个像素点对应的 scaffid
             last_cont->scaffId = thisScaffID ? ((thisScaffID == lastScaffID) ? (scaffId) : (++scaffId)) : 0;  // 如果存在scaffid则（判断是不是同一个scaff，如果是则继续用scaffid，否则++scaffid），否则为0  
@@ -1609,26 +1620,36 @@ MouseMove(GLFWwindow* window, f64 x, f64 y)
 
                 UpdateContigsFromMapState();
             }
-            else if (MetaData_Edit_Mode && MetaData_Edit_State && strlen((const char *)Meta_Data->tags[MetaData_Active_Tag]))
+            else if (
+                MetaData_Edit_Mode && 
+                MetaData_Edit_State && 
+                strlen((const char *)Meta_Data->tags[MetaData_Active_Tag])
+            )
             {
                 u32 pixel = Tool_Tip_Move.pixels.x;
                 u32 contigId = Map_State->contigIds[pixel];
 
-                if (MetaData_Edit_State == 1) Map_State->metaDataFlags[pixel] |= (1 << MetaData_Active_Tag);
-                else Map_State->metaDataFlags[pixel] &= ~(1 << MetaData_Active_Tag);
+                if (MetaData_Edit_State == 1) 
+                    Map_State->metaDataFlags[pixel] |=  (1 << MetaData_Active_Tag); // set the active tag
+                else 
+                    Map_State->metaDataFlags[pixel] &= ~(1 << MetaData_Active_Tag); // clear the active tag
                 
                 u32 testPixel = pixel;
                 while (testPixel && (Map_State->contigIds[testPixel - 1] == contigId))
                 {
-                    if (MetaData_Edit_State == 1) Map_State->metaDataFlags[--testPixel] |= (1 << MetaData_Active_Tag);
-                    else Map_State->metaDataFlags[--testPixel] &= ~(1 << MetaData_Active_Tag);
+                    if (MetaData_Edit_State == 1) 
+                        Map_State->metaDataFlags[--testPixel] |=  (1 << MetaData_Active_Tag);
+                    else 
+                        Map_State->metaDataFlags[--testPixel] &= ~(1 << MetaData_Active_Tag);
                 }
 
                 testPixel = pixel;
                 while ((testPixel < (Number_of_Pixels_1D - 1)) && (Map_State->contigIds[testPixel + 1] == contigId))
                 {
-                    if (MetaData_Edit_State == 1) Map_State->metaDataFlags[++testPixel] |= (1 << MetaData_Active_Tag);
-                    else Map_State->metaDataFlags[++testPixel] &= ~(1 << MetaData_Active_Tag);
+                    if (MetaData_Edit_State == 1) 
+                        Map_State->metaDataFlags[++testPixel] |=  (1 << MetaData_Active_Tag);
+                    else 
+                        Map_State->metaDataFlags[++testPixel] &= ~(1 << MetaData_Active_Tag);
                 }
 
                 UpdateContigsFromMapState();
@@ -4957,17 +4978,6 @@ SetTheme(struct nk_context *ctx, enum theme theme)
     Current_Theme = theme;
 }
 
-global_variable
-const char *
-Default_Tags[] = 
-{
-    "Haplotig",
-    "Unloc",
-    "X",
-    "Y",
-    "Z",
-    "W"
-};
 
 
 global_function
@@ -8803,7 +8813,10 @@ MainArgs {
                             //                 need to fix this issue
                             texture_array_4_ai.cal_compressed_hic(Contigs, Extensions);
                             FragsOrder frags_order(texture_array_4_ai.get_num_frags()); // intilize the frags_order with the number of fragments including the filtered out ones
-                            LikelihoodTable likelihood_table(texture_array_4_ai.get_frags(), texture_array_4_ai.get_compressed_hic(), (f32)show_auto_curation_button.smallest_frag_size_in_pixel / 32769.f);
+                            // exclude the fragments with first two tags during the auto curationme
+                            u32 exclude_tag_num = 2;
+                            u32 exclude_frag_idx[2] = {0, 1};
+                            LikelihoodTable likelihood_table(texture_array_4_ai.get_frags(), texture_array_4_ai.get_compressed_hic(), (f32)show_auto_curation_button.smallest_frag_size_in_pixel / 32769.f, exclude_tag_num, exclude_frag_idx);
                             // use the compressed_hic to calculate the frags_order directly
                             ai_model->sort_according_likelihood_unionFind( likelihood_table, frags_order, show_auto_curation_button.link_score_threshold, texture_array_4_ai.get_frags());
                             AutoCurationFromFragsOrder(
@@ -8815,7 +8828,7 @@ MainArgs {
                         // window to set the parameters for sort
                         if (nk_contextual_begin(NK_Context, 0, nk_vec2(Screen_Scale.x * 480, Screen_Scale.y * 400), bounds))
                         {
-                            nk_layout_row_dynamic(NK_Context, 80, 1);
+                            nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
                             nk_label(NK_Context, "Smallest Frag Size (pixels):", NK_TEXT_LEFT);
                             nk_edit_string_zero_terminated(
                                 NK_Context, 
@@ -8832,7 +8845,7 @@ MainArgs {
                                 sizeof(show_auto_curation_button.score_threshold_buf), 
                                 nk_filter_float);
 
-                            nk_layout_row_dynamic(NK_Context, 80, 2);
+                            nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
                             if (nk_button_label(NK_Context, "Cancel")) 
                             {   
                                 printf("[YaHS Sort] Cancel button clicked\n");
@@ -8857,16 +8870,16 @@ MainArgs {
                             // redo all the changes
                             if (!show_auto_curation_button.show_yahs_redo_confirm_popup)
                             {
-                                nk_layout_row_dynamic(NK_Context, 80, 1);
+                                nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
                                 if (nk_button_label(NK_Context, "Redo All (Careful!)")) 
                                 {   
                                     show_auto_curation_button.show_yahs_redo_confirm_popup=true;
                                 }
                             } else
                             {
-                                nk_layout_row_dynamic(NK_Context, 80, 1);
+                                nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
                                 nk_label(NK_Context, "Are you sure to redo all edits?", NK_TEXT_LEFT);
-                                nk_layout_row_dynamic(NK_Context, 80, 2);
+                                nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
                                 if (nk_button_label(NK_Context, "Yes")) 
                                 {
                                     show_auto_curation_button.show_yahs_redo_confirm_popup=false;
@@ -8881,16 +8894,16 @@ MainArgs {
                             // reject all the edits
                             if (!show_auto_curation_button.show_yahs_erase_confirm_popup)
                             {   
-                                nk_layout_row_dynamic(NK_Context, 80, 1);
+                                nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
                                 if (nk_button_label(NK_Context, "Erase All (Careful!)")) 
                                 {   
                                     show_auto_curation_button.show_yahs_erase_confirm_popup=true;
                                 }
                             } else
                             {
-                                nk_layout_row_dynamic(NK_Context, 80, 1);
+                                nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
                                 nk_label(NK_Context, "Are you sure to erase all edits?", NK_TEXT_LEFT);
-                                nk_layout_row_dynamic(NK_Context, 80, 2);
+                                nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
                                 if (nk_button_label(NK_Context, "Yes")) 
                                 {
                                     show_auto_curation_button.show_yahs_erase_confirm_popup=false;

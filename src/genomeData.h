@@ -43,7 +43,7 @@ struct original_contig
 
 struct contig
 {
-    u64 *metaDataFlags;
+    u64 *metaDataFlags;   // meta data flags for every contig
     u32 length;
     u32 originalContigId; // original contig id
     u32 startCoord;       // local coordinate on the original contig
@@ -72,8 +72,8 @@ struct map_state
     u32 *contigIds;         // [num_pixels_1d]
     u32 *originalContigIds; // orignal contig id [num_pixels_1d]
     u32 *contigRelCoords;   // local coordinate on the original contig [num_pixels_1d]
-    u32 *scaffIds;
-    u64 *metaDataFlags;
+    u32 *scaffIds;          // [num_pixels_1d]
+    u64 *metaDataFlags;     // [num_pixels_1d], 256kb for 32768 pixels
 };
 
 
