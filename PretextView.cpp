@@ -3943,7 +3943,6 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
     }
     else // clear all the memory, in gl and the arena
     {   
-
         glDeleteTextures(1, &Contact_Matrix->textures);
 
         glDeleteVertexArrays((GLsizei)(Number_of_Textures_1D * Number_of_Textures_1D), Contact_Matrix->vaos);
