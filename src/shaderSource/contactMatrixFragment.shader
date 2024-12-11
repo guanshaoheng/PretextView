@@ -118,4 +118,5 @@ void main()
     float value = bezier(mix(f1, f2, fract(mml))); // mix(x, y, a) = x * (1 - a) + y * a
     int idx = int(round(value * 255)); // covert to from [0 - 1] to [0 - 255]
     outColor = vec4(texelFetch(colormap, idx).rgb, 1.0);
+    // outColor = texelFetch(colormap, idx);
 }

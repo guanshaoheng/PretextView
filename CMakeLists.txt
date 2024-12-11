@@ -84,6 +84,14 @@ find_library(PYTORCH_EXTENSION_LIBRARY
 message(STATUS "Pytorch scatter found: ${PYTORCH_EXTENSION_LIBRARY}")
 
 
+
+find_library(PYTORCH_EXTENSION_LIBRARY
+    NAMES libtorchscatter.dylib
+    PATHS subprojects/pytorch_scatter/build
+    REQUIRED)
+message(STATUS "Pytorch scatter found: ${PYTORCH_EXTENSION_LIBRARY}")
+
+
 add_library(aisort STATIC src/aisort.cpp )
 target_link_libraries(aisort PRIVATE ${TORCH_LIBRARIES} ${PYTORCH_EXTENSION_LIBRARY})
 

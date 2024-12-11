@@ -147,6 +147,7 @@ FragmentSource_UI = readShaderSource((char*)"src/shaderSource/uiFragment.shader"
 
 
 
+
 global_variable
 memory_arena
 Working_Set;
@@ -5327,6 +5328,7 @@ Setup()
 }
 
 
+
 global_function
 void
 TakeScreenShot(int nchannels = 4)
@@ -5343,6 +5345,7 @@ TakeScreenShot(int nchannels = 4)
     stbi_write_png("PretextView_ScreenShot.png", viewport[2], viewport[3], nchannels, imageBuffer, nchannels * viewport[2]); //TODO change png compression to use libdeflate zlib impl
     FreeLastPush(Working_Set);
 }
+
 
 
 global_function
