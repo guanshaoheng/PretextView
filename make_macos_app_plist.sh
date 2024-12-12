@@ -1,6 +1,7 @@
 #!/bin/bash
 
 APPVERSION=$1
+app_name="PretextViewAI"
 
 cat > "Info.plist" <<END
 <?xml version="1.0" encoding="UTF-8"?>
@@ -8,13 +9,13 @@ cat > "Info.plist" <<END
 <plist version="1.0">
 <dict>
   <key>CFBundleGetInfoString</key>
-  <string>PretextView</string>
+  <string>${app_name}</string>
   <key>CFBundleExecutable</key>
-  <string>PretextView</string>
+  <string>${app_name}</string>
   <key>CFBundleIdentifier</key>
   <string>com.example.www</string>
   <key>CFBundleName</key>
-  <string>PretextView</string>
+  <string>${app_name}</string>
   <key>CFBundleIconFile</key>
   <string>icon.icns</string>
   <key>CFBundleShortVersionString</key>

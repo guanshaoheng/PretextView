@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2021 Ed Harry, Wellcome Sanger Institute, Genome Research Limited
+Copyright (c) 2024 Shaoheng Guan, Wellcome Sanger Institute
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

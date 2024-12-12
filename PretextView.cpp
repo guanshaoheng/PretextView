@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2021 Ed Harry, Wellcome Sanger Institute
+Copyright (c) 2024 Shaoheng Guan, Wellcome Sanger Institute
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +25,8 @@ SOFTWARE.
 #define my_String_(x) #x
 #define my_String(x) my_String_(x)
 
-#define PretextView_Version "PretextView Version " my_String(PV) 
+#define PretextView_Version "PretextViewAI Version " my_String(PV) // PV is defined in the CMakeLists.txt
+#define PretextView_Title "PretextViewAI " my_String(PV) " - Wellcome Sanger Institute"    
 
 
 #include <aisort.h>  // place this before add Header.h to avoid macro conflict
@@ -82,7 +84,7 @@ SOFTWARE.
 #define STBI_ONLY_PNG
 #ifndef DEBUG
 #define STBI_ASSERT(x)
-#endif
+#endif // debug
 #ifndef STB_IMAGE_IMPLEMENTATION
     #define STB_IMAGE_IMPLEMENTATION
     #include "stb_image.h"
@@ -102,50 +104,55 @@ SOFTWARE.
 #include "showWindowData.h"
 
 
+#ifdef __APPLE__
+std::string shader_source_dir = getResourcesPath() + "/src/shaderSource/";
+#else
+    fprintf(stderr, "Only implemented on MacOS.\n");
+    assert(0);
+#endif // __APPLE__
 // Contact_Matrix->shaderProgram
 global_variable
 std::string
-VertexSource_Texture = readShaderSource((char*)"src/shaderSource/contactMatrixVertex.shader");
+VertexSource_Texture = readShaderSource(shader_source_dir + "contactMatrixVertex.shader");
 
 // Contact_Matrix->shaderProgram
 global_variable
 std::string
-FragmentSource_Texture = readShaderSource((char*)"src/shaderSource/contactMatrixFragment.shader");
+FragmentSource_Texture = readShaderSource( shader_source_dir + "contactMatrixFragment.shader");
 
 global_variable
 std::string
-VertexSource_Flat = readShaderSource((char*)"src/shaderSource/flatVertex.shader");
+VertexSource_Flat = readShaderSource( shader_source_dir + "flatVertex.shader");
 
 global_variable
 std::string
-FragmentSource_Flat = readShaderSource((char*)"src/shaderSource/flatFragment.shader");
+FragmentSource_Flat = readShaderSource( shader_source_dir + "flatFragment.shader");
 
 global_variable
 std::string
-VertexSource_EditablePlot = readShaderSource((char*)"src/shaderSource/editVertex.shader");
+VertexSource_EditablePlot = readShaderSource( shader_source_dir + "editVertex.shader");
 
 global_variable
 std::string
-FragmentSource_EditablePlot = readShaderSource((char*)"src/shaderSource/editFragment.shader");
+FragmentSource_EditablePlot = readShaderSource( shader_source_dir + "editFragment.shader");
 
 // https://blog.tammearu.eu/posts/gllines/
 global_variable
 std::string
-GeometrySource_EditablePlot = readShaderSource((char*)"src/shaderSource/editGeometry.shader");
+GeometrySource_EditablePlot = readShaderSource( shader_source_dir + "editGeometry.shader");
 
 global_variable
 std::string
-VertexSource_UI = readShaderSource((char*)"src/shaderSource/uiVertex.shader");
+VertexSource_UI = readShaderSource( shader_source_dir + "uiVertex.shader");
 
 global_variable
 std::string
-FragmentSource_UI = readShaderSource((char*)"src/shaderSource/uiFragment.shader");
+FragmentSource_UI = readShaderSource( shader_source_dir + "uiFragment.shader");
+
 
 #define UI_SHADER_LOC_POSITION 0
 #define UI_SHADER_LOC_TEXCOORD 1
 #define UI_SHADER_LOC_COLOR 2
-
-
 
 
 global_variable
@@ -2289,14 +2296,10 @@ Render() {
         f32 position = 0.0f;
 
         // left border
-        vert[0].x = -0.5f;
-        vert[0].y = -0.5f;
-        vert[1].x = lineWidth - 0.5f;
-        vert[1].y = -0.5f;
-        vert[2].x = lineWidth - 0.5f;
-        vert[2].y = 0.5f;
-        vert[3].x = -0.5f;
-        vert[3].y = 0.5f;
+        vert[0].x = -0.5f;            vert[0].y = -0.5f;
+        vert[1].x = lineWidth - 0.5f; vert[1].y = -0.5f;
+        vert[2].x = lineWidth - 0.5f; vert[2].y = 0.5f;
+        vert[3].x = -0.5f;            vert[3].y = 0.5f;
 
         glBindBuffer(GL_ARRAY_BUFFER, Grid_Data->vbos[ptr]);
         glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -2315,14 +2318,10 @@ Render() {
             if (x > px)
             {   
                 // contig vertical line
-                vert[0].x = x;
-                vert[0].y = -0.5f;
-                vert[1].x = x + lineWidth;
-                vert[1].y = -0.5f;
-                vert[2].x = x + lineWidth;
-                vert[2].y = 0.5f;
-                vert[3].x = x;
-                vert[3].y = 0.5f;
+                vert[0].x = x;             vert[0].y = -0.5f;
+                vert[1].x = x + lineWidth; vert[1].y = -0.5f;
+                vert[2].x = x + lineWidth; vert[2].y = 0.5f;
+                vert[3].x = x;             vert[3].y = 0.5f;
 
                 glBindBuffer(GL_ARRAY_BUFFER, Grid_Data->vbos[ptr]);
                 glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -2331,14 +2330,10 @@ Render() {
             }
         }
         // right border
-        vert[0].x = 0.5f - lineWidth;
-        vert[0].y = -0.5f;
-        vert[1].x = 0.5f;
-        vert[1].y = -0.5f;
-        vert[2].x = 0.5f;
-        vert[2].y = 0.5f;
-        vert[3].x = 0.5f - lineWidth;
-        vert[3].y = 0.5f;
+        vert[0].x = 0.5f - lineWidth; vert[0].y = -0.5f;
+        vert[1].x = 0.5f;             vert[1].y = -0.5f;
+        vert[2].x = 0.5f;             vert[2].y = 0.5f;
+        vert[3].x = 0.5f - lineWidth; vert[3].y = 0.5f;
 
         glBindBuffer(GL_ARRAY_BUFFER, Grid_Data->vbos[ptr]);
         glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -2347,14 +2342,10 @@ Render() {
 
         position = 0.0f;
         // top border
-        vert[0].x = -0.5f;
-        vert[0].y = 0.5f - lineWidth;
-        vert[1].x = 0.5f;
-        vert[1].y = 0.5f - lineWidth;
-        vert[2].x = 0.5f;
-        vert[2].y = 0.5f;
-        vert[3].x = -0.5f;
-        vert[3].y = 0.5f;
+        vert[0].x = -0.5f; vert[0].y = 0.5f - lineWidth;
+        vert[1].x = 0.5f;  vert[1].y = 0.5f - lineWidth;
+        vert[2].x = 0.5f;  vert[2].y = 0.5f;
+        vert[3].x = -0.5f; vert[3].y = 0.5f;
 
         glBindBuffer(GL_ARRAY_BUFFER, Grid_Data->vbos[ptr]);
         glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -2373,14 +2364,10 @@ Render() {
             if (y < py)
             {   
                 // contig horizontal line
-                vert[0].x = -0.5f;
-                vert[0].y = y - lineWidth;
-                vert[1].x = 0.5f;
-                vert[1].y = y - lineWidth;
-                vert[2].x = 0.5f;
-                vert[2].y = y;
-                vert[3].x = -0.5f;
-                vert[3].y = y;
+                vert[0].x = -0.5f; vert[0].y = y - lineWidth;
+                vert[1].x = 0.5f;  vert[1].y = y - lineWidth;
+                vert[2].x = 0.5f;  vert[2].y = y;
+                vert[3].x = -0.5f; vert[3].y = y;
 
                 glBindBuffer(GL_ARRAY_BUFFER, Grid_Data->vbos[ptr]);
                 glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -2389,14 +2376,10 @@ Render() {
             }
         }
         // bottom border
-        vert[0].x = -0.5f;
-        vert[0].y = -0.5f;
-        vert[1].x = 0.5f;
-        vert[1].y = -0.5f;
-        vert[2].x = 0.5f;
-        vert[2].y = lineWidth - 0.5f;
-        vert[3].x = -0.5f;
-        vert[3].y = lineWidth - 0.5f;
+        vert[0].x = -0.5f; vert[0].y = -0.5f;
+        vert[1].x = 0.5f;  vert[1].y = -0.5f;
+        vert[2].x = 0.5f;  vert[2].y = lineWidth - 0.5f;
+        vert[3].x = -0.5f; vert[3].y = lineWidth - 0.5f;
 
         glBindBuffer(GL_ARRAY_BUFFER, Grid_Data->vbos[ptr]);
         glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -2431,14 +2414,10 @@ Render() {
             {
                 u32 invert = IsContigInverted(index);
 
-                vert[0].x = -py;
-                vert[0].y = invert ? y : (py + lineWidth);
-                vert[1].x = -py;
-                vert[1].y = invert ? (y - lineWidth) : py;
-                vert[2].x = -y;
-                vert[2].y = invert ? (y - lineWidth) : py;
-                vert[3].x = -y;
-                vert[3].y = invert ? y : (py + lineWidth);
+                vert[0].x = -py; vert[0].y = invert ? y : (py + lineWidth);
+                vert[1].x = -py; vert[1].y = invert ? (y - lineWidth) : py;
+                vert[2].x = -y;  vert[2].y = invert ? (y - lineWidth) : py;
+                vert[3].x = -y;  vert[3].y = invert ? y : (py + lineWidth);
 
                 ColourGenerator((u32)cont->originalContigId, (f32 *)barColour);
                 glUniform4fv(Flat_Shader->colorLocation, 1, (GLfloat *)&barColour);
@@ -2569,10 +2548,10 @@ Render() {
 
                         glUseProgram(Flat_Shader->shaderProgram);
 
-                        vert[0].x = x - w2t; vert[0].y = y + lh;
-                        vert[1].x = x + w2t; vert[1].y = y + lh;
-                        vert[2].x = x + w2t; vert[2].y = y;
-                        vert[3].x = x - w2t; vert[3].y = y;
+                        vert[0].x = x - w2t;  vert[0].y = y + lh;
+                        vert[1].x = x + w2t;  vert[1].y = y + lh;
+                        vert[2].x = x + w2t;  vert[2].y = y;
+                        vert[3].x = x - w2t;  vert[3].y = y;
 
                         glBindBuffer(GL_ARRAY_BUFFER, Label_Box_Data->vbos[ptr]);
                         glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -2622,10 +2601,10 @@ Render() {
 
                         glUseProgram(Flat_Shader->shaderProgram);
 
-                        vert[0].x = x - w2t; vert[0].y = y + lh;
-                        vert[1].x = x + w2t; vert[1].y = y + lh;
-                        vert[2].x = x + w2t; vert[2].y = y;
-                        vert[3].x = x - w2t; vert[3].y = y;
+                        vert[0].x = x - w2t;  vert[0].y = y + lh;
+                        vert[1].x = x + w2t;  vert[1].y = y + lh;
+                        vert[2].x = x + w2t;  vert[2].y = y;
+                        vert[3].x = x - w2t;  vert[3].y = y;
 
                         glBindBuffer(GL_ARRAY_BUFFER, Label_Box_Data->vbos[ptr]);
                         glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -2706,14 +2685,10 @@ Render() {
                         glUseProgram(Flat_Shader->shaderProgram);
                         glUniform4fv(Flat_Shader->colorLocation, 1, bg);
 
-                        vert[0].x = leftPixel + 1.0f;
-                        vert[0].y = y + scaleBarWidth + tickLength + 1.0f + lh;
-                        vert[1].x = rightPixel - 1.0f;
-                        vert[1].y = y + scaleBarWidth + tickLength + 1.0f + lh;
-                        vert[2].x = rightPixel - 1.0f;
-                        vert[2].y = y;
-                        vert[3].x = leftPixel + 1.0f;
-                        vert[3].y = y;
+                        vert[0].x = leftPixel + 1.0f;   vert[0].y = y + scaleBarWidth + tickLength + 1.0f + lh;
+                        vert[1].x = rightPixel - 1.0f;  vert[1].y = y + scaleBarWidth + tickLength + 1.0f + lh;
+                        vert[2].x = rightPixel - 1.0f;  vert[2].y = y;
+                        vert[3].x = leftPixel + 1.0f;   vert[3].y = y;
 
                         glBindBuffer(GL_ARRAY_BUFFER, Scale_Bar_Data->vbos[ptr]);
                         glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -2722,14 +2697,10 @@ Render() {
 
                         glUniform4fv(Flat_Shader->colorLocation, 1, (f32 *)&Scale_Bars->fg);
 
-                        vert[0].x = leftPixel + 1.0f;
-                        vert[0].y = y + scaleBarWidth;
-                        vert[1].x = rightPixel - 1.0f;
-                        vert[1].y = y + scaleBarWidth;
-                        vert[2].x = rightPixel - 1.0f;
-                        vert[2].y = y;
-                        vert[3].x = leftPixel + 1.0f;
-                        vert[3].y = y;
+                        vert[0].x = leftPixel + 1.0f;   vert[0].y = y + scaleBarWidth;
+                        vert[1].x = rightPixel - 1.0f;  vert[1].y = y + scaleBarWidth;
+                        vert[2].x = rightPixel - 1.0f;  vert[2].y = y;
+                        vert[3].x = leftPixel + 1.0f;   vert[3].y = y;
 
                         glBindBuffer(GL_ARRAY_BUFFER, Scale_Bar_Data->vbos[ptr]);
                         glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -2745,14 +2716,10 @@ Render() {
 
                             glUseProgram(Flat_Shader->shaderProgram);
 
-                            vert[0].x = x - (0.5f * scaleBarWidth);
-                            vert[0].y = y + scaleBarWidth + tickLength;
-                            vert[1].x = x + (0.5f * scaleBarWidth);
-                            vert[1].y = y + scaleBarWidth + tickLength;
-                            vert[2].x = x + (0.5f * scaleBarWidth);
-                            vert[2].y = y + scaleBarWidth;
-                            vert[3].x = x - (0.5f * scaleBarWidth);
-                            vert[3].y = y + scaleBarWidth;
+                            vert[0].x = x - (0.5f * scaleBarWidth);  vert[0].y = y + scaleBarWidth + tickLength;
+                            vert[1].x = x + (0.5f * scaleBarWidth);  vert[1].y = y + scaleBarWidth + tickLength;
+                            vert[2].x = x + (0.5f * scaleBarWidth);  vert[2].y = y + scaleBarWidth;
+                            vert[3].x = x - (0.5f * scaleBarWidth);  vert[3].y = y + scaleBarWidth;
 
                             glBindBuffer(GL_ARRAY_BUFFER, Scale_Bar_Data->vbos[ptr]);
                             glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -2833,28 +2800,20 @@ Render() {
                 }
 
                 // draw the vertical line
-                vert[0].x = screen.x - lineWidth;
-                vert[0].y = long_vertical ? screenYRange.x : screen.y - lineHeight;
-                vert[1].x = screen.x - lineWidth;
-                vert[1].y = long_vertical ? screenYRange.y : screen.y + lineHeight;
-                vert[2].x = screen.x + lineWidth;
-                vert[2].y = long_vertical ? screenYRange.y : screen.y + lineHeight;
-                vert[3].x = screen.x + lineWidth;
-                vert[3].y = long_vertical ? screenYRange.x : screen.y - lineHeight;
+                vert[0].x = screen.x - lineWidth;  vert[0].y = long_vertical ? screenYRange.x : screen.y - lineHeight;
+                vert[1].x = screen.x - lineWidth;  vert[1].y = long_vertical ? screenYRange.y : screen.y + lineHeight;
+                vert[2].x = screen.x + lineWidth;  vert[2].y = long_vertical ? screenYRange.y : screen.y + lineHeight;
+                vert[3].x = screen.x + lineWidth;  vert[3].y = long_vertical ? screenYRange.x : screen.y - lineHeight;
                 glBindBuffer(GL_ARRAY_BUFFER, Waypoint_Data->vbos[ptr]);
                 glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
                 glBindVertexArray(Waypoint_Data->vaos[ptr++]);
                 glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
 
                 // draw the horizontal line (originally: the left part, not sure why Ed draw them seperately, if problem arises we can returen here)  maybe avoid drawing the cross part twice...
-                vert[0].x = long_horizontal ? screenXRange.x : screen.x - lineHeight; 
-                vert[0].y = screen.y - lineWidth;
-                vert[1].x = long_horizontal ? screenXRange.x : screen.x - lineHeight; 
-                vert[1].y = screen.y + lineWidth;
-                vert[2].x = long_horizontal ? screenXRange.y : screen.x + lineHeight; // vert[2].x = screen.x - lineWidth;
-                vert[2].y = screen.y + lineWidth;
-                vert[3].x = long_horizontal ? screenXRange.y : screen.x + lineHeight; // vert[3].x = screen.x - lineWidth;
-                vert[3].y = screen.y - lineWidth;
+                vert[0].x = long_horizontal ? screenXRange.x : screen.x - lineHeight;  vert[0].y = screen.y - lineWidth;
+                vert[1].x = long_horizontal ? screenXRange.x : screen.x - lineHeight;  vert[1].y = screen.y + lineWidth;
+                vert[2].x = long_horizontal ? screenXRange.y : screen.x + lineHeight;  vert[2].y = screen.y + lineWidth;// vert[2].x = screen.x - lineWidth; 
+                vert[3].x = long_horizontal ? screenXRange.y : screen.x + lineHeight;  vert[3].y = screen.y - lineWidth;// vert[3].x = screen.x - lineWidth; 
                 glBindBuffer(GL_ARRAY_BUFFER, Waypoint_Data->vbos[ptr]);
                 glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
                 glBindVertexArray(Waypoint_Data->vaos[ptr++]);
@@ -2929,14 +2888,10 @@ Render() {
                 glUseProgram(Flat_Shader->shaderProgram);
                 glUniform4fv(Flat_Shader->colorLocation, 1, (f32 *)&Waypoint_Mode_Data->bg);
 
-                vert[0].x = width - spacing - textWidth;
-                vert[0].y = height - spacing - textBoxHeight;
-                vert[1].x = width - spacing - textWidth;
-                vert[1].y = height - spacing;
-                vert[2].x = width - spacing;
-                vert[2].y = height - spacing;
-                vert[3].x = width - spacing;
-                vert[3].y = height - spacing - textBoxHeight;
+                vert[0].x = width - spacing - textWidth;  vert[0].y = height - spacing - textBoxHeight;
+                vert[1].x = width - spacing - textWidth;  vert[1].y = height - spacing;
+                vert[2].x = width - spacing;              vert[2].y = height - spacing;
+                vert[3].x = width - spacing;              vert[3].y = height - spacing - textBoxHeight;
 
                 glBindBuffer(GL_ARRAY_BUFFER, Waypoint_Data->vbos[ptr]);
                 glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -2990,14 +2945,10 @@ Render() {
                 {
                     if (scaffId)
                     {
-                        vert[0].x = ModelXToScreen(start - 0.5f);
-                        vert[0].y = ModelYToScreen(0.5f - start);
-                        vert[1].x = ModelXToScreen(start - 0.5f);
-                        vert[1].y = ModelYToScreen(0.5f - position);
-                        vert[2].x = ModelXToScreen(position - 0.5f);
-                        vert[2].y = ModelYToScreen(0.5f - position);
-                        vert[3].x = ModelXToScreen(position - 0.5f);
-                        vert[3].y = ModelYToScreen(0.5f - start);
+                        vert[0].x = ModelXToScreen(start - 0.5f);     vert[0].y = ModelYToScreen(0.5f - start);
+                        vert[1].x = ModelXToScreen(start - 0.5f);     vert[1].y = ModelYToScreen(0.5f - position);
+                        vert[2].x = ModelXToScreen(position - 0.5f);  vert[2].y = ModelYToScreen(0.5f - position);
+                        vert[3].x = ModelXToScreen(position - 0.5f);  vert[3].y = ModelYToScreen(0.5f - start);
 
                         ColourGenerator((u32)scaffId, (f32 *)barColour);
                         u32 colour = ThreeFloatColorToU32(*((nk_colorf *)barColour));
@@ -3027,14 +2978,10 @@ Render() {
 
             if (scaffId)
             {
-                vert[0].x = ModelXToScreen(start - 0.5f);
-                vert[0].y = ModelYToScreen(0.5f - start);
-                vert[1].x = ModelXToScreen(start - 0.5f);
-                vert[1].y = ModelYToScreen(0.5f - position);
-                vert[2].x = ModelXToScreen(position - 0.5f);
-                vert[2].y = ModelYToScreen(0.5f - position);
-                vert[3].x = ModelXToScreen(position - 0.5f);
-                vert[3].y = ModelYToScreen(0.5f - start);
+                vert[0].x = ModelXToScreen(start - 0.5f);     vert[0].y = ModelYToScreen(0.5f - start);
+                vert[1].x = ModelXToScreen(start - 0.5f);     vert[1].y = ModelYToScreen(0.5f - position);
+                vert[2].x = ModelXToScreen(position - 0.5f);  vert[2].y = ModelYToScreen(0.5f - position);
+                vert[3].x = ModelXToScreen(position - 0.5f);  vert[3].y = ModelYToScreen(0.5f - start);
 
                 ColourGenerator((u32)scaffId, (f32 *)barColour);
                 u32 colour = FourFloatColorToU32(*((nk_colorf *)barColour));
@@ -3066,27 +3013,27 @@ Render() {
                 textBoxHeight += 6.0f;
                 f32 spacing = 10.0f;
 
-                char *helpText1 = (char *)"Scaffold Edit Mode";
-                char *helpText2 = (char *)"S: exit";
-                char *helpText3 = (char *)"Left Click: place";
-                char *helpText4 = (char *)"Middle Click / Spacebar: delete";
-                char *helpText5 = (char *)"Shift-D: delete all";
-                char *helpText6 = (char *)"A (Hold): flood fill";
-                char *helpText7 = (char *)"Shift-A (Hold): flood fill and override";
+                std::vector<std::string> helpTexts = {
+                    "Scaffold Edit Mode", 
+                    "S: exit", 
+                    "Left Click: place", 
+                    "Middle Click / Spacebar: delete", 
+                    "Shift-D: delete all", 
+                    "A (Hold): flood fill", 
+                    "Shift-A (Hold): flood fill and override"
+                };
 
-                f32 textWidth = fonsTextBounds(FontStash_Context, 0, 0, helpText7, 0, NULL);
+                f32 textWidth =0.f;
+                for (const auto& tmp:helpTexts) 
+                    textWidth = std::max(textWidth, fonsTextBounds(FontStash_Context, 0, 0, tmp.c_str(), 0, NULL));
 
                 glUseProgram(Flat_Shader->shaderProgram);
                 glUniform4fv(Flat_Shader->colorLocation, 1, (f32 *)&Scaff_Mode_Data->bg);
 
-                vert[0].x = width - spacing - textWidth;
-                vert[0].y = height - spacing - textBoxHeight;
-                vert[1].x = width - spacing - textWidth;
-                vert[1].y = height - spacing;
-                vert[2].x = width - spacing;
-                vert[2].y = height - spacing;
-                vert[3].x = width - spacing;
-                vert[3].y = height - spacing - textBoxHeight;
+                vert[0].x = width - spacing - textWidth;  vert[0].y = height - spacing - textBoxHeight;
+                vert[1].x = width - spacing - textWidth;  vert[1].y = height - spacing;
+                vert[2].x = width - spacing;              vert[2].y = height - spacing;
+                vert[3].x = width - spacing;              vert[3].y = height - spacing - textBoxHeight;
 
                 glBindBuffer(GL_ARRAY_BUFFER, Waypoint_Data->vbos[ptr]);
                 glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -3094,19 +3041,14 @@ Render() {
                 glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
 
                 glUseProgram(UI_Shader->shaderProgram);
-                fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight, helpText1, 0);
-                f32 textY = 1.0f + lh;
-                fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight + textY, helpText2, 0);
-                textY += (1.0f + lh);
-                fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight + textY, helpText3, 0);
-                textY += (1.0f + lh);
-                fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight + textY, helpText4, 0);
-                textY += (1.0f + lh);
-                fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight + textY, helpText5, 0);
-                textY += (1.0f + lh);
-                fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight + textY, helpText6, 0);
-                textY += (1.0f + lh);
-                fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight + textY, helpText7, 0);
+                for (u32 i=0; i< helpTexts.size() ; i++) {
+                    fonsDrawText(
+                        FontStash_Context, 
+                        width - spacing - textWidth, 
+                        height - spacing - textBoxHeight + (lh + 1.0f) * i, 
+                        helpTexts[i].c_str(), 
+                        0);
+                }
             }
         }
 
@@ -3167,29 +3109,31 @@ Render() {
                 textBoxHeight += 6.0f;
                 f32 spacing = 10.0f;
 
-                char *helpText1 = (char *)"MetaData Tag Mode";
-                char *helpText2 = (char *)"M: exit";
-                char *helpText3 = (char *)"Left Click: place";
-                char *helpText4 = (char *)"Middle Click / Spacebar: delete";
-                char *helpText5 = (char *)"Shift-D: delete all";
-                char *helpText6 = (char *)"Arrow Keys: select active tag";
                 char helpText7[128];
                 const char *activeTag = (const char *)Meta_Data->tags[MetaData_Active_Tag];
                 stbsp_snprintf(helpText7, sizeof(helpText7), "Active Tag: %s", strlen(activeTag) ? activeTag : "<NA>");
 
-                f32 textWidth = my_Max(fonsTextBounds(FontStash_Context, 0, 0, helpText7, 0, NULL), fonsTextBounds(FontStash_Context, 0, 0, helpText4, 0, NULL));
+                std::vector<std::string> helpTexts = {
+                    "MetaData Tag Mode", 
+                    "M: exit", 
+                    "Left Click: place", 
+                    "Middle Click / Spacebar: delete", 
+                    "Shift-D: delete all", 
+                    "Arrow Keys: select active tag", 
+                    helpText7
+                };
+
+                f32 textWidth = 0.f;
+                for (const auto& tmp:helpTexts) 
+                    textWidth = std::max(textWidth, fonsTextBounds(FontStash_Context, 0, 0, tmp.c_str(), 0, NULL));
 
                 glUseProgram(Flat_Shader->shaderProgram);
                 glUniform4fv(Flat_Shader->colorLocation, 1, (f32 *)&MetaData_Mode_Data->bg);
 
-                vert[0].x = width - spacing - textWidth;
-                vert[0].y = height - spacing - textBoxHeight;
-                vert[1].x = width - spacing - textWidth;
-                vert[1].y = height - spacing;
-                vert[2].x = width - spacing;
-                vert[2].y = height - spacing;
-                vert[3].x = width - spacing;
-                vert[3].y = height - spacing - textBoxHeight;
+                vert[0].x = width - spacing - textWidth;  vert[0].y = height - spacing - textBoxHeight;
+                vert[1].x = width - spacing - textWidth;  vert[1].y = height - spacing;
+                vert[2].x = width - spacing;              vert[2].y = height - spacing;
+                vert[3].x = width - spacing;              vert[3].y = height - spacing - textBoxHeight;
 
                 glBindBuffer(GL_ARRAY_BUFFER, Waypoint_Data->vbos[ptr]);
                 glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -3197,19 +3141,14 @@ Render() {
                 glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
 
                 glUseProgram(UI_Shader->shaderProgram);
-                fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight, helpText1, 0);
-                f32 textY = 1.0f + lh;
-                fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight + textY, helpText2, 0);
-                textY += (1.0f + lh);
-                fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight + textY, helpText3, 0);
-                textY += (1.0f + lh);
-                fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight + textY, helpText4, 0);
-                textY += (1.0f + lh);
-                fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight + textY, helpText5, 0);
-                textY += (1.0f + lh);
-                fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight + textY, helpText6, 0);
-                textY += (1.0f + lh);
-                fonsDrawText(FontStash_Context, width - spacing - textWidth, height - spacing - textBoxHeight + textY, helpText7, 0);
+                for (u32 i=0; i< helpTexts.size() ; i++) {
+                    fonsDrawText(
+                        FontStash_Context, 
+                        width - spacing - textWidth, 
+                        height - spacing - textBoxHeight + (lh + 1.0f) * i, 
+                        helpTexts[i].c_str(), 
+                        0);
+                }
             }
         }
         
@@ -3304,14 +3243,10 @@ Render() {
 
             glUseProgram(Flat_Shader->shaderProgram);
 
-            vert[0].x = ModelXToScreen(Tool_Tip_Move.worldCoords.x) + spacing;
-            vert[0].y = ModelYToScreen(-Tool_Tip_Move.worldCoords.y) + spacing;
-            vert[1].x = ModelXToScreen(Tool_Tip_Move.worldCoords.x) + spacing;
-            vert[1].y = ModelYToScreen(-Tool_Tip_Move.worldCoords.y) + spacing + textBoxHeight;
-            vert[2].x = ModelXToScreen(Tool_Tip_Move.worldCoords.x) + spacing + textWidth;
-            vert[2].y = ModelYToScreen(-Tool_Tip_Move.worldCoords.y) + spacing + textBoxHeight;
-            vert[3].x = ModelXToScreen(Tool_Tip_Move.worldCoords.x) + spacing + textWidth;
-            vert[3].y = ModelYToScreen(-Tool_Tip_Move.worldCoords.y) + spacing;
+            vert[0].x = ModelXToScreen(Tool_Tip_Move.worldCoords.x) + spacing;             vert[0].y = ModelYToScreen(-Tool_Tip_Move.worldCoords.y) + spacing;
+            vert[1].x = ModelXToScreen(Tool_Tip_Move.worldCoords.x) + spacing;             vert[1].y = ModelYToScreen(-Tool_Tip_Move.worldCoords.y) + spacing + textBoxHeight;
+            vert[2].x = ModelXToScreen(Tool_Tip_Move.worldCoords.x) + spacing + textWidth; vert[2].y = ModelYToScreen(-Tool_Tip_Move.worldCoords.y) + spacing + textBoxHeight;
+            vert[3].x = ModelXToScreen(Tool_Tip_Move.worldCoords.x) + spacing + textWidth; vert[3].y = ModelYToScreen(-Tool_Tip_Move.worldCoords.y) + spacing;
 
             glBindBuffer(GL_ARRAY_BUFFER, Tool_Tip_Data->vbos[0]);
             glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -5672,13 +5607,15 @@ void AutoCurationFromFragsOrder(
         return;
     }
 
+    u32 num_autoCurated_edits=0;
+
     // check the difference between the contigs, order and the new frags order
     u32 start_loc = 0;
     std::vector<s32> current_order(num_frags);
     const std::vector<s32> predicted_order = frags_order_->get_order_without_chromosomeInfor(); // start from 1
     for (s32 i = 0; i < num_frags; ++i) current_order[i] = i+1; // start from 1
     auto move_current_order_element = [&current_order, &num_frags](u32 from, u32 to)
-    {   
+    {
         if (from >= num_frags || to >= num_frags)
         {
             fprintf(stderr, "Invalid from(%d) or to(%d), index should betwee [0, %d].\n", from, to, num_frags-1);
@@ -5714,7 +5651,7 @@ void AutoCurationFromFragsOrder(
             AddMapEdit(0, {start_loc, start_loc + contigs_->contigs[i].length - 1}, true);
             current_order[i] = -current_order[i];
             start_loc += contigs_->contigs[i].length;
-            printf("[AI curation]: Invert contig %d.\n", predicted_order[i]);
+            printf("[Auto curation] (#%d) Invert contig %d.\n", ++num_autoCurated_edits, predicted_order[i]);
             continue;
         }
         else if (predicted_order[i] != current_order[i] && predicted_order[i] != -current_order[i])  // move the contig to the new position
@@ -5748,9 +5685,9 @@ void AutoCurationFromFragsOrder(
             start_loc += contigs_->contigs[i].length; // update start_loc after move fragments
             if (is_curated_inverted)
             {
-                printf("[AI curation]: Invert and Move contig %d to %d\n", predicted_order[i], i);
+                printf("[Auto curation] (#%d) Invert and Move contig %d to %d\n", ++num_autoCurated_edits, predicted_order[i], i);
             }
-            else printf("[AI curation]: Move contig %d to %d.\n", predicted_order[i], i);
+            else printf("[Auto curation] (#%d) Move contig %d to %d.\n", ++num_autoCurated_edits, predicted_order[i], i);
             continue;
         }
         else 
@@ -5759,7 +5696,7 @@ void AutoCurationFromFragsOrder(
             continue;
         }
     }
-    printf("[AI curatioin]: finished.\n");
+    printf("[Auto curatioin] finished with %d edits\n", num_autoCurated_edits);
 
     return ;
 }
@@ -8477,9 +8414,7 @@ MainArgs {
     {
         initWithFile = 1;
         CopyNullTerminatedString((u08 *)ArgBuffer[1], currFile);  // copy the filepath to currfile
-        #ifdef DEBUG
-            printf("Read from file: %s\n", currFile);  
-        #endif
+        printf("Read from file: %s\n", currFile);  
     }
 
     Mouse_Move.x = -1.0;  // intialize the mouse position
@@ -8522,7 +8457,7 @@ MainArgs {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_SAMPLES, 8);
 
-    GLFWwindow* window = glfwCreateWindow(1080, 1080, "PretextView", NULL, NULL);  // 1080 1080  TODO add a button to change the size of the window
+    GLFWwindow* window = glfwCreateWindow(1080, 1080, PretextView_Title, NULL, NULL);  // 1080 1080  TODO add a button to change the size of the window
     if (!window)
     {
         glfwTerminate();
@@ -8761,7 +8696,7 @@ MainArgs {
                     s32 yahs_sort_button = nk_button_label(NK_Context, "YaHS Sort");
                     // AI sort button
                     {
-                        if (ai_sort_button)
+                        if (ai_sort_button && currFileName && 0)
                         {   
                             printf("AISort button clicked\n");
                             // check if the ai model is loaded
@@ -8800,14 +8735,16 @@ MainArgs {
                     }
                     // YaHS sort button
                     {   
-                        if (yahs_sort_button)
+                        if (yahs_sort_button && currFileName)
                         {   
                             fprintf(stdout, "========================\n");
                             fprintf(stdout, "[YaHS Sort] start...\n");
                             fprintf(stdout, "[YaHS Sort] smallest_frag_size_in_pixel: %d\n", show_auto_curation_button.smallest_frag_size_in_pixel);
                             fprintf(stdout, "[YaHS Sort] link_score_threshold:        %.3f\n", show_auto_curation_button.link_score_threshold);
                             // compress the HiC data
+                            MY_CHECK(0);
                             auto texture_array_4_ai = TexturesArray4AI(Number_of_Textures_1D, Texture_Resolution, (char*)currFileName, Contigs);
+                            MY_CHECK(0);
                             texture_array_4_ai.copy_buffer_to_textures(Contact_Matrix->textures);
                             // TODO (SHAOHENG): here the size of viewport is changed in the copy_buffer_to_textures function, thus the size shown in the window is changed, 
                             //                 need to fix this issue

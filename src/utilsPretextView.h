@@ -1,3 +1,26 @@
+/*
+Copyright (c) 2024 Shaoheng Guan, Wellcome Sanger Institute
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
+
 #ifndef UTILS_H
 #define UTILS_H
 
@@ -8,6 +31,7 @@
 #include <numeric>
 #include <cassert>
 #include <vector>
+
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -125,7 +149,7 @@ bool checkGL_Error(const char *msg);
 unsigned int texture_id_cal(unsigned int x, unsigned int y, unsigned int number_of_textures_1d);
 
 
-std::string readShaderSource(char *shaderFile);
+std::string readShaderSource(std::string shaderFile);
 
 
 void PrintShaderInfoLog(GLuint shader);
@@ -176,5 +200,21 @@ void push_nk_style(
 
 
 void pop_nk_style(nk_context *ctx, u32 num_color_pushed=3);
+
+
+
+#ifdef __APPLE__
+#include <CoreFoundation/CoreFoundation.h>
+
+// Function to get the path to the Resources directory
+std::string getResourcesPath();
+
+#endif // __APPLE__
+
+
+void my_code_position_handler(const char* file, int line, const char* message=nullptr);
+
+#define MY_CHECK(MESSAGE) my_code_position_handler(__FILE__, __LINE__, MESSAGE)
+
 
 #endif // UTILS_H

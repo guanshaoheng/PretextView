@@ -1,3 +1,25 @@
+/*
+Copyright (c) 2024 Shaoheng Guan, Wellcome Sanger Institute
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
 #ifndef COPY_TEXTURE_H
 #define COPY_TEXTURE_H
 #include <iostream>
@@ -8,7 +30,6 @@
 
 #include "utilsPretextView.h"
 #include "genomeData.h"
-
 
 struct Frag4compress {
     u32 num;
@@ -197,6 +218,7 @@ public:
         u32 col_num_, 
         u32 layer_)
     {   
+        MY_CHECK(0);
         re_allocate_mem(row_num_, col_num_, layer_);
     }
 
@@ -206,9 +228,12 @@ public:
     }
 
     void cleanup()
-    {
+    {   
+
+        MY_CHECK(0);
         if (data)
-        {
+        {   
+            MY_CHECK(0);
             delete[] data;
             data = nullptr;
         }
@@ -216,6 +241,7 @@ public:
 
     void re_allocate_mem(u32 row_num_, u32 col_num_, u32 layer_)
     {   
+        MY_CHECK(0);
         cleanup();
         row_num = row_num_;
         col_num = col_num_;
@@ -224,8 +250,13 @@ public:
         shape[1] = col_num_;
         shape[2] = layer_;
         length = row_num * col_num * layer_num;
+
+        MY_CHECK(0);
         data = new T[length];
+
+        MY_CHECK(0);
         memset(data, 0, length * sizeof(T));
+        MY_CHECK(0);
     }
 
     void check_indexing(const u32& row, const u32& col, const u32& layer) const

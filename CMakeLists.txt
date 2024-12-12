@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.17)
-project(PretextView VERSION "0.2.5")
+project(PretextView VERSION "1.0.0")
+
+
+set(target_name PretextViewAI)
 
 
 if (APPLE)
@@ -17,14 +20,10 @@ if (APPLE)
 endif()
 
 
-set(target_name PretextView)
-
 set(CMAKE_C_STANDARD 17)   # 设置cpp版本
 set(CMAKE_CXX_STANDARD 17)   # 设置cpp版本
 set(CMAKE_C_STANDARD_REQUIRED ON)  # 设置cpp版本
 set(CMAKE_CXX_STANDARD_REQUIRED ON)  # 设置cpp版本
-
-set(CMAKE_BUILD_TYPE Debug)  # 设置调试版本
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Debug version")
@@ -54,6 +53,15 @@ add_subdirectory(subprojects/glfw)
 add_subdirectory(subprojects/libdeflate)
 add_subdirectory(subprojects/glm)
 
+set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
+add_subdirectory(subprojects/pytorch_scatter)
+
+set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
+find_package(Torch REQUIRED)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
+message(STATUS "Torch found: ${TORCH_LIBRARIES}")
+
+
 find_library(OPENBLAS_LIB openblas PATHS subprojects/OpenBLAS/build/lib)
 if(NOT OPENBLAS_LIB)
     message(FATAL_ERROR "OpenBLAS not found")
@@ -71,29 +79,16 @@ endif()
 # endif()
 # include_directories(${EIGEN3_INCLUDE_DIR})
 
-set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
-find_package(Torch REQUIRED)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-message(STATUS "Torch found: ${TORCH_LIBRARIES}")
 
-
-find_library(PYTORCH_EXTENSION_LIBRARY
-    NAMES libtorchscatter.dylib
-    PATHS subprojects/pytorch_scatter/build
-    REQUIRED)
-message(STATUS "Pytorch scatter found: ${PYTORCH_EXTENSION_LIBRARY}")
-
-
-
-find_library(PYTORCH_EXTENSION_LIBRARY
-    NAMES libtorchscatter.dylib
-    PATHS subprojects/pytorch_scatter/build
-    REQUIRED)
-message(STATUS "Pytorch scatter found: ${PYTORCH_EXTENSION_LIBRARY}")
+# find_library(PYTORCH_EXTENSION_LIBRARY
+#     NAMES libtorchscatter.dylib
+#     PATHS subprojects/pytorch_scatter/build
+#     REQUIRED)
+# message(STATUS "Pytorch scatter found: ${PYTORCH_EXTENSION_LIBRARY}")
 
 
 add_library(aisort STATIC src/aisort.cpp )
-target_link_libraries(aisort PRIVATE ${TORCH_LIBRARIES} ${PYTORCH_EXTENSION_LIBRARY})
+target_link_libraries(aisort PRIVATE ${TORCH_LIBRARIES} ${torchscatter})
 
 
 add_library(glad STATIC glad.c)
@@ -117,6 +112,9 @@ target_compile_definitions(${target_name} PRIVATE PV=${PROJECT_VERSION})
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_compile_definitions(${target_name} PRIVATE DEBUG)
     target_compile_definitions(copy_texture PRIVATE DEBUG)
+    message(STATUS "Debug version: flag (${CMAKE_BUILD_TYPE}) with DEBUG")
+else()
+    message(STATUS "Release version: flag (${CMAKE_BUILD_TYPE}) without DEBUG")
 endif()
 target_link_libraries(${target_name} PRIVATE glfw libdeflate_static ${TORCH_LIBRARIES} aisort glm glad utilsPretextView copy_texture imgui ${OPENBLAS_LIB})   #  Eigen3::Eigen
 # 先添加这些库才能添加glfw静态库 （如果是添加动态库无所谓）
@@ -139,5 +137,43 @@ endif()
 set_target_properties(
     ${target_name} 
     PROPERTIES 
-    INSTALL_RPATH "${CMAKE_INSTALL_RPATH};${CMAKE_INSTALL_PREFIX}/lib;${CMAKE_SOURCE_DIR}/subprojects/libtorch/lib")  
-install(TARGETS ${target_name} DESTINATION bin)
+    INSTALL_RPATH "@executable_path/../../lib")  
+
+# Define shader files
+set(SHADER_FILES
+    src/shaderSource/contactMatrixFragment.shader
+    src/shaderSource/contactMatrixFragmentHIC.shader
+    src/shaderSource/contactMatrixVertex.shader
+    src/shaderSource/contactMatrixVertexHIC.shader
+    src/shaderSource/editFragment.shader
+    src/shaderSource/editGeometry.shader
+    src/shaderSource/editVertex.shader
+    src/shaderSource/flatFragment.shader
+    src/shaderSource/flatVertex.shader
+    src/shaderSource/uiFragment.shader
+    src/shaderSource/uiVertex.shader
+)
+
+file( COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/shaderSource DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/src )
+
+
+file(GLOB TORCH_LIBRARIES "${CMAKE_CURRENT_SOURCE_DIR}/subprojects/libtorch/lib/*.dylib")
+file( COPY ${TORCH_LIBRARIES} DESTINATION ${CMAKE_INSTALL_PREFIX}/lib )
+
+# Define installation paths for macOS
+# CMAKE_INSTALL_PREFIX = PretextView.app
+if(APPLE)
+    set(APPS "${CMAKE_INSTALL_PREFIX}/Contents")
+    set(EXECUTABLE_DIR "${APPS}/MacOS")
+    set(RESOURCES_DIR "${APPS}/Resources")
+    
+    install(FILES ${SHADER_FILES} DESTINATION "${RESOURCES_DIR}/src/shaderSource") # Install shader files to Resources
+    install(FILES Info.plist DESTINATION "${APPS}")  # Install Info.plist
+    install(FILES icon.icns DESTINATION "${RESOURCES_DIR}")  # Install icon.icns
+    install(FILES subprojects/libtorch/lib/libtorch.dylib DESTINATION "${CMAKE_INSTALL_PREFIX}/lib") # Install the libtorch library
+    install(TARGETS torchscatter DESTINATION "${CMAKE_INSTALL_PREFIX}/lib") # Install the torchscatter library
+    install(TARGETS ${target_name} DESTINATION "${EXECUTABLE_DIR}") # Install the executable
+
+
+    # todo (shaoheng) copy ai model into 
+endif()

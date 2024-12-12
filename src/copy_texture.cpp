@@ -1,4 +1,26 @@
 
+/*
+Copyright (c) 2024 Shaoheng Guan, Wellcome Sanger Institute
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
 #include "copy_texture.h"
 
 
@@ -102,9 +124,19 @@ TexturesArray4AI::TexturesArray4AI(
     :num_textures_1d(num_textures_1d_), texture_resolution(texture_resolution_),
     is_copied_from_buffer(false), is_compressed(false)
 {   
+
+    MY_CHECK(0);
+
     frags = new Frag4compress(Contigs);
+
+    MY_CHECK(0);
     compressed_hic = new Matrix3D<f32>(1, 1, 5);  // initialize the compressed_hic with 1x1x5
+
+    MY_CHECK(0);
     compressed_extensions = new CompressedExtensions(1); // initialize the compressed_extensions with 1
+
+
+    MY_CHECK(0);
 
     char* tmp = fileName;
     while (*tmp != '\0' && *tmp != '.') 
@@ -145,9 +177,18 @@ TexturesArray4AI::TexturesArray4AI(
         assert(0);
     }
     
+
+    MY_CHECK(0);
     // Shader setup and texture binding
-    auto VertexSource_Texture = readShaderSource((char*)"src/shaderSource/contactMatrixVertexHIC.shader");
-    auto FragmentSource_Texture = readShaderSource((char*)"src/shaderSource/contactMatrixFragmentHIC.shader");
+    #ifdef __APPLE__
+    std::string shader_source_dir = getResourcesPath() + "/src/shaderSource/";
+    #else
+        fprintf(stderr, "Only implemented on MacOS.\n");
+        assert(0);
+    #endif // __APPLE__
+    MY_CHECK(shader_source_dir.c_str());
+    auto VertexSource_Texture = readShaderSource( shader_source_dir + "contactMatrixVertexHIC.shader");
+    auto FragmentSource_Texture = readShaderSource( shader_source_dir + "contactMatrixFragmentHIC.shader");
     shaderProgram = CreateShader(FragmentSource_Texture.c_str(), VertexSource_Texture.c_str());
 
     // Setup vao, vbo, ebo
@@ -282,7 +323,7 @@ void TexturesArray4AI::copy_buffer_to_textures(
     bool show_flag) 
 {   
     if (is_copied_from_buffer) return;
-
+    printf("copy_texture.cpp 307\n");
     // Temporary texture setup
     GLuint temptexture;
     glGenTextures(1, &temptexture);
@@ -293,6 +334,8 @@ void TexturesArray4AI::copy_buffer_to_textures(
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
+    printf("copy_texture.cpp 318\n");
+
     GLuint framebuffer;
     glGenFramebuffers(1, &framebuffer);
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
@@ -302,6 +345,8 @@ void TexturesArray4AI::copy_buffer_to_textures(
         std::cerr << "Framebuffer is not complete!" << std::endl;
         assert(0);
     }
+
+    printf("copy_texture.cpp 330\n");
 
     s32 orignal_viewport[4];
     glGetIntegerv(GL_VIEWPORT, orignal_viewport);
@@ -1450,12 +1495,13 @@ void TexturesArray4AI::output_compressed_hic_massCetre_extension_for_python() co
         assert(0);
     }
 
-    // used for debugging
-    output_textures_to_file(); 
-    output_compressed_hic_to_file();
-    output_compressed_extension_to_file();
-    output_mass_centres_to_file();
-    output_frags4AI_to_file();
+    #ifdef DEBUG// used for debugging
+        output_textures_to_file(); 
+        output_compressed_hic_to_file();
+        output_compressed_extension_to_file();
+        output_mass_centres_to_file();
+        output_frags4AI_to_file();
+    #endif // DEBUG
 
     return ;
 }
