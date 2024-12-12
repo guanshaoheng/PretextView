@@ -43,8 +43,12 @@ echo "libtorch has been downloaded and extracted to $DEST_DIR"
 # cmake .. -DCMAKE_INSTALL_PREFIX=../install_local && cmake --build . --config Release -j 6 && cmake --install .
 
 
+# generate icon for PretextViewAI
+cd ico_design && cd ico_design &&  iconutil -c icns icon_v2.iconset && cd ..
+
+
 # Finished: there are still problem for installation as the app can not find the LC_RPATH, need to fix this
-rm -rf build_cmake  PretextView.app  PretextViewAI.APP PretextViewAI.dmg
+rm -rf build_cmake  PretextView.app  PretextViewAI.app PretextViewAI.dmg
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=PretextViewAI.app -S . -B build_cmake  && cmake --build build_cmake  -j 8 && cmake --install build_cmake
  
 PretextViewAI.app/Contents/MacOS/PretextViewAI /Users/sg35/auto-curation/log/learning_notes/hic_curation/13 idLinTess1_1 auto-curation/aPelFus1_1.pretext

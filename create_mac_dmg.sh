@@ -1,4 +1,6 @@
 
+
+
 # Create a DMG file for a macOS application
 create-dmg \
     --volname "PretextViewAI" \
