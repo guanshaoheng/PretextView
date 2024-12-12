@@ -74,7 +74,3 @@ install.bat # [Windows]
 ```
 Application will be installed to the 'app' folder in the source directory.
 
-
-# Compile in Debug Mode, Class desination and `.pretext` file data structure 
-
-Refere to [Learning Log 2024.03.26](https://github.com/sanger-tol/auto-curation/blob/main/log/3.27.2024/log.md)
