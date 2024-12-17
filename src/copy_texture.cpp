@@ -122,18 +122,18 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
 TexturesArray4AI::TexturesArray4AI(
     u32 num_textures_1d_, u32 texture_resolution_, char* fileName, const contigs* Contigs)
     :num_textures_1d(num_textures_1d_), texture_resolution(texture_resolution_),
-    is_copied_from_buffer(false), is_compressed(false)
+    is_copied_from_buffer(false), is_compressed(false), hic_shader_initilised(false)
 {   
-
+    
     MY_CHECK(0);
 
-    frags = new Frag4compress(Contigs);
+    this->frags = new Frag4compress(Contigs);
 
     MY_CHECK(0);
-    compressed_hic = new Matrix3D<f32>(1, 1, 5);  // initialize the compressed_hic with 1x1x5
+    this->compressed_hic = new Matrix3D<f32>(1, 1, 5);  // initialize the compressed_hic with 1x1x5
 
     MY_CHECK(0);
-    compressed_extensions = new CompressedExtensions(1); // initialize the compressed_extensions with 1
+    this->compressed_extensions = new CompressedExtensions(1); // initialize the compressed_extensions with 1
 
 
     MY_CHECK(0);
@@ -141,43 +141,41 @@ TexturesArray4AI::TexturesArray4AI(
     char* tmp = fileName;
     while (*tmp != '\0' && *tmp != '.') 
     {
-        name[tmp - fileName] = *tmp; 
+        this->name[tmp - fileName] = *tmp; 
         tmp++; 
     }
-    name[tmp - fileName] = '\0';
-    num_pixels_1d = num_textures_1d * texture_resolution;
-    if ((texture_resolution & (texture_resolution - 1)) != 0) 
+    this->name[tmp - fileName] = '\0';
+    this->num_pixels_1d = this->num_textures_1d * this->texture_resolution;
+    if ((this->texture_resolution & (this->texture_resolution - 1)) != 0) 
     {
-        fprintf(stderr, "The texture resolution (%d) is not power of 2\n", texture_resolution);
+        fprintf(stderr, "The texture resolution (%d) is not power of 2\n", this->texture_resolution);
         assert(0);
     }
-    texture_resolution_exp = (u32)std::log2(texture_resolution);
-    total_num_textures = ((1 + num_textures_1d) * num_textures_1d ) >> 1;
-    textures = new u08*[total_num_textures];
+    this->texture_resolution_exp = (u32)std::log2(this->texture_resolution);
+    this->total_num_textures = ((1 + this->num_textures_1d) * this->num_textures_1d ) >> 1;
+    this->textures = new u08*[this->total_num_textures];
     try
     {
-        for (u32 i = 0; i < total_num_textures; i++)
+        for (u32 i = 0; i < this->total_num_textures; i++)
         {
-            textures[i] = new u08[texture_resolution * texture_resolution];
+            this->textures[i] = new u08[this->texture_resolution * this->texture_resolution];
         }
     }
     catch(const std::exception& e)
     {   
-        for (u32 i = 0; i < total_num_textures; i++)
+        for (u32 i = 0; i < this->total_num_textures; i++)
         {
-            if (textures[i])
+            if (this->textures[i])
             {
-                delete[] textures[i];
-                textures[i] = nullptr;
+                delete[] this->textures[i];
+                this->textures[i] = nullptr;
             }
         }
-        delete[] textures;
-        textures = nullptr;
+        delete[] this->textures;
+        this->textures = nullptr;
         std::cerr << e.what() << " Allocate mem error\n";
         assert(0);
     }
-    
-
     MY_CHECK(0);
     // Shader setup and texture binding
     #ifdef __APPLE__
@@ -189,29 +187,29 @@ TexturesArray4AI::TexturesArray4AI(
     MY_CHECK(shader_source_dir.c_str());
     auto VertexSource_Texture = readShaderSource( shader_source_dir + "contactMatrixVertexHIC.shader");
     auto FragmentSource_Texture = readShaderSource( shader_source_dir + "contactMatrixFragmentHIC.shader");
-    shaderProgram = CreateShader(FragmentSource_Texture.c_str(), VertexSource_Texture.c_str());
+    this->shaderProgram = CreateShader(FragmentSource_Texture.c_str(), VertexSource_Texture.c_str());
 
     // Setup vao, vbo, ebo
     f32 vertexpositions[] = {
         // position      texCoord
         -1.f, -1.f,     0.0f, 0.0f,
-         1.f, -1.f,     1.0f, 0.0f,
-         1.f,  1.f,     1.0f, 1.0f, 
+        1.f, -1.f,     1.0f, 0.0f,
+        1.f,  1.f,     1.0f, 1.0f, 
         -1.f,  1.f,     0.0f, 1.0f,
     };
     u32 triangle_indices[] = {
         0, 1, 2, 
         2, 3, 0,
     };
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
+    glGenVertexArrays(1, &this->vao);
+    glBindVertexArray(this->vao);
 
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glGenBuffers(1, &this->vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertexpositions), vertexpositions, GL_STATIC_DRAW);
 
-    glGenBuffers(1, &ebo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+    glGenBuffers(1, &this->ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(triangle_indices), triangle_indices, GL_STATIC_DRAW);
 
     // Position attribute
@@ -221,6 +219,8 @@ TexturesArray4AI::TexturesArray4AI(
     // Texture coordinate attribute
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(f32), (void*)(2 * sizeof(f32)));
     glEnableVertexAttribArray(1);
+
+    this->hic_shader_initilised = true;
 }
 
 
@@ -264,14 +264,13 @@ TexturesArray4AI::~TexturesArray4AI()
         mass_centres = nullptr;
     }
 
-    glUseProgram(0);
-    glDeleteShader(shaderProgram);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glDeleteBuffers(1, &vbo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glDeleteBuffers(1, &ebo);
-    glBindVertexArray(0);
-    glDeleteVertexArrays(1, &vao);
+    if (this->hic_shader_initilised)
+    {
+        glDeleteShader(this->shaderProgram);
+        glDeleteBuffers(1, &this->vbo);
+        glDeleteBuffers(1, &this->ebo);
+        glDeleteVertexArrays(1, &this->vao);
+    }
 }
 
 
@@ -319,11 +318,13 @@ void TexturesArray4AI::check_copied_from_buffer() const
 }
 
 void TexturesArray4AI::copy_buffer_to_textures(
-    const GLuint &contact_matrix_textures, 
+    const contact_matrix *contact_matrix_, 
     bool show_flag) 
 {   
+
+    const GLuint &contact_matrix_textures = contact_matrix_->textures;
     if (is_copied_from_buffer) return;
-    printf("copy_texture.cpp 307\n");
+    MY_CHECK(0);
     // Temporary texture setup
     GLuint temptexture;
     glGenTextures(1, &temptexture);
@@ -333,8 +334,7 @@ void TexturesArray4AI::copy_buffer_to_textures(
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    printf("copy_texture.cpp 318\n");
+    MY_CHECK(0);
 
     GLuint framebuffer;
     glGenFramebuffers(1, &framebuffer);
@@ -346,7 +346,7 @@ void TexturesArray4AI::copy_buffer_to_textures(
         assert(0);
     }
 
-    printf("copy_texture.cpp 330\n");
+    MY_CHECK(0);
 
     s32 orignal_viewport[4];
     glGetIntegerv(GL_VIEWPORT, orignal_viewport);
@@ -361,9 +361,9 @@ void TexturesArray4AI::copy_buffer_to_textures(
         GLcall(glViewport(0, 0, texture_resolution, texture_resolution));
         GLcall(glClearColor(0.3f, 0.3f, 0.3f, 1.0f));
         GLcall(glClear(GL_COLOR_BUFFER_BIT)); 
-        GLcall(glUniform1i(glGetUniformLocation(shaderProgram, "layer"), layer));
-        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
-        GLcall(glBindVertexArray(vao));
+        GLcall(glUniform1i(glGetUniformLocation(this->shaderProgram, "layer"), layer));
+        glUniformMatrix4fv(glGetUniformLocation(this->shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+        GLcall(glBindVertexArray(this->vao));
         GLcall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0));
         GLcall( glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer));
         GLcall(glReadPixels(0, 0, texture_resolution, texture_resolution, GL_RED, GL_UNSIGNED_BYTE, textures[layer]));
@@ -396,6 +396,109 @@ void TexturesArray4AI::copy_buffer_to_textures(
 
     return ;
 }
+
+
+
+void TexturesArray4AI::copy_buffer_to_textures_dynamic(
+    const contact_matrix *contact_matrix_, 
+    bool show_flag) 
+{
+
+    MY_CHECK(0);
+    // Temporary texture setup
+    GLuint temptexture;
+    glGenTextures(1, &temptexture);
+    glBindTexture(GL_TEXTURE_2D, temptexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, texture_resolution, texture_resolution, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    GLuint framebuffer;
+    glGenFramebuffers(1, &framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, temptexture, 0);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) 
+    {
+        std::cerr << "Framebuffer is not complete!" << std::endl;
+        assert(0);
+    }
+
+    MY_CHECK(0);
+
+    s32 orignal_viewport[4];
+    glGetIntegerv(GL_VIEWPORT, orignal_viewport);
+
+    // TODO (shaoheng): the shader is using all 4 channels but readpixel only the red channel
+    auto model = glm::mat4(1.0f);
+    glUseProgram(contact_matrix_->shaderProgram);
+    glUniformMatrix4fv(contact_matrix_->matLocation, 1, GL_FALSE, glm::value_ptr(model));
+    glBindTexture(GL_TEXTURE_2D_ARRAY, contact_matrix_->textures);
+    u32 layer_cnt = 0, ptr_cnt = 0;
+    for (u32 i = 0 ; i < this->num_textures_1d; i ++ )
+    {
+        for (u32 j = 0; j < this->num_textures_1d ; j ++ )
+        {
+            if ( i > j )
+            {
+                ptr_cnt++;
+                continue;
+            }
+            // GLcall(glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer));
+            GLcall(glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0));
+            GLcall(glViewport(0, 0, texture_resolution, texture_resolution));
+            GLcall(glClearColor(0.3f, 0.3f, 0.3f, 1.0f));
+            GLcall(glClear(GL_COLOR_BUFFER_BIT));
+
+            // GLcall(glUseProgram(this->shaderProgram));
+            // GLcall(glBindTexture(GL_TEXTURE_2D_ARRAY, contact_matrix_->textures));
+            // GLcall(glUniform1i(glGetUniformLocation(this->shaderProgram, "layer"), layer_cnt));
+            // glUniformMatrix4fv(glGetUniformLocation(this->shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+            // GLcall(glBindVertexArray(this->vao));
+            // GLcall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0));
+
+            glBindTexture(GL_TEXTURE_2D_ARRAY, contact_matrix_->textures);
+            GLcall(glBindVertexArray(contact_matrix_->vaos[ptr_cnt])); 
+            GLcall(glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL));
+
+            // GLcall( glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer));
+            GLcall( glBindFramebuffer(GL_READ_FRAMEBUFFER, 0));
+            GLcall(glReadPixels(0, 0, texture_resolution, texture_resolution, GL_RED, GL_UNSIGNED_BYTE, textures[layer_cnt]));
+            if ((layer_cnt + 1) % (total_num_textures / 100) == 0)
+            {
+                printf("\rCopying tiles to cpu %.2f%% (Layer %d of %d)", ((f32)layer_cnt + 1.f) / (f32)total_num_textures * 100.0f, layer_cnt + 1, total_num_textures);
+                fflush(stdout);
+            }
+            layer_cnt++;
+            ptr_cnt++;
+        }
+    }
+    printf("\n"); 
+    if (layer_cnt != total_num_textures)
+    {   
+        std::stringstream ss;
+        ss << "layer_cnt (" << layer_cnt << ") != total_num_textures (" << this->total_num_textures << ")";
+        MY_CHECK(ss.str().c_str());
+        assert(0);
+    }
+    
+
+    is_copied_from_buffer = true;
+
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDeleteFramebuffers(1, &framebuffer);
+
+    if (show_flag)
+    {
+        show_collected_textures();
+    }
+
+    glViewport(orignal_viewport[0], orignal_viewport[1], orignal_viewport[2], orignal_viewport[3]);
+    return ;
+}
+
 
 
 void TexturesArray4AI::prepare_tmp_texture2d_array(GLuint& tmp_texture2d_array)

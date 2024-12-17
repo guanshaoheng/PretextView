@@ -70,16 +70,7 @@ else()
 endif()
 
 
-# set(CMAKE_PREFIX_PATH "subprojects/eigen/install_local/share/eigen3/cmake" ${CMAKE_PREFIX_PATH})
-# find_package(Eigen3 REQUIRED NO_MODULE)
-# if (NOT Eigen3_FOUND)
-#     message(FATAL_ERROR "Eigen3 not found")
-# else()
-#     message(STATUS "Eigen3 found, and include dir: ${EIGEN3_INCLUDE_DIR}")
-# endif()
-# include_directories(${EIGEN3_INCLUDE_DIR})
-
-
+# compile pytorch scatter library outside of this project
 # find_library(PYTORCH_EXTENSION_LIBRARY
 #     NAMES libtorchscatter.dylib
 #     PATHS subprojects/pytorch_scatter/build
@@ -140,25 +131,9 @@ set_target_properties(
     INSTALL_RPATH "@executable_path/../../lib")  
 
 # Define shader files
-set(SHADER_FILES
-    src/shaderSource/contactMatrixFragment.shader
-    src/shaderSource/contactMatrixFragmentHIC.shader
-    src/shaderSource/contactMatrixVertex.shader
-    src/shaderSource/contactMatrixVertexHIC.shader
-    src/shaderSource/editFragment.shader
-    src/shaderSource/editGeometry.shader
-    src/shaderSource/editVertex.shader
-    src/shaderSource/flatFragment.shader
-    src/shaderSource/flatVertex.shader
-    src/shaderSource/uiFragment.shader
-    src/shaderSource/uiVertex.shader
-)
-
-file( COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/shaderSource DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/src )
-
-
+file(GLOB SHADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/shaderSource/*.shader")
+file(COPY ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource")
 file(GLOB TORCH_LIBRARIES "${CMAKE_CURRENT_SOURCE_DIR}/subprojects/libtorch/lib/*.dylib")
-file( COPY ${TORCH_LIBRARIES} DESTINATION ${CMAKE_INSTALL_PREFIX}/lib )
 
 # Define installation paths for macOS
 # CMAKE_INSTALL_PREFIX = PretextView.app
@@ -170,7 +145,7 @@ if(APPLE)
     install(FILES ${SHADER_FILES} DESTINATION "${RESOURCES_DIR}/src/shaderSource") # Install shader files to Resources
     install(FILES Info.plist DESTINATION "${APPS}")  # Install Info.plist
     install(FILES icon.icns DESTINATION "${RESOURCES_DIR}")  # Install icon.icns
-    install(FILES subprojects/libtorch/lib/libtorch.dylib DESTINATION "${CMAKE_INSTALL_PREFIX}/lib") # Install the libtorch library
+    install(FILES ${TORCH_LIBRARIES} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib") # Install the libtorch library
     install(TARGETS torchscatter DESTINATION "${CMAKE_INSTALL_PREFIX}/lib") # Install the torchscatter library
     install(TARGETS ${target_name} DESTINATION "${EXECUTABLE_DIR}") # Install the executable
 

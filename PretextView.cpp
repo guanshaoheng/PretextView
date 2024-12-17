@@ -526,6 +526,10 @@ IsContigInverted(u32 index)
     // return(Contigs->contigInvertFlags[index / 8] & (1 << (index % 8)));  // check if contig is inverted  
 }
 
+global_function
+void
+setContactMatrixVertexArray(contact_matrix* Contact_Matrix_, bool copy_flag=false, bool regenerate_flag=false);
+
 #define Max_Number_of_Contigs 4096
 
 
@@ -4377,120 +4381,8 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
         Contact_Matrix->vaos =  new GLuint[ Number_of_Textures_1D * Number_of_Textures_1D]; //  (GLuint*) malloc(sizeof(GLuint) * Number_of_Textures_1D * Number_of_Textures_1D );  // TODO make sure the memory is freed before the re-allocation
         Contact_Matrix->vbos = new GLuint[ Number_of_Textures_1D * Number_of_Textures_1D]; // (GLuint*) malloc(sizeof(GLuint) * Number_of_Textures_1D * Number_of_Textures_1D );
 
-        GLuint posAttrib = (GLuint)glGetAttribLocation(Contact_Matrix->shaderProgram, "position");
-        GLuint texAttrib = (GLuint)glGetAttribLocation(Contact_Matrix->shaderProgram, "texcoord");
-        
-        /*
-        从左上到右下开始遍历，见上述编号
-        */
-        f32 x = -0.5f;
-        f32 y = 0.5f;
-        f32 quadSize = 1.0f / (f32)Number_of_Textures_1D; // 1.0 / 32.f = 0.03125
-        f32 allCornerCoords[2][2] = {{0.0f, 1.0f}, {1.0f, 0.0f}}; 
-        
+        setContactMatrixVertexArray(Contact_Matrix, false, false);  // set the vertex data of the contact matrix
 
-        u32 ptr = 0;
-        ForLoop(Number_of_Textures_1D)
-        {
-            ForLoop2(Number_of_Textures_1D)
-            {
-                tex_vertex textureVertices[4];
-
-                glGenVertexArrays( // 生成对象的名称， 
-                    1,                            // 生成的个数
-                    Contact_Matrix->vaos + ptr);  // 存储位置的指针
-                glBindVertexArray(Contact_Matrix->vaos[ptr]);  // 绑定顶点名称
-
-                f32 *cornerCoords = allCornerCoords[index2 >= index ? 0 : 1]; // 包含对角线的上三角的时候取第一行{0, 1}，否则取第二行{1, 0}  为了解决关于对角线对称
-                
-                u32 min = my_Min(index, index2);
-                u32 max = my_Max(index, index2);
-                
-                
-                /*
-                    对称性编号
-                    [[ 0  1  2  3  4  5  6  7  8  9]
-                     [ 1 10 11 12 13 14 15 16 17 18]
-                     [ 2 11 19 20 21 22 23 24 25 26]
-                     [ 3 12 20 27 28 29 30 31 32 33]
-                     [ 4 13 21 28 34 35 36 37 38 39]
-                     [ 5 14 22 29 35 40 41 42 43 44]
-                     [ 6 15 23 30 36 41 45 46 47 48]
-                     [ 7 16 24 31 37 42 46 49 50 51]
-                     [ 8 17 25 32 38 43 47 50 52 53]
-                     [ 9 18 26 33 39 44 48 51 53 54]]
-                */
-                f32 texture_index_symmetric = (f32)((min * (Number_of_Textures_1D - 1))
-                    - (((min-1) * min) >> 1 )
-                    + max) ;
-                
-                /*
-                    3 2
-                    0 1
-                */
-                textureVertices[0].x = x ;              // x -> [-0.5, 0.5]
-                textureVertices[0].y = y - quadSize ;   // y -> [-0.5, 0.5]
-                textureVertices[0].s = cornerCoords[0]; // s表示texture的水平分量
-                textureVertices[0].t = cornerCoords[1]; // t表示texture的垂直分量
-                textureVertices[0].u = texture_index_symmetric;
-
-                textureVertices[1].x = x  + quadSize;
-                textureVertices[1].y = y - quadSize ;
-                textureVertices[1].s = 1.0f;
-                textureVertices[1].t = 1.0f;
-                textureVertices[1].u = texture_index_symmetric;
-
-                textureVertices[2].x = x  + quadSize;
-                textureVertices[2].y = y ;
-                textureVertices[2].s = cornerCoords[1];
-                textureVertices[2].t = cornerCoords[0];
-                textureVertices[2].u = texture_index_symmetric;
-
-                textureVertices[3].x = x ;
-                textureVertices[3].y = y ;
-                textureVertices[3].s = 0.0f;
-                textureVertices[3].t = 0.0f;
-                textureVertices[3].u = texture_index_symmetric;
-
-                glGenBuffers(                    // 生成buffer的名字 存储在contact_matrix->vbos+ptr 对应的地址上
-                    1,                           // 个数
-                    Contact_Matrix->vbos + ptr); // 指针，存储生成的名字  
-                glBindBuffer(                    // 绑定到一个已经命名的buffer对象上
-                    GL_ARRAY_BUFFER,             // 绑定的对象，gl_array_buffer 一般是绑定顶点的信息
-                    Contact_Matrix->vbos[ptr]);  // 通过输入buffer的名字将其绑定到gl_array_buffer
-                glBufferData(                    // 创建、初始化存储数据的buffer
-                    GL_ARRAY_BUFFER,             // 绑定的对象，gl_array_buffer 一般是绑定顶点的信息
-                    4 * sizeof(tex_vertex),      // 对象的大小（bytes）
-                    textureVertices,             // 即将绑定到gl_array_buffer的数据的指针
-                    GL_STATIC_DRAW);             // 绑定后的数据是用于干什么的
-                
-                // tell GL how to interpret the data in the GL_ARRAY_BUFFER
-                glEnableVertexAttribArray(posAttrib); 
-                glVertexAttribPointer(           // 定义一个数组存储所有的通用顶点属性
-                    posAttrib,                   // 即将修改属性的索引
-                    2,                           // 定义每个属性的参数的个数， 只能为1 2 3 4中的一个，初始值为4
-                    GL_FLOAT,                    // 定义该属性的数据类型，则数据为4个字节， 占用两个的话，则一共为8字节
-                    GL_FALSE,                    // normalized， 是否要在取用的时候规范化这些数
-                    sizeof(tex_vertex),          // stride  定义从一个信息的指针下一个信息指针的bytes的间隔， 一个信息包到下一个信息包的长度
-                    0);                          // const void* 指定当前与 GL_ARRAY_BUFFER 绑定的缓冲区数据头指针偏移多少个到 第一个通用顶点属性的第一个特征开始的位置。 初始值为 0。因为此处想要读取的信息为 x 和 y
-                glEnableVertexAttribArray(texAttrib); // 
-                glVertexAttribPointer(
-                    texAttrib, 
-                    3, 
-                    GL_FLOAT,   // 定义每个属性的数据类型
-                    GL_FALSE,   // GL_FALSE, GL_TRUE
-                    sizeof(tex_vertex), 
-                    (void *)(3 * sizeof(GLfloat))); // 偏移量为3，因为前三个为x, y and pad, 想要读取的数据为 s, t and u
-
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Quad_EBO);
-
-                x += quadSize; // next column
-                ++ptr;         // ptr for current texture
-            }
-
-            y -= quadSize;  // next row
-            x = -0.5f;      // from column 0
-        }
     }
 
     // Texture Pixel Lookups  texture像素查找
@@ -4504,12 +4396,12 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
 
         u32 *pixStartLookup = PushArrayP(arena, u32, 2 * nTex); // 申请空间 2 * 528 个 u32
         u32 ptr = 0;
-        ForLoop(Number_of_Textures_1D) // 遍历每一个texture
+        for (u32 i = 0; i < Number_of_Textures_1D; i ++ ) // 遍历每一个texture
         {
-            ForLoop2(Number_of_Textures_1D - index)
+            for (u32 j = i ; j < Number_of_Textures_1D; j ++ ) 
             {
-                pixStartLookup[ptr++] = (u32)((index + index2) * Texture_Resolution); // 列 * 1024   双数索引是列，单数是行
-                pixStartLookup[ptr++] = (u32)(index * Texture_Resolution);            // 行 * 1024
+                pixStartLookup[ptr++] = (u32)(j * Texture_Resolution); // 列 * 1024   双数索引是列，单数是行
+                pixStartLookup[ptr++] = (u32)(i * Texture_Resolution);            // 行 * 1024
             }
         }
 
@@ -4532,9 +4424,9 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
         glActiveTexture(GL_TEXTURE3); // 激活第三个texture，以下代码会影响第三个texture
 
         u32 *pixRearrageLookup = PushArrayP(arena, u32, nPix1D); // allocte 1024 * 32 u32 memory
-        ForLoop(nPix1D)
+        for (u32 i = 0 ; i < nPix1D; i ++ )
         {
-            pixRearrageLookup[index] = (u32)index;  // assign the index to the pixRearrageLookup
+            pixRearrageLookup[i] = (u32)i;  // assign the index to the pixRearrageLookup
         }
 
         glGenBuffers(1, &pixRearrage);  // generate a buffer object
@@ -5611,9 +5503,9 @@ void AutoCurationFromFragsOrder(
 
     // check the difference between the contigs, order and the new frags order
     u32 start_loc = 0;
-    std::vector<s32> current_order(num_frags);
+    std::vector<std::pair<s32, s32>> current_order(num_frags);
     const std::vector<s32> predicted_order = frags_order_->get_order_without_chromosomeInfor(); // start from 1
-    for (s32 i = 0; i < num_frags; ++i) current_order[i] = i+1; // start from 1
+    for (s32 i = 0; i < num_frags; ++i) current_order[i] = {i+1, contigs_->contigs[i].length}; // start from 1
     auto move_current_order_element = [&current_order, &num_frags](u32 from, u32 to)
     {
         if (from >= num_frags || to >= num_frags)
@@ -5622,7 +5514,7 @@ void AutoCurationFromFragsOrder(
             return;
         }
         if (from == to) return;
-        s32 tmp = current_order[from];
+        auto tmp = current_order[from];
         if (from > to) 
         {   
             for (u32 i = from; i > to; --i) current_order[i] = current_order[i-1];
@@ -5637,68 +5529,202 @@ void AutoCurationFromFragsOrder(
     // update the map state based on the new order
     for (u32 i = 0; i < num_frags; ++i) 
     {
-        if (predicted_order[i] == current_order[i])  // leave the contig unchanged
+        if (predicted_order[i] == current_order[i].first)  // leave the contig unchanged
         {   
-            start_loc += contigs_->contigs[i].length;
+            start_loc += current_order[i].second;
             continue;
         }
 
         // only invert
-        if (predicted_order[i] == -current_order[i])
+        if (predicted_order[i] == -current_order[i].first)
         {
-            u32 pixelFrom = start_loc, pixelEnd= start_loc + contigs_->contigs[i].length - 1;
+            u32 pixelFrom = start_loc, pixelEnd= start_loc + current_order[i].second - 1;
             InvertMap(pixelFrom, pixelEnd);
-            AddMapEdit(0, {start_loc, start_loc + contigs_->contigs[i].length - 1}, true);
-            current_order[i] = -current_order[i];
-            start_loc += contigs_->contigs[i].length;
+            AddMapEdit(0, {start_loc, start_loc + current_order[i].second - 1}, true);
+            current_order[i].first = -current_order[i].first;
+            start_loc += current_order[i].second;
             printf("[Auto curation] (#%d) Invert contig %d.\n", ++num_autoCurated_edits, predicted_order[i]);
             continue;
         }
-        else if (predicted_order[i] != current_order[i] && predicted_order[i] != -current_order[i])  // move the contig to the new position
+        else if (
+            predicted_order[i] != current_order[i].first && 
+            predicted_order[i] != -current_order[i].first)  // move the contig to the new position
         {
+
             bool is_curated_inverted = predicted_order[i] < 0;
 
             // find the pixel range of the contig to move
             u32 pixelFrom = 0, tmp_i = 0; // tmp_i is the index of the current contig, which is going to be processed
-            while (std::abs(predicted_order[i])!=std::abs(current_order[tmp_i]))
-            {   
+            while (std::abs(predicted_order[i])!=std::abs(current_order[tmp_i].first))
+            {
                 if (tmp_i >= num_frags)
                 {
-                    fprintf(stderr, "Error: contig %d not found in the current order.\n", current_order[i]);
-                    assert(0);
+                    fprintf(stderr, "Error: contig %d not found in the current order.\n", current_order[i].first);
+                    MY_CHECK(0);
                 }
-                pixelFrom += contigs_->contigs[tmp_i].length; // length updated based on the current order
+                pixelFrom += current_order[tmp_i].second; // length updated based on the current order
+                if (pixelFrom>=Number_of_Pixels_1D)
+                {
+                    fprintf(stderr, "Error: pixelFrom(%d) >= Number_of_Pixels_1D(%d).\n", pixelFrom, Number_of_Pixels_1D);
+                    MY_CHECK(0);
+                }
                 ++tmp_i;
             }
-            u32 pixelEnd = pixelFrom + contigs_->contigs[tmp_i].length - 1;
+            u32 pixelEnd = pixelFrom + current_order[tmp_i].second - 1;
             if (is_curated_inverted)
             {
                 InvertMap(pixelFrom, pixelEnd);
-                current_order[tmp_i] = -current_order[tmp_i];
+                current_order[tmp_i].first = -current_order[tmp_i].first;
             }
             s32 delta = start_loc - pixelFrom;
-            RearrangeMap(pixelFrom, pixelEnd, delta, false);
+            RearrangeMap(pixelFrom, pixelEnd, delta);
             AddMapEdit(delta, {(u32)((s32)pixelFrom + delta), (u32)((s32)pixelEnd + delta)}, is_curated_inverted);
 
             // update the current order, insert the contig to the new position
             move_current_order_element(tmp_i, i); // move element from tmp_i to i
-            start_loc += contigs_->contigs[i].length; // update start_loc after move fragments
+            start_loc += current_order[i].second; // update start_loc after move fragments
             if (is_curated_inverted)
             {
-                printf("[Auto curation] (#%d) Invert and Move contig %d to %d\n", ++num_autoCurated_edits, predicted_order[i], i);
+                printf("[Auto curation] (#%d) Invert and Move contig %d to %d, start_loc:%d.\n", ++num_autoCurated_edits, predicted_order[i], i, start_loc);
             }
-            else printf("[Auto curation] (#%d) Move contig %d to %d.\n", ++num_autoCurated_edits, predicted_order[i], i);
+            else printf("[Auto curation] (#%d) Move contig %d to %d, start_loc:%d.\n", ++num_autoCurated_edits, predicted_order[i], i, start_loc);
             continue;
         }
         else 
         {
-            fprintf(stderr, "Unknown error, predicted_order[%d] = %d, current[%d] = %d.\n", i, predicted_order[i], i, current_order[i]);
+            fprintf(stderr, "Unknown error, predicted_order[%d] = %d, current[%d] = %d.\n", i, predicted_order[i], i, current_order[i].first);
             continue;
         }
     }
     printf("[Auto curatioin] finished with %d edits\n", num_autoCurated_edits);
 
     return ;
+}
+
+
+// set the vertex array for the contact matrix
+// copy_flag: if true, show full texture for copy the texture to array on cpu
+global_function
+void setContactMatrixVertexArray(contact_matrix* Contact_Matrix_, bool copy_flag, bool regenerate_flag)
+{   
+    glUseProgram(Contact_Matrix_->shaderProgram);
+    GLuint posAttrib = (GLuint)glGetAttribLocation(Contact_Matrix_->shaderProgram, "position");
+    GLuint texAttrib = (GLuint)glGetAttribLocation(Contact_Matrix_->shaderProgram, "texcoord");
+    
+    /*
+    从左上到右下开始遍历，见上述编号
+    */
+    f32 x = -0.5f;
+    f32 y = 0.5f;
+    f32 quadSize = 1.0f / (f32)Number_of_Textures_1D; // 1.0 / 32.f = 0.03125
+    f32 allCornerCoords[2][2] = {{0.0f, 1.0f}, {1.0f, 0.0f}}; 
+
+    if (regenerate_flag) // first delete the generated vertex array objects and buffers
+    {   
+        glDeleteVertexArrays((GLsizei)(Number_of_Textures_1D * Number_of_Textures_1D), Contact_Matrix->vaos);
+        glDeleteBuffers((GLsizei)(Number_of_Textures_1D * Number_of_Textures_1D), Contact_Matrix->vbos);
+    }
+    
+    u32 ptr = 0;
+    ForLoop(Number_of_Textures_1D)
+    {
+        ForLoop2(Number_of_Textures_1D)
+        {
+            tex_vertex textureVertices[4];
+
+            glGenVertexArrays( // 生成对象的名称， 
+                1,                            // 生成的个数
+                Contact_Matrix_->vaos + ptr);  // 存储位置的指针
+            glBindVertexArray(Contact_Matrix_->vaos[ptr]);  // 绑定顶点名称
+
+            f32 *cornerCoords = allCornerCoords[index2 >= index ? 0 : 1]; // 包含对角线的上三角的时候取第一行{0, 1}，否则取第二行{1, 0}  为了解决关于对角线对称
+            
+            u32 min = my_Min(index, index2);
+            u32 max = my_Max(index, index2);
+            /*
+                对称性编号
+                [[ 0  1  2  3  4  5  6  7  8  9]
+                    [ 1 10 11 12 13 14 15 16 17 18]
+                    [ 2 11 19 20 21 22 23 24 25 26]
+                    [ 3 12 20 27 28 29 30 31 32 33]
+                    [ 4 13 21 28 34 35 36 37 38 39]
+                    [ 5 14 22 29 35 40 41 42 43 44]
+                    [ 6 15 23 30 36 41 45 46 47 48]
+                    [ 7 16 24 31 37 42 46 49 50 51]
+                    [ 8 17 25 32 38 43 47 50 52 53]
+                    [ 9 18 26 33 39 44 48 51 53 54]]
+            */
+            f32 texture_index_symmetric = (f32)((min * (Number_of_Textures_1D - 1))
+                - (((min-1) * min) >> 1 )
+                + max) ;
+            
+            /*
+                3 2
+                0 1
+            */
+            textureVertices[0].x = !copy_flag? x               : -1.f;   // x -> [-0.5, 0.5]
+            textureVertices[0].y = !copy_flag? y - quadSize    : -1.f;   // y -> [-0.5, 0.5]
+            textureVertices[0].s = !copy_flag? cornerCoords[0] :  0.f; // s表示texture的水平分量
+            textureVertices[0].t = !copy_flag? cornerCoords[1] :  0.f; // t表示texture的垂直分量
+            textureVertices[0].u = texture_index_symmetric;
+
+            textureVertices[1].x = !copy_flag? x + quadSize    :  1.f;   
+            textureVertices[1].y = !copy_flag? y - quadSize    : -1.f;
+            textureVertices[1].s = !copy_flag? 1.0f            :  1.f;
+            textureVertices[1].t = !copy_flag? 1.0f            :  0.f;
+            textureVertices[1].u = texture_index_symmetric;
+
+            textureVertices[2].x = !copy_flag? x + quadSize    :  1.f;   
+            textureVertices[2].y = !copy_flag? y               :  1.f;
+            textureVertices[2].s = !copy_flag? cornerCoords[1] :  1.f;
+            textureVertices[2].t = !copy_flag? cornerCoords[0] :  1.f;
+            textureVertices[2].u = texture_index_symmetric;
+
+            textureVertices[3].x = !copy_flag? x               : -1.f;              
+            textureVertices[3].y = !copy_flag? y               :  1.f;
+            textureVertices[3].s = !copy_flag? 0.0f            :  0.f;
+            textureVertices[3].t = !copy_flag? 0.0f            :  1.f;
+            textureVertices[3].u = texture_index_symmetric;
+
+            glGenBuffers(                    // 生成buffer的名字 存储在contact_matrix->vbos+ptr 对应的地址上
+                1,                           // 个数
+                Contact_Matrix_->vbos + ptr); // 指针，存储生成的名字  
+            glBindBuffer(                    // 绑定到一个已经命名的buffer对象上
+                GL_ARRAY_BUFFER,             // 绑定的对象，gl_array_buffer 一般是绑定顶点的信息
+                Contact_Matrix_->vbos[ptr]);  // 通过输入buffer的名字将其绑定到gl_array_buffer
+            glBufferData(                    // 创建、初始化存储数据的buffer
+                GL_ARRAY_BUFFER,             // 绑定的对象，gl_array_buffer 一般是绑定顶点的信息
+                4 * sizeof(tex_vertex),      // 对象的大小（bytes）
+                textureVertices,             // 即将绑定到gl_array_buffer的数据的指针
+                GL_STATIC_DRAW);             // 绑定后的数据是用于干什么的
+            
+            // tell GL how to interpret the data in the GL_ARRAY_BUFFER
+            glEnableVertexAttribArray(posAttrib); 
+            glVertexAttribPointer(           // 定义一个数组存储所有的通用顶点属性
+                posAttrib,                   // 即将修改属性的索引
+                2,                           // 定义每个属性的参数的个数， 只能为1 2 3 4中的一个，初始值为4
+                GL_FLOAT,                    // 定义该属性的数据类型，则数据为4个字节， 占用两个的话，则一共为8字节
+                GL_FALSE,                    // normalized， 是否要在取用的时候规范化这些数
+                sizeof(tex_vertex),          // stride  定义从一个信息的指针下一个信息指针的bytes的间隔， 一个信息包到下一个信息包的长度
+                0);                          // const void* 指定当前与 GL_ARRAY_BUFFER 绑定的缓冲区数据头指针偏移多少个到 第一个通用顶点属性的第一个特征开始的位置。 初始值为 0。因为此处想要读取的信息为 x 和 y
+            glEnableVertexAttribArray(texAttrib); // 
+            glVertexAttribPointer(
+                texAttrib, 
+                3, 
+                GL_FLOAT,   // 定义每个属性的数据类型
+                GL_FALSE,   // GL_FALSE, GL_TRUE
+                sizeof(tex_vertex), 
+                (void *)(3 * sizeof(GLfloat))); // 偏移量为3，因为前三个为x, y and pad, 想要读取的数据为 s, t and u
+
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Quad_EBO);
+
+            x += quadSize; // next column
+            ++ptr;         // ptr for current texture
+        }
+
+        y -= quadSize;  // next row
+        x = -0.5f;      // from column 0
+    }
 }
 
 
@@ -8527,7 +8553,7 @@ MainArgs {
     // {   
     //     bool show_flag = true;
     //     auto tmp = new TexturesArray4AI(32, 1024, (char*)"123", Contigs);
-    //     tmp->copy_buffer_to_textures(Contact_Matrix->textures, show_flag);
+    //     tmp->copy_buffer_to_textures(Contact_Matrix, show_flag);
     //     delete tmp;
     //     if (show_flag)
     //     {
@@ -8708,7 +8734,7 @@ MainArgs {
 
                             // prepare the graph data 
                             auto texture_array_4_ai = TexturesArray4AI(Number_of_Textures_1D, Texture_Resolution, (char*)currFileName, Contigs);
-                            texture_array_4_ai.copy_buffer_to_textures(Contact_Matrix->textures);
+                            texture_array_4_ai.copy_buffer_to_textures(Contact_Matrix);
                             texture_array_4_ai.cal_compressed_hic(Contigs, Extensions);
                             FragsOrder frags_order(texture_array_4_ai.get_num_frags()); // intilize the frags_order with the number of fragments including the filtered out ones
                             bool ai_flag = false;
@@ -8742,18 +8768,16 @@ MainArgs {
                             fprintf(stdout, "[YaHS Sort] smallest_frag_size_in_pixel: %d\n", show_auto_curation_button.smallest_frag_size_in_pixel);
                             fprintf(stdout, "[YaHS Sort] link_score_threshold:        %.3f\n", show_auto_curation_button.link_score_threshold);
                             // compress the HiC data
-                            MY_CHECK(0);
                             auto texture_array_4_ai = TexturesArray4AI(Number_of_Textures_1D, Texture_Resolution, (char*)currFileName, Contigs);
-                            MY_CHECK(0);
-                            texture_array_4_ai.copy_buffer_to_textures(Contact_Matrix->textures);
-                            // TODO (SHAOHENG): here the size of viewport is changed in the copy_buffer_to_textures function, thus the size shown in the window is changed, 
-                            //                 need to fix this issue
+                            setContactMatrixVertexArray(Contact_Matrix, true, true);  // set the vertex for copying
+                            texture_array_4_ai.copy_buffer_to_textures_dynamic(Contact_Matrix);
+                            setContactMatrixVertexArray(Contact_Matrix, false, true);  // restore the vertex array for rendering
                             texture_array_4_ai.cal_compressed_hic(Contigs, Extensions);
                             FragsOrder frags_order(texture_array_4_ai.get_num_frags()); // intilize the frags_order with the number of fragments including the filtered out ones
                             // exclude the fragments with first two tags during the auto curationme
                             u32 exclude_tag_num = 2;
                             u32 exclude_frag_idx[2] = {0, 1};
-                            LikelihoodTable likelihood_table(texture_array_4_ai.get_frags(), texture_array_4_ai.get_compressed_hic(), (f32)show_auto_curation_button.smallest_frag_size_in_pixel / 32769.f, exclude_tag_num, exclude_frag_idx);
+                            LikelihoodTable likelihood_table(texture_array_4_ai.get_frags(), texture_array_4_ai.get_compressed_hic(), (f32)show_auto_curation_button.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), exclude_tag_num, exclude_frag_idx);
                             // use the compressed_hic to calculate the frags_order directly
                             ai_model->sort_according_likelihood_unionFind( likelihood_table, frags_order, show_auto_curation_button.link_score_threshold, texture_array_4_ai.get_frags());
                             AutoCurationFromFragsOrder(

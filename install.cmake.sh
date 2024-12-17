@@ -48,9 +48,9 @@ cd ico_design && cd ico_design &&  iconutil -c icns icon_v2.iconset && cd ..
 
 
 # Finished: there are still problem for installation as the app can not find the LC_RPATH, need to fix this
-rm -rf build_cmake  PretextView.app  PretextViewAI.app PretextViewAI.dmg
+rm -rf build_cmake  PretextViewAI.app PretextViewAI.dmg
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=PretextViewAI.app -S . -B build_cmake  && cmake --build build_cmake  -j 8 && cmake --install build_cmake
  
-PretextViewAI.app/Contents/MacOS/PretextViewAI /Users/sg35/auto-curation/log/learning_notes/hic_curation/13 idLinTess1_1 auto-curation/aPelFus1_1.pretext
+PretextViewAI.app/Contents/MacOS/PretextViewAI /Users/sg35/auto-curation/log/learning_notes/hic_curation/13 idLinTess1_1\ auto-curation/aPelFus1_1.pretext
 # test
 # install_name_tool -add_rpath subprojects/libtorch/lib app/bin/PretextView

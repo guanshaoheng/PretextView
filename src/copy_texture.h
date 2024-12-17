@@ -546,8 +546,8 @@ class TexturesArray4AI
 {
 private:
     char name[256];
-    GLuint shaderProgram;
-    GLuint vao, vbo, ebo;
+    GLuint shaderProgram, vao, vbo, ebo;
+    bool hic_shader_initilised=false;
     u32 num_textures_1d;
     u32 total_num_textures;
     u32 texture_resolution; 
@@ -557,9 +557,9 @@ private:
     Matrix3D<f32>* compressed_hic = nullptr; // [0 - 3] channel represent the 4 directions, channel 4 represents the average of the interaction block
     CompressedExtensions* compressed_extensions = nullptr;
     MassCentre* mass_centres = nullptr;
+    unsigned char** textures=nullptr;
     bool is_copied_from_buffer;
     bool is_compressed;
-    unsigned char** textures;
 public:
     TexturesArray4AI(u32 num_textures_1d, u32 texture_resolution, char* fileName, const contigs* Contigs);
 
@@ -603,7 +603,8 @@ public:
     u32 get_num_textures_1d(){return num_textures_1d;}
 
     void check_copied_from_buffer() const;
-    void copy_buffer_to_textures(const GLuint& contact_matrix_textures, bool show_flag=false);
+    void copy_buffer_to_textures(const contact_matrix *contact_matrix_, bool show_flag=false);
+    void copy_buffer_to_textures_dynamic(const contact_matrix *contact_matrix_, bool show_flag=false);
 
     f32 cal_diagonal_mean_within_fragments(int shift);
 

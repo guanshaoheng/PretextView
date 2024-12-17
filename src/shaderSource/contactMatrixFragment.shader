@@ -8,7 +8,7 @@ uniform usamplerBuffer pixrearrangelookup; // 3
 uniform uint pixpertex;        // 1024
 uniform uint ntex1dm1;         // number of textures in 1D minus 1 = 31
 uniform float oopixpertex;     // 1.0 / pixpertex
-uniform vec3 controlpoints;    // 0.0, 0.5, 1.0 
+uniform vec3 controlpoints;    // 0.0, 0.5, 1.0, used to adjust the contrast of the color map
 
 float bezier(float t)  // bezier function to adjust the color map
 {
@@ -116,7 +116,10 @@ void main()
     float f2 = BiLinear(Texcoord, textureSize(tex, 0).xy, floormml + 1);
 
     float value = bezier(mix(f1, f2, fract(mml))); // mix(x, y, a) = x * (1 - a) + y * a
+
     int idx = int(round(value * 255)); // covert to from [0 - 1] to [0 - 255]
     outColor = vec4(texelFetch(colormap, idx).rgb, 1.0);
     // outColor = texelFetch(colormap, idx);
+
+    // outColor = vec4(value, 0.0, 0.0, 1.0);
 }
