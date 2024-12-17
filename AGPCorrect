@@ -1,4 +1,4 @@
-#!/Users/sg35/miniconda3/envs/pretext/bin/python3.12
+#!/usr/bin/python3
 
 import sys
 import gzip
@@ -9,8 +9,8 @@ import re
 
 
 def remove_after_last_plus_or_minus(s):
-    # 使用正则表达式匹配最后一个 + 或 - 及其后的所有字符
-    # 但只删除 + 或 - 之后的字符
+    # match characters after + or - 
+    # replace them with + or -
     return re.sub(r'([+-]).*$', r'\1', s)
 
 
