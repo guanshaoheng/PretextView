@@ -64,6 +64,22 @@ SOFTWARE.
 // #else  // problem is here
 // #include <x86intrin.h>  // please use ```arch -x86_64 zsh```, before run the compiling
 // #endif
+#if defined(_WIN32) || defined(_WIN64)
+    // Windows-specific includes
+    #include <intrin.h>
+    #define ARCH_X86 1
+#elif defined(__x86_64__) || defined(__i386__)
+    // Non-Windows x86 architectures
+    #include <x86intrin.h>
+    #define ARCH_X86 1
+#elif defined(__arm__) || defined(__aarch64__)
+    // ARM architectures
+    #include <arm_neon.h> // Example: ARM NEON intrinsics
+    #define ARCH_ARM 1
+#else
+    #error "Unsupported architecture or operating system"
+#endif // defined(_WIN32) || defined(_WIN64)
+
 
 #include "libdeflate.h"
 
