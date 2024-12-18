@@ -582,7 +582,12 @@ public:
     }
 
     const Matrix3D<f32> *get_compressed_hic() const
-    {
+    {   
+        if (compressed_hic == nullptr)
+        {
+            std::cerr << "The compressed_hic is not initialized" << std::endl;
+            assert(0);
+        }
         return compressed_hic;
     }
 
@@ -611,7 +616,11 @@ public:
     void cal_compressed_hic(
         const contigs* Contigs, 
         const extension_sentinel& Extensions,
-        f32 D_hic_ratio=0.05f, u32 maximum_D=5000, f32 min_hic_density = 30.f);
+        bool is_extension_required=true, 
+        bool is_massCenter_required=true,
+        f32 D_hic_ratio=0.05f, 
+        u32 maximum_D=5000, 
+        f32 min_hic_density = 30.f);
     void cal_compressed_extension(const extension_sentinel &Extensions);
 
     Sum_and_Number get_fragement_diag_mean_square(

@@ -779,8 +779,11 @@ void TexturesArray4AI::show_collected_textures()
 void TexturesArray4AI::cal_compressed_hic(
     const contigs* Contigs, 
     const extension_sentinel& Extensions,
-    f32 D_hic_ratio, u32 maximum_D, f32 min_hic_density) // with shape of [number_of_fragments, number_of_fragments, 4]
-    // todo (shaoheng) input the map_state and then calculate the compressed hic
+    bool is_extension_required,
+    bool is_massCenter_required,
+    f32 D_hic_ratio, 
+    u32 maximum_D, 
+    f32 min_hic_density) 
 {   
     check_copied_from_buffer();
 
@@ -791,45 +794,49 @@ void TexturesArray4AI::cal_compressed_hic(
         fprintf(stderr, "\n[Compress Hic] warning: frags->total_length(%d) != num_pixels_1d (%d).\n\n", frags->total_length, num_pixels_1d);
     }
     compressed_hic->re_allocate_mem(frags->num, frags->num, 5);
-    compressed_extensions->re_allocate_mem(frags->num);
     if (mass_centres) 
     {
         delete mass_centres;
         mass_centres = nullptr;
     }
-    mass_centres = new MassCentre[frags->num * frags->num];
 
-    // compress the extensions
-    cal_compressed_extension(Extensions);
-
-    // cal the mass center
-    // NOTE: the mass center cal is a lit bit different from the results from the pretextParserPython, as the textures collected has slightly differences and the frags->startCoord is also slightly different.
-    // 1. texture difference: because in pretextParserPython, we are using bc4 lib uncompress the textures, while in this code, we are using the glReadPixels to get the textures, which may have some differences. This need to be solved.
-    // 2. frags->startCoord difference: the startCoord in pretextParser is calculated by float times resolution, while in this code, we are collect the frags' lengths directly from the Contigs.
     const u32 num_interaction_to_cal = (frags->num * (frags->num - 1))>>1;
-    u32 cnt = 0;
-    for (u32 i = 0; i < frags->num; ++i)
-    {   
-        for (u32 j = i+1; j < frags->num; ++j)
+
+    if (is_extension_required)
+    {
+        // compress the extensions
+        compressed_extensions->re_allocate_mem(frags->num);
+        cal_compressed_extension(Extensions);
+    }
+
+    if (is_massCenter_required)
+    {
+        // cal the mass center
+        mass_centres = new MassCentre[frags->num * frags->num];
+        u32 cnt = 0;
+        for (u32 i = 0; i < frags->num; ++i)
         {   
-            cal_mass_centre(
-                frags->startCoord[i],
-                frags->startCoord[j],
-                frags->length[i],
-                frags->length[j],
-                mass_centres + i * frags->num + j);
-            mass_centres[j * frags->num + i].row = mass_centres[i * frags->num + j].col;
-            mass_centres[j * frags->num + i].col = mass_centres[i * frags->num + j].row;
-            ++cnt;
-            if (cnt % (num_interaction_to_cal / 100) == 0)
-            {
-                fprintf(stdout, "\rCalculating mass center %.2f%%, [%d/%d]", (f32)cnt / (f32)num_interaction_to_cal * 100.0f, cnt, num_interaction_to_cal);
-                fflush(stdout);
+            for (u32 j = i+1; j < frags->num; ++j)
+            {   
+                cal_mass_centre(
+                    frags->startCoord[i],
+                    frags->startCoord[j],
+                    frags->length[i],
+                    frags->length[j],
+                    mass_centres + i * frags->num + j);
+                mass_centres[j * frags->num + i].row = mass_centres[i * frags->num + j].col;
+                mass_centres[j * frags->num + i].col = mass_centres[i * frags->num + j].row;
+                ++cnt;
+                if (cnt % (num_interaction_to_cal / 100) == 0)
+                {
+                    fprintf(stdout, "\rCalculating mass center %.2f%%, [%d/%d]", (f32)cnt / (f32)num_interaction_to_cal * 100.0f, cnt, num_interaction_to_cal);
+                    fflush(stdout);
+                }
             }
         }
+        fprintf(stdout, "\n");
     }
-    fprintf(stdout, "\n");
-
+    
     // cal the average hic interation 
     for (u32 frag_i = 0 ; frag_i < frags->num; frag_i++)
     {
@@ -858,7 +865,7 @@ void TexturesArray4AI::cal_compressed_hic(
     }
 
     Values_on_Channel buffer_values_on_channel;
-    cnt = 0;
+    u32 cnt = 0;
     for (u32 i = 0; i < frags->num; i++)
     {
         for (u32 j = i+1; j < frags->num; j++)
@@ -885,7 +892,7 @@ void TexturesArray4AI::cal_compressed_hic(
     is_compressed = true;
 
     #ifdef DEBUG
-        output_compressed_hic_massCetre_extension_for_python();
+        if (is_extension_required && is_massCenter_required) output_compressed_hic_massCetre_extension_for_python();
     #endif // DEBUG
 
 }

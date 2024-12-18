@@ -530,6 +530,17 @@ global_function
 void
 setContactMatrixVertexArray(contact_matrix* Contact_Matrix_, bool copy_flag=false, bool regenerate_flag=false);
 
+
+global_function
+void 
+prepare_before_copy(f32 *original_control_points);
+
+
+global_function
+void 
+restore_settings_after_copy(const f32 *original_control_points);
+
+
 #define Max_Number_of_Contigs 4096
 
 
@@ -3781,6 +3792,9 @@ PopulateTextureLoadQueue(void *in) // 填充已经初始化过的 所有的queue
 }
 
 
+/*
+adjust the gamma thus adjust the contrast
+*/
 global_function
 void
 AdjustColorMap(s32 dir)
@@ -3788,12 +3802,19 @@ AdjustColorMap(s32 dir)
     f32 unit = 0.05f;
     f32 delta = unit * (dir > 0 ? 1.0f : -1.0f);
 
-    Color_Maps->controlPoints[1] = my_Max(my_Min(Color_Maps->controlPoints[1] + delta, Color_Maps->controlPoints[2]), Color_Maps->controlPoints[0]);
+    Color_Maps->controlPoints[1] = my_Max(
+        my_Min(Color_Maps->controlPoints[1] + delta, Color_Maps->controlPoints[2]), 
+        Color_Maps->controlPoints[0]
+    );
 
     glUseProgram(Contact_Matrix->shaderProgram);
     glUniform3fv( Color_Maps->cpLocation, 1, Color_Maps->controlPoints);
 }
 
+
+/*
+change to the last or next color map
+*/
 global_function
 void
 NextColorMap(s32 dir)
@@ -5725,6 +5746,42 @@ void setContactMatrixVertexArray(contact_matrix* Contact_Matrix_, bool copy_flag
         y -= quadSize;  // next row
         x = -0.5f;      // from column 0
     }
+}
+
+
+global_function
+void 
+prepare_before_copy(f32 *original_control_points)
+{
+    // prepare before reading textures
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_BUFFER, Color_Maps->maps[Color_Maps->nMaps-1]);
+    glActiveTexture(GL_TEXTURE0);
+    for (u32 i = 0; i < 3 ; i ++ ) 
+        original_control_points[i] = Color_Maps->controlPoints[i];
+    Color_Maps->controlPoints[0] = 0.0f;
+    Color_Maps->controlPoints[1] = 0.5f;
+    Color_Maps->controlPoints[2] = 1.0f;
+    glUseProgram(Contact_Matrix->shaderProgram);
+    glUniform3fv( Color_Maps->cpLocation, 1, Color_Maps->controlPoints);
+    setContactMatrixVertexArray(Contact_Matrix, true, true);  // set the vertex for copying
+    return ;
+}
+
+
+global_function
+void 
+restore_settings_after_copy(const f32 *original_control_points)
+{
+    // restore settings
+    setContactMatrixVertexArray(Contact_Matrix, false, true);  // restore the vertex array for rendering
+    for (u32 i = 0 ; i < 3 ; i ++ )
+        Color_Maps->controlPoints[i] = original_control_points[i];
+    glUseProgram(Contact_Matrix->shaderProgram);
+    glUniform3fv( Color_Maps->cpLocation, 1, Color_Maps->controlPoints);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_BUFFER, Color_Maps->maps[Color_Maps->currMap]);
+    glActiveTexture(GL_TEXTURE0);
 }
 
 
@@ -8769,17 +8826,33 @@ MainArgs {
                             fprintf(stdout, "[YaHS Sort] link_score_threshold:        %.3f\n", show_auto_curation_button.link_score_threshold);
                             // compress the HiC data
                             auto texture_array_4_ai = TexturesArray4AI(Number_of_Textures_1D, Texture_Resolution, (char*)currFileName, Contigs);
-                            setContactMatrixVertexArray(Contact_Matrix, true, true);  // set the vertex for copying
-                            texture_array_4_ai.copy_buffer_to_textures_dynamic(Contact_Matrix);
-                            setContactMatrixVertexArray(Contact_Matrix, false, true);  // restore the vertex array for rendering
-                            texture_array_4_ai.cal_compressed_hic(Contigs, Extensions);
+
+                            // prepare before reading textures
+                            f32 original_control_points[3];
+                            prepare_before_copy(original_control_points);
+                            texture_array_4_ai.copy_buffer_to_textures_dynamic(Contact_Matrix, false);
+                            restore_settings_after_copy(original_control_points);
+                            texture_array_4_ai.cal_compressed_hic(
+                                Contigs, 
+                                Extensions, 
+                                false, 
+                                false);
                             FragsOrder frags_order(texture_array_4_ai.get_num_frags()); // intilize the frags_order with the number of fragments including the filtered out ones
                             // exclude the fragments with first two tags during the auto curationme
                             u32 exclude_tag_num = 2;
                             u32 exclude_frag_idx[2] = {0, 1};
-                            LikelihoodTable likelihood_table(texture_array_4_ai.get_frags(), texture_array_4_ai.get_compressed_hic(), (f32)show_auto_curation_button.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), exclude_tag_num, exclude_frag_idx);
+                            LikelihoodTable likelihood_table(
+                                texture_array_4_ai.get_frags(), 
+                                texture_array_4_ai.get_compressed_hic(), 
+                                (f32)show_auto_curation_button.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), 
+                                exclude_tag_num, 
+                                exclude_frag_idx);
                             // use the compressed_hic to calculate the frags_order directly
-                            ai_model->sort_according_likelihood_unionFind( likelihood_table, frags_order, show_auto_curation_button.link_score_threshold, texture_array_4_ai.get_frags());
+                            ai_model->sort_according_likelihood_unionFind( 
+                                likelihood_table, 
+                                frags_order, 
+                                show_auto_curation_button.link_score_threshold, 
+                                texture_array_4_ai.get_frags());
                             AutoCurationFromFragsOrder(
                                 &frags_order, 
                                 Contigs,
