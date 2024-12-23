@@ -233,6 +233,9 @@ struct ShowAutoCurationButton
     // Variables for the editing UI state
     bool show_yahs_erase_confirm_popup = false;
     bool show_yahs_redo_confirm_popup = false;
+    //sorting mode
+    u32 sort_mode = 0; // 0: union find, 1: fuse union find, 2 deep fuse
+    std::vector<std::string> sort_mode_names = {"Union Find", "Fuse Union Find", "Deep Fuse"};
     u08 frag_size_buf[16];
     u08 score_threshold_buf[16];
     ShowAutoCurationButton()
@@ -247,6 +250,11 @@ struct ShowAutoCurationButton
         snprintf((char*)frag_size_buf, sizeof(frag_size_buf), "%u", smallest_frag_size_in_pixel);
         memset(score_threshold_buf, 0, sizeof(score_threshold_buf));
         snprintf((char*)score_threshold_buf, sizeof(score_threshold_buf), "%.3f", link_score_threshold);
+    }
+
+    std::string get_sort_mode_name() const
+    {
+        return sort_mode_names[sort_mode];
     }
 };
 

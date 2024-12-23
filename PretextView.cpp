@@ -5510,9 +5510,6 @@ void AutoCurationFromFragsOrder(
     contigs* contigs_,
     map_state* map_state_) 
 {   
-    // TODO (shaoheng): after curation, just join the fragments which are treated as a chromosome together
-    //                  thus, while calculating the compressed-hic matrix, we get different results
-    //                  and then, we can calculate the new orders with lower score threshold
     u32 num_frags = contigs_->numberOfContigs;
     if (num_frags != frags_order_->get_num_frags()) 
     {
@@ -8779,7 +8776,7 @@ MainArgs {
                     s32 yahs_sort_button = nk_button_label(NK_Context, "YaHS Sort");
                     // AI sort button
                     {
-                        if (ai_sort_button && currFileName && 0)
+                        if (ai_sort_button && currFileName)
                         {   
                             printf("AISort button clicked\n");
                             // check if the ai model is loaded
@@ -8804,15 +8801,17 @@ MainArgs {
                             }
                             else 
                             {
-                                LikelihoodTable likelihood_table(texture_array_4_ai.get_frags(), texture_array_4_ai.get_compressed_hic(), 2.f / 32769.f);
+                                u32 exclude_tag_num = 2;
+                                u32 exclude_frag_idx[2] = {0, 1};
+                                LikelihoodTable likelihood_table(
+                                    texture_array_4_ai.get_frags(), 
+                                    texture_array_4_ai.get_compressed_hic(), 
+                                    (f32)show_auto_curation_button.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), 
+                                    exclude_tag_num, 
+                                    exclude_frag_idx);
                                 // use the compressed_hic to calculate the frags_order directly
-                                ai_model->sort_according_likelihood_unionFind( likelihood_table, frags_order, 0.4, texture_array_4_ai.get_frags());
+                                ai_model->sort_according_likelihood_dfs( likelihood_table, frags_order, 0.4, texture_array_4_ai.get_frags());
                             }
-                            AutoCurationFromFragsOrder(
-                                &frags_order, 
-                                Contigs,
-                                Map_State
-                            );
                             std::cout << std::endl;
                         }
                     }
@@ -8824,6 +8823,7 @@ MainArgs {
                             fprintf(stdout, "[YaHS Sort] start...\n");
                             fprintf(stdout, "[YaHS Sort] smallest_frag_size_in_pixel: %d\n", show_auto_curation_button.smallest_frag_size_in_pixel);
                             fprintf(stdout, "[YaHS Sort] link_score_threshold:        %.3f\n", show_auto_curation_button.link_score_threshold);
+                            fprintf(stdout, "[YaHS Sort] Sort mode:                   %s\n", show_auto_curation_button.get_sort_mode_name().c_str());
                             // compress the HiC data
                             auto texture_array_4_ai = TexturesArray4AI(Number_of_Textures_1D, Texture_Resolution, (char*)currFileName, Contigs);
 
@@ -8848,11 +8848,35 @@ MainArgs {
                                 exclude_tag_num, 
                                 exclude_frag_idx);
                             // use the compressed_hic to calculate the frags_order directly
-                            ai_model->sort_according_likelihood_unionFind( 
-                                likelihood_table, 
-                                frags_order, 
-                                show_auto_curation_button.link_score_threshold, 
-                                texture_array_4_ai.get_frags());
+                            if (show_auto_curation_button.sort_mode == 0)
+                            {
+                                ai_model->sort_according_likelihood_unionFind( 
+                                    likelihood_table, 
+                                    frags_order, 
+                                    show_auto_curation_button.link_score_threshold, 
+                                    texture_array_4_ai.get_frags());
+                            }
+                            else if (show_auto_curation_button.sort_mode == 1)
+                            {
+                                ai_model->sort_according_likelihood_unionFind_doFuse( 
+                                    likelihood_table, 
+                                    frags_order, 
+                                    show_auto_curation_button.link_score_threshold, 
+                                    texture_array_4_ai.get_frags(), true, true);
+                            }
+                            else if (show_auto_curation_button.sort_mode == 2)
+                            {
+                                ai_model->sort_according_likelihood_unionFind_doFuse( 
+                                    likelihood_table, 
+                                    frags_order, 
+                                    show_auto_curation_button.link_score_threshold, 
+                                    texture_array_4_ai.get_frags(), false, true);
+                            }
+                            else 
+                            {
+                                fprintf(stderr, "[YaHS Sort] Error: Unknown sort mode (%d)\n", show_auto_curation_button.sort_mode);
+                                assert(0);
+                            }
                             AutoCurationFromFragsOrder(
                                 &frags_order, 
                                 Contigs,
@@ -8878,6 +8902,22 @@ MainArgs {
                                 (char*)show_auto_curation_button.score_threshold_buf, 
                                 sizeof(show_auto_curation_button.score_threshold_buf), 
                                 nk_filter_float);
+                            
+                            nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 3);
+                            if (nk_option_label(NK_Context, "UnionFind", show_auto_curation_button.sort_mode == 0))
+                            {
+                                show_auto_curation_button.sort_mode = 0;
+                            }
+
+                            if (nk_option_label(NK_Context, "Fuse", show_auto_curation_button.sort_mode == 1)) 
+                            {
+                                show_auto_curation_button.sort_mode = 1;
+                            }
+
+                            if (nk_option_label(NK_Context, "Deep Fuse", show_auto_curation_button.sort_mode == 2)) 
+                            {
+                                show_auto_curation_button.sort_mode = 2;
+                            }
 
                             nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
                             if (nk_button_label(NK_Context, "Cancel")) 
@@ -8900,6 +8940,7 @@ MainArgs {
                                 show_auto_curation_button.set_buf();
                                 printf("[YaHS Sort] smallest_frag_size_in_pixel: %d\n", show_auto_curation_button.smallest_frag_size_in_pixel);
                                 printf("[YaHS Sort] link_score_threshold:        %.3f\n", show_auto_curation_button.link_score_threshold);
+                                printf("[YaHS Sort] Sort mode:                   %s\n", show_auto_curation_button.get_sort_mode_name().c_str());
                             }
                             // redo all the changes
                             if (!show_auto_curation_button.show_yahs_redo_confirm_popup)

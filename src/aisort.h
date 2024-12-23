@@ -309,13 +309,22 @@ public:
     void sort_according_likelihood_dfs(
         const LikelihoodTable& likelihood_table, 
         FragsOrder& frags_order,
-        const f32 threshold=-0.001);
+        const f32 threshold=-0.001, 
+        const Frag4compress* frags=nullptr) const;
 
     void sort_according_likelihood_unionFind(
         const LikelihoodTable& likelihood_table, 
         FragsOrder& frags_order,
         const f32 threshold=-0.001, 
         const Frag4compress* frags=nullptr) const;
+
+    void sort_according_likelihood_unionFind_doFuse(
+        const LikelihoodTable& likelihood_table, 
+        FragsOrder& frags_order,
+        const f32 threshold=-0.001, 
+        const Frag4compress* frags=nullptr,
+        const bool doStageOne=true,
+        const bool doStageTwo=false) const;
 
     void model_valid() 
     {

@@ -191,7 +191,6 @@ GLuint CreateShader(
 #pragma clang diagnostic pop
 
 
-
 void push_nk_style(
     nk_context *ctx, 
     nk_color normal, 

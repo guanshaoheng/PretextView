@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.17)
-project(PretextView VERSION "1.0.0")
+project(PretextView VERSION "1.2.0")
 
 
 set(target_name PretextViewAI)
