@@ -80,7 +80,7 @@ $[b_1, b_2, \ldots, b_j]$
 are fused. Let $a_{i-1}$ be the source, and $b_{j+1}$ be the sink. We insert $A_t$ and $B_h$ in the optimal way to achieve the highest total score, preserving their internal order.
 
 If the link score of the fused chain $S_F$ is larger than the original scores plus threshold:
-$$S_F = \sum_{i=0}^{N-1} s(f_i, f_{i+1}) \;\; \ge \;\; \Bigl(S_{A_t} + S_{B_h} + S_{\text{thresh}}\Bigr)$$
+$$S_F = \sum_{i=0}^{N-1} s(f_i, f_{i+1}) \ge \Bigl(S_{A_t} + S_{B_h} + S_{\text{thresh}}\Bigr)$$
 where $f \in F$, and $F$ is the chain fused from $A_t$ and $B_h$. The score of $A_t$ is $S_{A_t} = \sum_{i=0}^{N_{A_t}-1} s(a_i, a_{i+1})$ with $a \in A_t$.
 
 ---
