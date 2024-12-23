@@ -60,12 +60,8 @@ Bioinformatics, Volume 39, Issue 1, January 2023, btac808, https://doi.org/10.10
 - Traverse all the links from highest to lowest score, consider the the two ends.
   
 Suppose we have two chains:
-$$
-A: [a_1, a_2, a_3, \ldots, a_i, \ldots, a_n]
-$$
-$$
-B: [b_1, b_2, b_3, \ldots, b_j, \ldots, b_m]
-$$
+$$A: [a_1, a_2, a_3, \ldots, a_i, \ldots, a_n]$$
+$$B: [b_1, b_2, b_3, \ldots, b_j, \ldots, b_m]$$
 They can only be linked if there is a strong (larger than threshold) link between one of the following pairs:$[a_1, b_1], [a_1, b_m], [a_n, b_1], [a_n, b_m]$
 
 
@@ -78,19 +74,13 @@ For two chains: $A: [a_1, a_2, a_3, \ldots, a_i, \ldots, a_n]$ and $B: [b_1, b_2
 The Union Find approach considers only the two ends. Now we consider fusing these two chains into one if $[a_i, b_j]$ is a link with a score higher than the threshold.
 
 **In fuse mode**, the tail of $A$, denoted $A_t$:
-$
-  [a_i, a_{i+1}, \ldots, a_n]
-$
+$[a_i, a_{i+1}, \ldots, a_n]$
 and the head of $B$, denoted $B_h$:
-$
-  [b_1, b_2, \ldots, b_j]
-$
+$[b_1, b_2, \ldots, b_j]$
 are fused. Let $a_{i-1}$ be the source, and $b_{j+1}$ be the sink. We insert $A_t$ and $B_h$ in the optimal way to achieve the highest total score, preserving their internal order.
 
 If the link score of the fused chain $S_F$ is larger than the original scores plus threshold:
-$$
-  S_F = \sum_{i=0}^{N-1} s(f_i, f_{i+1}) \;\; \ge \;\; \Bigl(S_{A_t} + S_{B_h} + S_{\text{thresh}}\Bigr)
-$$
+$$S_F = \sum_{i=0}^{N-1} s(f_i, f_{i+1}) \;\; \ge \;\; \Bigl(S_{A_t} + S_{B_h} + S_{\text{thresh}}\Bigr)$$
 where $f \in F$, and $F$ is the chain fused from $A_t$ and $B_h$. The score of $A_t$ is $S_{A_t} = \sum_{i=0}^{N_{A_t}-1} s(a_i, a_{i+1})$ with $a \in A_t$.
 
 ---
