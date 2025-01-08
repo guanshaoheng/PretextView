@@ -313,17 +313,34 @@ void AiModel::sort_according_likelihood_unionFind(
     });
     // initialize the chromosomes and union-find
     // every fragment is initilised as a not-inverted chain
-    std::vector<std::deque<s32>> chromosomes(n);
-    for (u32 i=0; i < n; i++) chromosomes[i].push_back(i+1); 
-    std::vector<u32> chain_id(n);
-    std::iota(chain_id.begin(), chain_id.end(), 0);
+    std::vector<std::deque<s32>> chromosomes;
+    std::vector<s32> chain_id(n, -1);
+    std::vector<std::deque<s32>> chromosomes_excluded(n);
+    for (u32 i=0; i < n; i++) 
+    {
+        if (likelihood_table.excluded_fragment_idx.count(i)!=0)  // excluded fragment
+        {
+            chromosomes_excluded.push_back({(s32)i+1});
+        }
+        else
+        {
+            chain_id[i] = chromosomes.size();
+            chromosomes.push_back({(s32)i+1});
+        }
+    }
 
     // Process links in order of decreasing score
     for (auto &lnk : all_links)
     {
         u32 a = lnk.frag_a;
         u32 b = lnk.frag_b;
-        u32 ca = chain_id[a], cb = chain_id[b];
+        s32 ca = chain_id[a], cb = chain_id[b];
+
+        if (ca < 0 || cb < 0) 
+        {
+            fprintf(stderr, "Error: ca(%d) or cb(%d) should >= 0, only chain_id of excluded fragment can be smaller than 0.\n", ca, cb);
+            assert(0);
+        }
 
         if (ca == cb) continue;
 
@@ -335,7 +352,7 @@ void AiModel::sort_according_likelihood_unionFind(
         // thus they can not be linked
         if (!is_head_or_end(cha, a) || !is_head_or_end(chb, b)) continue;
 
-        // Find the index i/j of a/b on cha/b
+        // find the index i/j of a/b on cha/b
         u32 i = 0, j = 0;
         for (; i < cha.size(); i++)
             if (std::abs(cha[i]) == a+1)
@@ -383,7 +400,17 @@ void AiModel::sort_according_likelihood_unionFind(
                 for (auto &val: b) len_b += frags->length[std::abs(val)-1];
                 return len_a > len_b;
             });
+        
+        std::sort(chromosomes_excluded.begin(), chromosomes_excluded.end(), 
+            [&frags](const std::deque<s32>& a, const std::deque<s32>& b) {
+                u32 len_a = 0, len_b = 0;
+                for (auto &val: a) len_a += frags->length[std::abs(val)-1];
+                for (auto &val: b) len_b += frags->length[std::abs(val)-1];
+                return len_a > len_b;
+            });
     }
+    // merge two vectors
+    chromosomes.insert(chromosomes.end(), chromosomes_excluded.begin(), chromosomes_excluded.end());
 
     frags_order.set_order(chromosomes);
 }

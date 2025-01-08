@@ -116,6 +116,7 @@ graph
     u16 on;
     u16 nameOn;
     nk_colorf colour;
+    u08 activecolor;
 };
 
 

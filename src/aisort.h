@@ -49,6 +49,7 @@ private:
     u32 num_frags;   // all the frags including the filtered out ones
     f32* data;       // with shape [num_frags, num_frags, 4]
 public:
+    std::unordered_set<u32> excluded_fragment_idx;
     Frag4compress* frags;
     LikelihoodTable(const GraphData* graph, const torch::Tensor& likelihood_tensor)
         :num_frags(graph->frags->num), frags(graph->frags), data(nullptr)
@@ -62,22 +63,25 @@ public:
         Frag4compress* frags, 
         const Matrix3D<f32>* compressed_hic, 
         const f32 threshold=10.f/32769.f, 
-        const u32 exclude_tag_num=0, 
-        const u32* exclude_tag_idx=nullptr)
+        const std::vector<s32>& exclude_tag_idx=std::vector<s32>() ) 
         :num_frags(frags->num), frags(frags), data(nullptr)
     {   
-        if (exclude_tag_num > 0 && exclude_tag_idx == nullptr)
-        {
-            fprintf(stderr, "The exclude_tag_num(%d) > 0, but the exclude_tag_idx is nullptr\n", exclude_tag_num);
-            assert(0);
-        }
-
         auto is_exclude_tag = [&](u32 idx) -> bool
         {   
-            if (exclude_tag_num==0) return false;
-            for (u32 i = 0; i < exclude_tag_num; i++)
+            if ((f32)frags->length[idx]/(f32)frags->total_length <= threshold) 
             {
-                if (frags->metaDataFlags[idx] & (1<<exclude_tag_idx[i])) return true;
+                this->excluded_fragment_idx.insert(idx);
+                return true;
+            }
+            if (exclude_tag_idx.size()==0) return false;
+            for (auto i : exclude_tag_idx)
+            {   
+                if (i < 0) continue;
+                if (frags->metaDataFlags[idx] & (1<<i)) 
+                {
+                    this->excluded_fragment_idx.insert(idx);
+                    return true;
+                }
             }
             return false;
         };
@@ -86,10 +90,10 @@ public:
         for (u32 i = 0; i<num_frags * num_frags * 4; i++) data[i] = -1.f;
         for (u32 i = 0; i<num_frags; i++)
         {   
-            if ( (f32)frags->length[i]/(f32)frags->total_length <= threshold || is_exclude_tag(i) ) continue;
+            if ( is_exclude_tag(i) ) continue;
             for (u32 j = 0; j < num_frags; j++)
             {   
-                if ( (f32)frags->length[j]/(f32)frags->total_length <= threshold || is_exclude_tag(j)) continue;
+                if ( is_exclude_tag(j)) continue;
                 (*this)(i, j, 0) = (*compressed_hic)(i, j, 0);
                 (*this)(i, j, 1) = (*compressed_hic)(i, j, 1);
                 (*this)(i, j, 2) = (*compressed_hic)(i, j, 3);
@@ -116,7 +120,7 @@ public:
             std::cerr << "Error: index out of range" << std::endl;
             assert(0);
         }
-        return data[i * num_frags * 4 + j * 4 + k];
+        return data[ ((i * num_frags) << 2) + (j << 2) + k];
     }
 
     const f32& operator() (const u32 i, const u32 j, const u32 k) const
@@ -126,11 +130,11 @@ public:
             std::cerr << "Error: index out of range" << std::endl;
             assert(0);
         }
-        return data[i * num_frags * 4 + j * 4 + k];
+        return data[ ((i * num_frags) << 2) + (j << 2) + k];
     }
 
     void set_data(
-        const  torch::Tensor& likelihood_tensor, 
+        const torch::Tensor& likelihood_tensor, 
         const GraphData* graph_data)
     {   
         u32 num_selected_nodes = graph_data->get_num_nodes();
@@ -146,7 +150,6 @@ public:
         auto frags_idx_new_to_old = graph_data->get_selected_node_idx();
         for (u32 i = 0; i < graph_data->get_num_full_edges(); i ++  )
         {   
-            // TODO (SHAOHENG): copy the data to the likelihood table
             u32 node_i = graph_data->edges_index_full(0, i), node_j = graph_data->edges_index_full(1, i);
             if (node_i > node_j) 
             {

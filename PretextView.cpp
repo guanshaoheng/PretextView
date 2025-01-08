@@ -187,6 +187,107 @@ global_function
 void
 SetTheme(struct nk_context *ctx, enum theme theme);
 
+
+
+global_variable
+    f32
+        bgcolor[][4] =
+            {
+                {0.2f, 0.6f, 0.4f, 1.0f},       // original
+                {0.922f, 0.635f, 0.369f, 1.0f}, // jasper (orange)
+                {0.62f, 0.482f, 0.71f, 1.0f},   // heather (lavender)
+                {0.29f, 0.545f, 0.659f, 1.0f},  // Carolina (blue)
+                {1.0f, 1.0f, 1.0f, 1.0f},       // white
+                {0.765f, 0.765f, 0.765f, 1.0f}, // Grey
+                {0.0f, 0.0f, 0.0f, 1.0f}        // Black
+};
+
+global_variable const char *
+    bg_color[] =
+        {
+            "Classic",
+            "Jasper",
+            "Heather",
+            "Carolina",
+            "White",
+            "Grey",
+            "Black"};
+
+global_variable
+    u08
+        active_bgcolor = 0;
+
+struct
+    metaoutline
+{
+    u08 on;
+    u08 color;
+};
+
+struct metaoutline global_meta_outline = {1, 0};
+
+global_variable metaoutline *
+    meta_outline = &global_meta_outline;
+
+global_variable
+    u08
+        default_metadata_colorProfile = 0;
+
+global_variable
+    u08
+        meta_data_curcolorProfile = default_metadata_colorProfile;
+
+global_variable
+    f32
+        meta_dataColors[][3] =
+            {
+                {1.666f, 2.666f, 3.666f}, // original
+                {2.666f, 1.666f, 3.666f},
+                {3.666f, 2.666f, 1.666f},
+                {5.666f, 3.666f, 2.666f}};
+
+global_variable const char *
+    metaColors[] =
+        {
+            "Color set 1",
+            "Color set 2",
+            "Color set 3",
+            "Color set 4"};
+
+global_variable const char *
+    outlineColors[] =
+        {
+            "No-Outline",
+            "Black-Outline",
+            "White-Outline"};
+
+global_variable
+    u08
+        activeGraphColour = 0;
+
+global_variable
+    nk_colorf
+        graphColors[] =
+            {
+                {0.1f, 0.8f, 0.7f, 1.0f},       // Default
+                {1.0f, 0.341f, 0.2f, 1.0f},     // Vermillion
+                {0.137f, 0.451f, 0.882f, 1.0f}, // essence (vibrant blue)
+                {0.706f, 0.0f, 1.0f, 1.0f}      // Drystorm (purple)
+};
+
+global_variable const char *
+    colour_graph[] =
+        {
+            "Default",
+            "Vermillion",
+            "Blue",
+            "Purple"};
+
+global_variable
+    nk_colorf
+        DefaultGraphColour = graphColors[activeGraphColour];
+
+
 global_variable
 nk_context *
 NK_Context;
@@ -259,6 +360,25 @@ global_variable
 quad_data *
 QuadTree_Data;
 #endif
+
+
+struct
+    CustomColorMapOrder
+{
+    u32 nMaps;
+    u32 order[Number_of_Color_Maps];
+};
+
+
+global_variable
+    CustomColorMapOrder
+        userColourMapOrder;
+
+
+global_variable
+s32
+useCustomOrder = 0;
+
 
 global_variable
 quad_data *
@@ -434,6 +554,59 @@ meta_mode_data *
 MetaData_Mode_Data;
 
 global_variable
+meta_mode_data *
+Extension_Mode_Data;
+
+
+struct selected_sequence_cover_countor
+{
+    s32 original_contig_index;
+    s32 idx_within_original_contig;
+    f64 end_time;
+    f64 label_last_seconds = 5.0f;
+    u08 plotted;
+    f32 contig_start; // ratio
+    f32 contig_end;   // ratio
+    s32 map_loc;      // in pixel
+    void clear()
+    {
+        original_contig_index = -1;
+        idx_within_original_contig = -1;
+        end_time = -1.;
+        plotted = false;
+        contig_start = -1.0;
+        contig_end = -1.0;
+        map_loc = -1;
+    };
+
+    void set(
+        s32 original_contig_index_,
+        s32 idx_within_original_contig_,
+        f64 current_time_,
+        f32 contig_start_,
+        f32 contig_end_,
+        s32 map_loc_
+    )
+    {   
+        this->clear();
+        original_contig_index = original_contig_index_; 
+        idx_within_original_contig = idx_within_original_contig_; 
+        end_time = current_time_ + label_last_seconds;
+        plotted = 0;
+        contig_start = contig_start_;
+        contig_end = contig_end_;
+        map_loc = map_loc_;
+    }
+};
+
+
+global_variable
+selected_sequence_cover_countor
+Selected_Sequence_Cover_Countor;
+
+
+
+global_variable
 u32
 UI_On = 0;
 
@@ -446,6 +619,7 @@ Global_Mode = mode_normal;
 #define Waypoint_Edit_Mode (Global_Mode == mode_waypoint_edit)
 #define Scaff_Edit_Mode (Global_Mode == mode_scaff_edit)
 #define MetaData_Edit_Mode (Global_Mode == mode_meta_edit)
+#define Extension_Mode (Global_Mode == mode_extension)
 
 global_variable
 s32
@@ -546,7 +720,7 @@ restore_settings_after_copy(const f32 *original_control_points);
 
 global_variable
 meta_data *
-Meta_Data; // meta data for each contig
+Meta_Data; // meta data tags for each contig
 
 global_variable
 u32
@@ -557,6 +731,11 @@ u08
 MetaData_Edit_State = 0;
 
 global_variable
+u16
+sortMetaEdits;
+
+
+global_variable
 const char *
 Default_Tags[] = 
 {
@@ -565,7 +744,28 @@ Default_Tags[] =
     "X",
     "Y",
     "Z",
-    "W"
+    "W",
+    "HAP1",
+    "HAP2",
+    "Target",
+    "Contaminant",
+    "X1",
+    "X2",
+    "Y1",
+    "Y2",
+    "Z1",
+    "Z2",
+    "W1",
+    "W2",
+    "I",
+    "II",
+    "III",
+    "IV",
+    "V",
+    "B1",
+    "B2",
+    "B3",
+    "U"
 };
 
 
@@ -1711,6 +1911,12 @@ global_variable
 u08
 Mouse_Invert = 0;
 
+
+global_variable
+u08
+Grey_Haplotigs = 1;
+
+
 global_variable
 u08
 Deferred_Close_UI = 0;
@@ -2010,13 +2216,55 @@ global_function
 void
 ColourGenerator(u32 index, f32 *rgb)
 {
-#define RedFreq 1.666f
-#define GreenFreq 2.666f
-#define BlueFreq 3.666f
+// #define RedFreq 1.666f
+// #define GreenFreq 2.666f
+// #define BlueFreq 3.666f
+
+//     rgb[0] = 0.5f * (sinf((f32)index * RedFreq) + 1.0f);
+//     rgb[1] = 0.5f * (sinf((f32)index * GreenFreq) + 1.0f);
+//     rgb[2] = 0.5f * (sinf((f32)index * BlueFreq) + 1.0f);
+
+    f32 RedFreq = meta_dataColors[meta_data_curcolorProfile][0];
+    f32 GreenFreq = meta_dataColors[meta_data_curcolorProfile][1];
+    f32 BlueFreq = meta_dataColors[meta_data_curcolorProfile][2];
 
     rgb[0] = 0.5f * (sinf((f32)index * RedFreq) + 1.0f);
     rgb[1] = 0.5f * (sinf((f32)index * GreenFreq) + 1.0f);
     rgb[2] = 0.5f * (sinf((f32)index * BlueFreq) + 1.0f);
+}
+
+
+void DrawOutlinedText(
+    FONScontext *FontStash_Context, 
+    nk_colorf *colour, 
+    const char *text, 
+    f32 x, 
+    f32 y, 
+    f32 offset = 1.0f)
+{
+
+    nk_colorf outlineColor;
+    if (meta_outline->on == 2)
+    {
+        outlineColor = {1.0f, 1.0f, 1.0f, 1.0f};
+    }
+    else
+    {
+        outlineColor = {0.0f, 0.0f, 0.0f, 1.0f};
+    }
+
+    unsigned int outlineColorU32 = FourFloatColorToU32(outlineColor);
+    unsigned int textColorU32 = FourFloatColorToU32(*colour);
+
+    fonsSetColor(FontStash_Context, outlineColorU32);
+    fonsDrawText(FontStash_Context, x - offset, y - offset, text, 0);
+    fonsDrawText(FontStash_Context, x + offset, y - offset, text, 0);
+    fonsDrawText(FontStash_Context, x - offset, y + offset, text, 0);
+    fonsDrawText(FontStash_Context, x + offset, y + offset, text, 0);
+
+    // // Draw the original text on top
+    fonsSetColor(FontStash_Context, textColorU32);
+    fonsDrawText(FontStash_Context, x, y, text, 0);
 }
 
 
@@ -2059,7 +2307,8 @@ Render() {
     f32 height;
     {
         glClear(GL_COLOR_BUFFER_BIT);
-        glClearColor(0.2f, 0.6f, 0.4f, 1.0f);
+        // glClearColor(0.2f, 0.6f, 0.4f, 1.0f); // classic background color
+        glClearColor(bgcolor[active_bgcolor][0], bgcolor[active_bgcolor][1], bgcolor[active_bgcolor][2], bgcolor[active_bgcolor][3]);
 
         s32 viewport[4];
         glGetIntegerv (GL_VIEWPORT, viewport);
@@ -2868,7 +3117,6 @@ Render() {
                 }
             }
 
-            // add the the notes to the window
             if (Waypoint_Edit_Mode && !UI_On)
             {
                 fonsSetSize(FontStash_Context, 24.0f * Screen_Scale.x);
@@ -2926,6 +3174,132 @@ Render() {
             }
         }
        
+        // Extension Mode
+        if (Extension_Mode && !UI_On)
+        {
+            u32 ptr = 0;
+            vertex vert[4];
+            f32 lh = 0.0f;
+
+            glUseProgram(Flat_Shader->shaderProgram);
+            glUniformMatrix4fv(Flat_Shader->matLocation, 1, GL_FALSE, textNormalMat);
+            glUseProgram(UI_Shader->shaderProgram);
+            glUniformMatrix4fv(UI_Shader->matLocation, 1, GL_FALSE, textNormalMat);
+
+            glViewport(0, 0, (s32)width, (s32)height);
+
+#define DefaultExtensionSize 20.0f
+            // glUseProgram(Flat_Shader->shaderProgram);
+            // glUniform4fv(Flat_Shader->colorLocation, 1, (f32 *)&Waypoint_Mode_Data->base);
+
+            // f32 lineWidth = Waypoint_Mode_Data->size / DefaultWaypointSize * 0.7f * Screen_Scale.x;
+            // f32 lineHeight = Waypoint_Mode_Data->size / DefaultWaypointSize * 8.0f * Screen_Scale.x;
+
+            fonsSetSize(FontStash_Context, 24.0f * Screen_Scale.x);
+            fonsVertMetrics(FontStash_Context, 0, 0, &lh);
+            fonsSetColor(FontStash_Context, FourFloatColorToU32(Extension_Mode_Data->text));
+
+            f32 textBoxHeight = lh;
+            textBoxHeight *= 7.0f;
+            textBoxHeight += 6.0f;
+            f32 spacing = 10.0f;
+
+            // 6 lines in total
+            std::vector<std::string> helpTexts = {
+                "Extensions:",
+                "X: exit"
+            };
+            if (Extensions.head)
+            {
+                TraverseLinkedList(Extensions.head, extension_node)
+                {
+                    switch (node->type)
+                    {
+                        case extension_graph:
+                            {
+                                graph *gph = (graph *)node->extension;
+
+                                if (strstr((char*)gph->name, "coverage"))
+                                {
+                                    helpTexts.push_back("C: Graph: coverage");
+                                }
+                                else if (strstr((char*)gph->name, "gap"))
+                                {
+                                    helpTexts.push_back("G: Graph: gap");
+                                }
+                                else if (strstr((char*)gph->name, "repeat_density"))
+                                {
+                                    helpTexts.push_back("R: Graph: repeat_density");
+                                }
+                                else if (strstr((char*)gph->name, "telomere"))
+                                {
+                                    helpTexts.push_back("T: Graph: telomere");
+                                }
+                            }
+                            break;
+                    }
+                }
+            }
+
+            f32 textWidth = 0.; 
+            for (auto i : helpTexts)
+            {
+                textWidth = my_Max(textWidth, fonsTextBounds(FontStash_Context, 0, 0, i.c_str(), 0, NULL)) ;
+            }
+            textWidth += 0.5f * spacing;
+
+            glUseProgram(Flat_Shader->shaderProgram);
+            glUniform4fv(Flat_Shader->colorLocation, 1, (f32 *)&Extension_Mode_Data->bg);
+
+            vert[0].x = width - spacing - textWidth; vert[0].y = height - spacing - textBoxHeight;
+            vert[1].x = width - spacing - textWidth; vert[1].y = height - spacing;
+            vert[2].x = width - spacing;             vert[2].y = height - spacing;
+            vert[3].x = width - spacing;             vert[3].y = height - spacing - textBoxHeight;
+
+            glBindBuffer(GL_ARRAY_BUFFER, Waypoint_Data->vbos[ptr]);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
+            glBindVertexArray(Waypoint_Data->vaos[ptr++]);
+            glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
+
+            glUseProgram(UI_Shader->shaderProgram);
+            for (u32 i=0; i< helpTexts.size() ; i++) 
+            {
+                fonsDrawText(
+                    FontStash_Context, 
+                    width - spacing - textWidth, 
+                    height - spacing - textBoxHeight + (lh + 1.0f) * i, 
+                    helpTexts[i].c_str(), 
+                    0);
+            }
+        }
+
+        // label to show the selected sequence
+        if (Selected_Sequence_Cover_Countor.end_time > 0.)
+        {   
+            if (GetTime() < Selected_Sequence_Cover_Countor.end_time)
+            {   
+                char buff[256];
+                f32 colour[4] = {1.0, 1.0, 1.0, 1.0};
+                snprintf(buff, 256, "%s (%u)", (char *)((Original_Contigs+Selected_Sequence_Cover_Countor.original_contig_index)->name), Selected_Sequence_Cover_Countor.idx_within_original_contig+1);
+
+                f32 textWidth = fonsTextBounds(FontStash_Context, 0, 0, (char *)buff, 0, NULL);
+                ColourGenerator(65, colour);
+                // position of text
+                f32 textX = ModelXToScreen(
+                    (f32)Selected_Sequence_Cover_Countor.map_loc / (f32)Number_of_Pixels_1D -0.5f) 
+                    - (0.5f * textWidth);
+                f32 textY = ModelYToScreen( 0.5f - (f32)Selected_Sequence_Cover_Countor.map_loc / (f32)Number_of_Pixels_1D);
+                
+                DrawOutlinedText(FontStash_Context, (nk_colorf *)colour, (char *)buff, textX, textY, 2.0 );
+
+                Selected_Sequence_Cover_Countor.plotted = true;
+            }
+            else
+            {
+                Selected_Sequence_Cover_Countor.clear();
+            }
+        }
+
         // Scaff Bars
         if (File_Loaded && (Scaff_Edit_Mode || Scaffs_Always_Visible))
         {
@@ -3078,6 +3452,9 @@ Render() {
             glViewport(0, 0, (s32)width, (s32)height);
 
             f32 colour[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+            vertex vert[4];
+            u32 ptr = 0;
+            f32 barColour[4] = {1.0f, 1.0f, 1.0f, 0.5f};
 
             f32 lh = 0.0f;   
             fonsClearState(FontStash_Context);
@@ -3089,25 +3466,74 @@ Render() {
 
             f32 position = 0.0f;
             f32 start = 0.0f;
+            u32 scaffId = Contigs->contigs->scaffId;
             ForLoop(Contigs->numberOfContigs)
             {
                 contig *cont = Contigs->contigs + index;
-                position += ((f32)cont->length / (f32)Number_of_Pixels_1D);
+                position += ((f32)cont->length / (f32)Number_of_Pixels_1D); // end of the contig
                 if (*cont->metaDataFlags)
                 {
                     u32 tmp = 0;
+                    bool haplotigTagged = false;
                     ForLoop2(ArrayCount(Meta_Data->tags))
                     {
                         if (*cont->metaDataFlags & ((u64)1 << index2))
                         {
                             f32 textWidth = fonsTextBounds(FontStash_Context, 0, 0, (char *)Meta_Data->tags[index2], 0, NULL);
                             ColourGenerator(index2 + 1, colour);
-                            fonsSetColor(FontStash_Context, FourFloatColorToU32(*((nk_colorf *)colour)));
-                            fonsDrawText(FontStash_Context, ModelXToScreen(0.5f * (position + start - 1.0f)) - (0.5f * textWidth), ModelYToScreen((0.5f * (1.0f - position - start))) - (lh * (f32)(++tmp)), (char *)Meta_Data->tags[index2], 0);
+                            // fonsSetColor(FontStash_Context, FourFloatColorToU32(*((nk_colorf *)colour)));
+                            // fonsDrawText(FontStash_Context, ModelXToScreen(0.5f * (position + start - 1.0f)) - (0.5f * textWidth), ModelYToScreen((0.5f * (1.0f - position - start))) - (lh * (f32)(++tmp)), (char *)Meta_Data->tags[index2], 0);
+                            if (meta_outline->on)
+                            {
+                                // position of text
+                                f32 textX = ModelXToScreen(0.5f * (position + start - 1.0f)) - (0.5f * textWidth);
+                                f32 textY = ModelYToScreen((0.5f * (1.0f - position - start))) - (lh * (f32)(++tmp));
+
+                                DrawOutlinedText(FontStash_Context, (nk_colorf *)colour, (char *)Meta_Data->tags[index2], textX, textY);
+                            }
+                            else
+                            {
+                                fonsSetColor(FontStash_Context, FourFloatColorToU32(*((nk_colorf *)colour)));
+                                fonsDrawText(
+                                    FontStash_Context,
+                                    ModelXToScreen(0.5f * (position + start - 1.0f)) - (0.5f * textWidth), 
+                                    ModelYToScreen((0.5f * (1.0f - position - start))) - (lh * (f32)(++tmp)), 
+                                    (char *)Meta_Data->tags[index2], 
+                                    0);
+                            }
+
+                            // Check if the tag is "Haplotig"
+                            if (strcmp((char *)Meta_Data->tags[index2], "Haplotig") == 0)
+                            {
+                                haplotigTagged = true;
+                            }
                         }
+                    }
+
+                    if (haplotigTagged && Grey_Haplotigs)
+                    {
+                        vert[0].x = ModelXToScreen(start - 0.5f);     vert[0].y = ModelYToScreen(0.5f - start);
+                        vert[1].x = ModelXToScreen(start - 0.5f);     vert[1].y = ModelYToScreen(0.5f - position);
+                        vert[2].x = ModelXToScreen(position - 0.5f);  vert[2].y = ModelYToScreen(0.5f - position);
+                        vert[3].x = ModelXToScreen(position - 0.5f);  vert[3].y = ModelYToScreen(0.5f - start);
+
+                        ColourGenerator((u32)scaffId, (f32 *)barColour);
+                        u32 colour = FourFloatColorToU32(*((nk_colorf *)barColour));
+
+                        glUseProgram(Flat_Shader->shaderProgram);
+                        glUniform4fv(Flat_Shader->colorLocation, 1, (GLfloat *)&barColour);
+
+                        glBindBuffer(GL_ARRAY_BUFFER, Scaff_Bar_Data->vbos[ptr]);
+                        glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
+                        glBindVertexArray(Scaff_Bar_Data->vaos[ptr++]);
+                        glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
+
+                        glUseProgram(UI_Shader->shaderProgram);
+                        fonsSetColor(FontStash_Context, colour);
                     }
                 }
                 start = position;
+                scaffId = cont->scaffId;
             }
 
             if (MetaData_Edit_Mode && !UI_On)
@@ -3821,12 +4247,57 @@ NextColorMap(s32 dir)
 {
     glActiveTexture(GL_TEXTURE1);
     
-    Color_Maps->currMap = dir > 0 ? (Color_Maps->currMap == (Color_Maps->nMaps - 1) ? 0 : Color_Maps->currMap + 1) : (Color_Maps->currMap == 0 ? Color_Maps->nMaps - 1 : Color_Maps->currMap - 1);
+    if (useCustomOrder)
+    {
+        // Find the current index in the custom order
+        u32 currentIndex = 0;
+        for (u32 i = 0; i < userColourMapOrder.nMaps; i++)
+        {
+            if (userColourMapOrder.order[i] == Color_Maps->currMap)
+            {
+                currentIndex = i;
+                break;
+            }
+        }
+
+        // Calculate the next index in the custom order
+        u32 nextIndex = dir > 0 ? (currentIndex == (userColourMapOrder.nMaps - 1) ? 0 : currentIndex + 1) : (currentIndex == 0 ? userColourMapOrder.nMaps - 1 : currentIndex - 1);
+
+        Color_Maps->currMap = userColourMapOrder.order[nextIndex];
+    }
+    else
+    {
+        Color_Maps->currMap = dir > 0 ? (Color_Maps->currMap == (Color_Maps->nMaps - 1) ? 0 : Color_Maps->currMap + 1) : (Color_Maps->currMap == 0 ? Color_Maps->nMaps - 1 : Color_Maps->currMap - 1);
+    }
     
     glBindTexture(GL_TEXTURE_BUFFER, Color_Maps->maps[Color_Maps->currMap]);
     
     glActiveTexture(GL_TEXTURE0);
 }
+
+
+global_function
+u32
+GetOrderedColorMapIndex(u32 displayIndex)
+{
+    if (displayIndex < userColourMapOrder.nMaps)
+    {
+        return userColourMapOrder.order[displayIndex];
+    }
+    return displayIndex;
+}
+
+
+global_function void
+InitializeColorMapOrder()
+{
+    userColourMapOrder.nMaps = Color_Maps->nMaps;
+    for (u32 i = 0; i < userColourMapOrder.nMaps; i++)
+    {
+        userColourMapOrder.order[i] = i;
+    }
+}
+
 
 global_variable
 GLuint
@@ -4936,6 +5407,14 @@ Setup()
         MetaData_Mode_Data->size = DefaultMetaDataSize;
     }
 
+    // Extension Mode Colours
+    {
+        Extension_Mode_Data = PushStruct(Working_Set, meta_mode_data);
+        Extension_Mode_Data->text = Yellow_Text_Float;
+        Extension_Mode_Data->bg = Grey_Background;
+        Extension_Mode_Data->size = DefaultExtensionSize;
+    }
+
 #ifdef Internal
     {
         Tiles = PushStruct(Working_Set, ui_colour_element);
@@ -5489,6 +5968,32 @@ RearrangeMap(       // NOTE: VERY IMPORTANT
 }
 
 
+global_function
+std::vector<s32>
+get_exclude_metaData_idx(std::vector<std::string>& exclude_tags)
+{   
+    if (exclude_tags.empty()) return std::vector<s32>();
+
+    std::vector<s32> exclude_frag_idx((u32) exclude_tags.size(), -1);
+    for (u32 i=0; i < exclude_frag_idx.size(); i++)
+    {   
+        for (u32 j=0; j < 64; j++)
+        {   
+            if (!Meta_Data->tags[j]) break;
+            auto tmp = std::string((char*)Meta_Data->tags[j]);
+            std::transform(tmp.begin(), tmp.end(), tmp.begin(), ::tolower);
+            if ( tmp == exclude_tags[i]) 
+            {
+                exclude_frag_idx[i] = j;
+                break;
+            }
+        }
+    }
+    return exclude_frag_idx;
+}
+
+
+
 void RedoAllEdits(map_editor* map_editor_)
 {
     while (map_editor_->nUndone) RedoMapEdit();
@@ -5782,6 +6287,15 @@ restore_settings_after_copy(const f32 *original_control_points)
 }
 
 
+global_function void
+JumpToDiagonal(GLFWwindow *window)
+{
+    Camera_Position.x = -Camera_Position.y;
+    ClampCamera();
+    Redisplay = 1;
+}
+
+
 global_function
 u32
 ToggleEditMode(GLFWwindow* window)
@@ -5810,6 +6324,30 @@ ToggleEditMode(GLFWwindow* window)
 
     return(result);
 }
+
+
+global_function
+    u32
+    ToggleExtensionMode(GLFWwindow *window)
+{
+    u32 result = 1;
+
+    if (Extension_Mode)
+    {
+        Global_Mode = mode_normal;
+    }
+    else if (Normal_Mode)
+    {
+        Global_Mode = mode_extension;
+    }
+    else
+    {
+        result = 0;
+    }
+
+    return result;
+}
+
 
 global_function
 u32
@@ -6094,9 +6632,12 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
 
             switch (key)
             {
-                case GLFW_KEY_L:
-                    if (!Waypoint_Edit_Mode) break;
-                    Long_Waypoints_Mode = (Long_Waypoints_Mode +1) % 3; 
+                case GLFW_KEY_J:
+                    JumpToDiagonal(window);
+                    break;
+
+                case GLFW_KEY_X:
+                    keyPressed = ToggleExtensionMode(window);
                     break;
 
                 case GLFW_KEY_E:
@@ -6176,7 +6717,70 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                     break;
                 
                 case GLFW_KEY_T:
-                    ToggleToolTip(window);
+                    if (Extension_Mode && Extensions.head)
+                    {
+                        TraverseLinkedList(Extensions.head, extension_node)
+                        {
+                            switch (node->type)
+                            {
+                            case extension_graph:
+                            {
+
+                                graph *gph = (graph *)node->extension;
+                                if (strcmp((char *)gph->name, "telomere") == 0)
+                                {
+                                    gph->on = !gph->on;
+                                    break;
+                                }
+                            }
+                            }
+                        }
+                        break;
+                    }
+                    else
+                    {
+                        ToggleToolTip(window);
+                    }
+                    break;
+
+                case GLFW_KEY_C:
+                    if (!Extensions.head) break;
+                    TraverseLinkedList(Extensions.head, extension_node)
+                    {
+                        switch (node->type)
+                        {
+                        case extension_graph:
+                        {
+
+                            graph *gph = (graph *)node->extension;
+                            if (strcmp((char *)gph->name, "coverage") == 0)
+                            {
+                                gph->on = !gph->on;
+                                break;
+                            }
+                        }
+                        }
+                    }
+                    break;
+
+                case GLFW_KEY_G:
+                    if (!Extensions.head) break;
+                    TraverseLinkedList(Extensions.head, extension_node)
+                    {
+                        switch (node->type)
+                        {
+                        case extension_graph:
+                        {
+
+                            graph *gph = (graph *)node->extension;
+                            if (strcmp((char *)gph->name, "gap") == 0)
+                            {
+                                gph->on = !gph->on;
+                                break;
+                            }
+                        }
+                        }
+                    }
                     break;
 
                 case GLFW_KEY_N:
@@ -6187,14 +6791,25 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                     Scale_Bars->on = !Scale_Bars->on;
                     break;
 
-                case GLFW_KEY_G:
-                    Grid->on = !Grid->on;
+                case GLFW_KEY_L:
+                    if (Waypoint_Edit_Mode)
+                    {
+                        Long_Waypoints_Mode = (Long_Waypoints_Mode +1) % 3; 
+                    }
+                    else
+                    {
+                        Grid->on = !Grid->on;
+                    }
                     break;
 
                 case GLFW_KEY_S:
                     if (Edit_Mode)
                     {
                         Edit_Pixels.snap = !Edit_Pixels.snap;
+                    }
+                    else if (mods & GLFW_MOD_SHIFT)
+                    {
+                        Scaffs_Always_Visible = Scaffs_Always_Visible ? 0 : 1;
                     }
                     else
                     {
@@ -6249,6 +6864,25 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                     if (mods == GLFW_MOD_CONTROL)
                     {
                         Loading = 1;
+                    }
+                    else if (Extension_Mode && Extensions.head)
+                    {
+                        TraverseLinkedList(Extensions.head, extension_node)
+                        {
+                            switch (node->type)
+                            {
+                            case extension_graph:
+                            {
+                                graph *gph = (graph *)node->extension;
+                                if (strcmp((char *)gph->name, "repeat_density") == 0)
+                                {
+                                    gph->on = !gph->on;
+                                    break;
+                                }
+                            }
+                            }
+                        }
+                        break;
                     }
                     else
                     {
@@ -7118,6 +7752,245 @@ resources, click each entry to view its licence.)text";
 
     nk_end(ctx);
 }
+
+
+
+global_function void
+UserSaveState(const char *, u08, char *);
+
+global_variable char
+    profile_savebuff[1024] = {0};
+
+global_function
+    u08
+    UserProfileEditorRun(const char *name, struct file_browser *browser, struct nk_context *ctx, u32 show, u08 save = 0)
+{
+    struct nk_window *window = nk_window_find(ctx, name);
+    u32 doesExist = window != 0;
+
+    if (!show && !doesExist)
+    {
+        return (0);
+    }
+
+    if (show && doesExist && (window->flags & NK_WINDOW_HIDDEN))
+    {
+        window->flags &= ~(nk_flags)NK_WINDOW_HIDDEN;
+        FileBrowserReloadDirectoryContent(browser, browser->directory);
+    }
+
+    u08 ret = 0;
+    struct media *media = browser->media;
+    struct nk_rect total_space;
+
+    if (nk_begin(ctx, name, nk_rect(Screen_Scale.x * 50, Screen_Scale.y * 50, Screen_Scale.x * 830, Screen_Scale.y * 600),
+                 NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_TITLE | NK_WINDOW_CLOSABLE | NK_WINDOW_SCALABLE))
+    {
+
+        nk_layout_row_dynamic(ctx, Screen_Scale.y * 30.0f, 1);
+
+        if (nk_button_label(ctx, "Save"))
+        {
+            UserSaveState("userprofile", 1, 0);
+        }
+
+        nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 4);
+
+        if (Extensions.head)
+        {
+            // extensions
+            if (nk_tree_push(NK_Context, NK_TREE_TAB, "Extensions", NK_MINIMIZED))
+
+            {
+                char buff[128];
+
+                nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
+
+                TraverseLinkedList(Extensions.head, extension_node)
+                {
+                    switch (node->type)
+                    {
+                    case extension_graph:
+                    {
+                        graph *gph = (graph *)node->extension;
+
+                        stbsp_snprintf(buff, sizeof(buff), "Graph: %s", (char *)gph->name);
+
+                        nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 5);
+                        gph->on = nk_check_label(NK_Context, buff, (s32)gph->on) ? 1 : 0;
+
+                        u08 currselection = gph->activecolor; // Start with the graph's current color selection
+
+                        ForLoop(4)
+                        {
+                            // Update currselection based on user choice in nk_option_label
+                            if (nk_option_label(NK_Context, colour_graph[index], currselection == index))
+                            {
+                                currselection = index;
+                            }
+                        }
+
+                        if (currselection != gph->activecolor)
+                        {
+                            gph->activecolor = currselection;
+                            gph->colour = graphColors[gph->activecolor];
+                        }
+                    }
+                    break;
+                    }
+                }
+
+                nk_tree_pop(NK_Context);
+            }
+        }
+
+        // metadata tags
+        if (nk_tree_push(NK_Context, NK_TREE_TAB, "MetaData Tag Settings", NK_MINIMIZED))
+        {
+            nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 3);
+
+            u08 select = meta_outline->on;
+
+            ForLoop(3)
+            {
+                if (nk_option_label(NK_Context, outlineColors[index], select == index))
+                {
+                    select = index;
+                }
+            }
+            if (meta_outline->on != select)
+            {
+                meta_outline->on = select;
+            }
+
+            meta_outline->on = select;
+
+            u08 selection = meta_data_curcolorProfile;
+            ForLoop(4)
+            {
+                // Update currselection based on user choice in nk_option_label
+                if (nk_option_label(NK_Context, metaColors[index], selection == index))
+                {
+                    selection = index;
+                }
+            }
+
+            if (meta_data_curcolorProfile != selection)
+            {
+                meta_data_curcolorProfile = selection;
+            }
+            nk_tree_pop(NK_Context);
+        }
+
+        // Background colour
+        if (nk_tree_push(NK_Context, NK_TREE_TAB, "Background Colour", NK_MINIMIZED))
+        {
+            char buff[128];
+            u08 selection = active_bgcolor;
+
+            ForLoop(7)
+            {
+                // Update currselection based on user choice in nk_option_label
+                if (nk_option_label(NK_Context, bg_color[index], selection == index))
+                {
+                    selection = index;
+                }
+            }
+
+            if (active_bgcolor != selection)
+            {
+                active_bgcolor = selection;
+            }
+
+            nk_tree_pop(NK_Context);
+        }
+
+        // Custom ordering for Colour maps
+        if (nk_tree_push(NK_Context, NK_TREE_TAB, "Color Map Order", NK_MINIMIZED))
+        {
+            static s32 selectedIndex = -1; 
+            bool orderChanged = false;
+
+            nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
+            if (nk_checkbox_label(NK_Context, "Use Custom Color Map Order", &useCustomOrder))
+            {
+                orderChanged = true;
+            }
+
+            // "Reset to Default Order" button
+            nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
+            if (nk_button_label(NK_Context, "Reset to Default Order"))
+            {
+                for (u32 i = 0; i < Color_Maps->nMaps; i++)
+                {
+                    userColourMapOrder.order[i] = i;
+                }
+                selectedIndex = -1;
+                orderChanged = true;
+            }
+
+            if (useCustomOrder) // adjust the color map order
+            {
+                for (u32 i = 0; i < Color_Maps->nMaps; i++)
+                {
+                    u32 mapIndex = userColourMapOrder.order[i];
+
+                    nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 50.0f, 1);
+
+                    if (nk_group_begin(NK_Context, Color_Map_Names[mapIndex], NK_WINDOW_NO_SCROLLBAR))
+                    {   
+                        bool pushed_flag = false;
+                        if (i == selectedIndex)
+                        {
+                            nk_style_push_color(NK_Context, &NK_Context->style.window.background, nk_rgb(150, 150, 200));
+                            pushed_flag = true;
+                        }
+
+                        nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
+                        if (nk_button_label(NK_Context, Color_Map_Names[mapIndex]))
+                        {
+                            if (selectedIndex == -1)
+                            {
+                                selectedIndex = i;
+                            }
+                            else
+                            {
+                                // Swap the selected items
+                                u32 temp = userColourMapOrder.order[selectedIndex];
+                                userColourMapOrder.order[selectedIndex] = userColourMapOrder.order[i];
+                                userColourMapOrder.order[i] = temp;
+                                selectedIndex = -1;
+                                orderChanged = true;
+                            }
+                        }
+
+                        if (pushed_flag) nk_style_pop_color(NK_Context);
+
+                        nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 40.0f, 1);
+                        nk_image(NK_Context, Color_Maps->mapPreviews[mapIndex]);
+
+                        nk_group_end(NK_Context);
+                    }
+                }
+            }
+            else
+            {
+                nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
+                nk_label(NK_Context, "Enable custom order to reorder color maps", NK_TEXT_LEFT);
+            }
+
+            nk_tree_pop(NK_Context);
+        }
+
+        // nk_tree_pop(NK_Context); // used to have this here, but it was causing a crash
+
+        nk_style_set_font(ctx, &NK_Font->handle);
+    }
+    nk_end(ctx);
+
+    return (ret);
+}
+
 
 global_function
 struct nk_image
@@ -8270,6 +9143,319 @@ LoadState(u64 headerHash, char *path)
     return(0);
 }
 
+
+// User Profile
+global_variable u08 *
+    UserSaveState_Path = 0;
+
+global_variable u08 *
+    UserSaveState_Name = 0;
+
+global_function void
+UserSetSaveStatePaths()
+{
+    if (!UserSaveState_Path)
+    {
+        char buff_[64];
+        char *buff = (char *)buff_;
+#ifndef _WIN32
+        char sep = '/';
+        const char *path = getenv("XDG_CONFIG_HOME");
+        char *folder;
+        char *folder2;
+        if (path)
+        {
+            folder = (char *)"PretextView";
+            folder2 = 0;
+        }
+        else
+        {
+            path = getenv("HOME");
+            if (!path)
+                path = getpwuid(getuid())->pw_dir;
+            folder = (char *)".config";
+            folder2 = (char *)"PretextView";
+        }
+
+        if (path)
+        {
+            while ((*buff++ = *path++))
+            {
+            }
+            *(buff - 1) = sep;
+            while ((*buff++ = *folder++))
+            {
+            }
+
+            mkdir((char *)buff_, 0700);
+            struct stat st = {};
+
+            u32 goodPath = 0;
+
+            if (!stat((char *)buff_, &st))
+            {
+                if (folder2)
+                {
+                    *(buff - 1) = sep;
+                    while ((*buff++ = *folder2++))
+                    {
+                    }
+
+                    mkdir((char *)buff_, 0700);
+                    if (!stat((char *)buff_, &st))
+                    {
+                        goodPath = 1;
+                    }
+                }
+                else
+                {
+                    goodPath = 1;
+                }
+            }
+
+            if (goodPath)
+            {
+                u32 n = StringLength((u08 *)buff_);
+                UserSaveState_Path = PushArray(Working_Set, u08, n + 18);
+                CopyNullTerminatedString((u08 *)buff_, UserSaveState_Path);
+                UserSaveState_Path[n] = (u08)sep;
+                UserSaveState_Name = UserSaveState_Path + n + 1;
+                UserSaveState_Path[n + 17] = 0;
+            }
+        }
+#else
+        PWSTR path = 0;
+        char sep = '\\';
+        HRESULT hres = SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, 0, &path);
+        if (SUCCEEDED(hres))
+        {
+            PWSTR pathPtr = path;
+            while ((*buff++ = *pathPtr++))
+            {
+            }
+            *(buff - 1) = sep;
+            char *folder = (char *)"PretextView";
+            while ((*buff++ = *folder++))
+            {
+            }
+
+            if (CreateDirectory((char *)buff_, NULL) || ERROR_ALREADY_EXISTS == GetLastError())
+            {
+                u32 n = StringLength((u08 *)buff_);
+                UserSaveState_Path = PushArray(Working_Set, u08, n + 18);
+                CopyNullTerminatedString((u08 *)buff_, UserSaveState_Path);
+                UserSaveState_Path[n] = (u08)sep;
+                UserSaveState_Name = UserSaveState_Path + n + 1;
+                UserSaveState_Path[n + 17] = 0;
+            }
+        }
+
+        if (path)
+            CoTaskMemFree(path);
+#endif
+    }
+}
+
+global_function void
+UserSaveState(const char *headerHash = "userprofile", u08 overwrite = 1, char *path = 0)
+{
+
+    if (!UserSaveState_Path)
+    {
+        UserSetSaveStatePaths();
+    }
+
+    char filePath[MAX_PATH_LEN];
+    if (!path)
+    {
+        snprintf(filePath, sizeof(filePath), "%s%s", UserSaveState_Path, headerHash);
+        path = filePath;
+    }
+
+    if (!overwrite)
+    {
+        FILE *file = fopen(path, "rb");
+        if (file)
+        {
+            fclose(file);
+        }
+    }
+
+    // Open the file for writing
+    FILE *file = fopen(path, "wb");
+    if (!file)
+    {
+        return;
+    }
+
+    u16 ngphextensions = 0;
+    TraverseLinkedList(Extensions.head, extension_node)
+    {
+        switch (node->type)
+        {
+            case extension_graph:
+            {
+                graph *gph = (graph *)node->extension;
+                ngphextensions++;
+            }
+        }
+    }
+    fwrite(&ngphextensions, sizeof(ngphextensions), 1, file);
+
+    // Specific color for each track
+    TraverseLinkedList(Extensions.head, extension_node)
+    {
+        switch (node->type)
+        {
+        case extension_graph:
+        {
+            graph *gph = (graph *)node->extension;
+
+            // Get the name length and write it first
+            u32 name_len = strlen((char *)gph->name);
+            fwrite(&name_len, sizeof(name_len), 1, file);
+
+            // Write the name string data
+            fwrite(gph->name, sizeof(char), name_len, file);
+
+            // Write the color data
+            u08 colour = (u08)gph->activecolor;
+            fwrite(&colour, sizeof(colour), 1, file);
+        }
+        }
+    }
+
+    // metadata tags color profile
+    fwrite(&meta_data_curcolorProfile, sizeof(meta_data_curcolorProfile), 1, file);
+
+    // metadata tags outline
+    fwrite(&meta_outline->on, sizeof(meta_outline->on), 1, file);
+
+    // backgound color
+    fwrite(&active_bgcolor, sizeof(active_bgcolor), 1, file);
+
+    // Save custom color map order
+    fwrite(&useCustomOrder, sizeof(useCustomOrder), 1, file);
+    fwrite(&userColourMapOrder.nMaps, sizeof(userColourMapOrder.nMaps), 1, file);
+    fwrite(userColourMapOrder.order, sizeof(u32), userColourMapOrder.nMaps, file);
+
+    fclose(file);
+
+    printf("[UserProfile]: Saved to: %s\n", path);
+}
+
+global_function
+    u08
+    UserLoadState(const char *headerHash = "userprofile", const char *path = 0)
+{
+
+    if (!UserSaveState_Path)
+    {
+        UserSetSaveStatePaths();
+    }
+
+    char filePath[MAX_PATH_LEN];
+    if (!path)
+    {
+        // Concatenate the save path and headerHash (filename)
+        snprintf(filePath, sizeof(filePath), "%s%s", UserSaveState_Path, headerHash);
+        path = filePath;
+    }
+
+    // Open the file for reading
+    FILE *file = fopen(path, "rb");
+    if (!file)
+    {
+        return 1; // Failed to open file
+    }
+
+    // Read user profile settings
+    TraverseLinkedList(Extensions.head, extension_node)
+    {
+        switch (node->type)
+        {
+        case extension_graph:
+        {
+            graph *gph = (graph *)node->extension;
+
+            gph->colour = graphColors[activeGraphColour];
+        }
+        break;
+        }
+    }
+    // u08 waypointsVisible;
+    // u08 contigLabels;
+
+    u16 ngphextensions;
+    fread(&ngphextensions, sizeof(ngphextensions), 1, file);
+    u08 colour;
+    u32 *name;
+
+    ForLoop(ngphextensions)
+    {
+        u32 name_len;
+        if (fread(&name_len, sizeof(name_len), 1, file) != 1)
+        {
+            break;
+        }
+
+        char *name = (char *)malloc(name_len + 1);
+        if (fread(name, sizeof(char), name_len, file) != name_len)
+        {
+            free(name);
+            break;
+        }
+        name[name_len] = '\0';
+
+        u08 colour;
+        if (fread(&colour, sizeof(colour), 1, file) != 1)
+        {
+            free(name);
+            break;
+        }
+
+        // Search for the graph in the current list and update its color
+        TraverseLinkedList(Extensions.head, extension_node)
+        {
+            switch (node->type)
+            {
+            case extension_graph:
+            {
+                graph *gph = (graph *)node->extension;
+
+                if (strcmp((char *)gph->name, name) == 0)
+                {
+                    gph->activecolor = colour;
+                    gph->colour = graphColors[gph->activecolor];
+                    break;
+                }
+            }
+            }
+        }
+
+        free(name);
+    }
+
+    // metadata tags color profile
+    fread(&meta_data_curcolorProfile, sizeof(meta_data_curcolorProfile), 1, file);
+
+    // metadata tags outline
+    fread(&meta_outline->on, sizeof(meta_outline->on), 1, file);
+
+    // background color
+    fread(&active_bgcolor, sizeof(active_bgcolor), 1, file);
+
+    // Load custom color map order
+    fread(&useCustomOrder, sizeof(useCustomOrder), 1, file);
+    fread(&userColourMapOrder.nMaps, sizeof(userColourMapOrder.nMaps), 1, file);
+    fread(userColourMapOrder.order, sizeof(u32), userColourMapOrder.nMaps, file);
+
+    fclose(file);
+    return 0; // Success
+}
+
+
+
 global_variable
 u32
 Global_Text_Buffer[1024] = {0};
@@ -8452,38 +9638,83 @@ GenerateAGP(char *path, u08 overwrite, u08 formatSingletons, u08 preserveOrder)
 }
 
 
-global_function
-void
-SortMapByMetaTags()
+// global_function
+// void
+// SortMapByMetaTags()
+// {
+//     u32 nPixelToConsider = Number_of_Pixels_1D;
+//     for (;;)
+//     {
+//         u64 maxFlag = 0;
+//         ForLoop(nPixelToConsider) maxFlag = my_Max(maxFlag, Map_State->metaDataFlags[index]);
+//         if (!maxFlag) break;
+
+//         ForLoop(nPixelToConsider)
+//         {
+//             u32 pixelEnd = nPixelToConsider - index - 1;
+//             s32 delta = (s32)(Number_of_Pixels_1D - pixelEnd - 1);
+//             if (Map_State->metaDataFlags[pixelEnd] == maxFlag)
+//             {
+//                 u32 pixelStart = pixelEnd;
+//                 while (pixelStart && Map_State->metaDataFlags[pixelStart - 1] == maxFlag) --pixelStart;
+                
+//                 if (delta)
+//                 {
+//                     RearrangeMap(pixelStart, pixelEnd, delta);
+//                     AddMapEdit(delta, {(u32)((s32)pixelStart + delta), (u32)((s32)pixelEnd + delta)}, 0);
+//                 }
+
+//                 nPixelToConsider -= (pixelEnd - pixelStart + 1);
+//                 break;
+//             }
+//         }
+//     }
+// }
+
+
+void SortMapByMetaTags(u64 tagMask)
 {
     u32 nPixelToConsider = Number_of_Pixels_1D;
+    sortMetaEdits = 0;
     for (;;)
     {
         u64 maxFlag = 0;
-        ForLoop(nPixelToConsider) maxFlag = my_Max(maxFlag, Map_State->metaDataFlags[index]);
-        if (!maxFlag) break;
+        bool hasRelevantFlags = false;
+        ForLoop(nPixelToConsider)
+        {
+            u64 relevantFlags = Map_State->metaDataFlags[index] & tagMask;
+            if (relevantFlags)
+            {
+                maxFlag = my_Max(maxFlag, relevantFlags);
+                hasRelevantFlags = true;
+            }
+        }
+        if (!hasRelevantFlags)
+            break;
 
         ForLoop(nPixelToConsider)
         {
             u32 pixelEnd = nPixelToConsider - index - 1;
             s32 delta = (s32)(Number_of_Pixels_1D - pixelEnd - 1);
-            if (Map_State->metaDataFlags[pixelEnd] == maxFlag)
+            u64 relevantFlags = Map_State->metaDataFlags[pixelEnd] & tagMask;
+            if (relevantFlags == maxFlag)
             {
                 u32 pixelStart = pixelEnd;
-                while (pixelStart && Map_State->metaDataFlags[pixelStart - 1] == maxFlag) --pixelStart;
-                
+                while (pixelStart && ((Map_State->metaDataFlags[pixelStart - 1] & tagMask) == maxFlag))
+                    --pixelStart;
                 if (delta)
                 {
                     RearrangeMap(pixelStart, pixelEnd, delta);
                     AddMapEdit(delta, {(u32)((s32)pixelStart + delta), (u32)((s32)pixelEnd + delta)}, 0);
+                    sortMetaEdits++;
                 }
-
                 nPixelToConsider -= (pixelEnd - pixelStart + 1);
                 break;
             }
         }
     }
 }
+
 
 MainArgs {
     u32 initWithFile = 0;   // initialization with .map file or not 
@@ -8640,7 +9871,14 @@ MainArgs {
         MouseMove(window, mousex, mousey);
     }
     
+    if (UserLoadState("userprofile", 0)!=0) 
+        InitializeColorMapOrder();
+
     Redisplay = 1;
+
+    char searchbuf[256] = {0};
+    s32 caseSensitive_search_sequences = 0;
+
     while (!glfwWindowShouldClose(window)) 
     {
         if (Redisplay) 
@@ -8726,6 +9964,7 @@ MainArgs {
             s32 showLoadStateScreen = 0;
             s32 showSaveAGPScreen = 0;
             s32 showMetaDataTagEditor = 0;
+            s32 showUserProfileScreen = 0;
             static u32 currGroup1 = 0;
             static u32 currGroup2 = 0;
             static s32 currSelected1 = -1;
@@ -8762,6 +10001,7 @@ MainArgs {
                         showLoadStateScreen = nk_button_label(NK_Context, "Load State");
                         showSaveAGPScreen = nk_button_label(NK_Context, "Generate AGP");
                     }
+                    showUserProfileScreen = nk_button_label(NK_Context, "User Profile");
                     showAboutScreen = nk_button_label(NK_Context, "About");
 
 
@@ -8801,13 +10041,12 @@ MainArgs {
                             }
                             else 
                             {
-                                u32 exclude_tag_num = 2;
-                                u32 exclude_frag_idx[2] = {0, 1};
+                                std::vector<std::string> exclude_tags = {"haplotig", "unloc"};
+                                std::vector<s32> exclude_frag_idx = get_exclude_metaData_idx(exclude_tags);
                                 LikelihoodTable likelihood_table(
                                     texture_array_4_ai.get_frags(), 
                                     texture_array_4_ai.get_compressed_hic(), 
                                     (f32)show_auto_curation_button.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), 
-                                    exclude_tag_num, 
                                     exclude_frag_idx);
                                 // use the compressed_hic to calculate the frags_order directly
                                 ai_model->sort_according_likelihood_dfs( likelihood_table, frags_order, 0.4, texture_array_4_ai.get_frags());
@@ -8839,13 +10078,12 @@ MainArgs {
                                 false);
                             FragsOrder frags_order(texture_array_4_ai.get_num_frags()); // intilize the frags_order with the number of fragments including the filtered out ones
                             // exclude the fragments with first two tags during the auto curationme
-                            u32 exclude_tag_num = 2;
-                            u32 exclude_frag_idx[2] = {0, 1};
+                            std::vector<std::string> exclude_tags = {"haplotig", "unloc"};
+                            std::vector<s32> exclude_frag_idx = get_exclude_metaData_idx(exclude_tags);
                             LikelihoodTable likelihood_table(
                                 texture_array_4_ai.get_frags(), 
                                 texture_array_4_ai.get_compressed_hic(), 
                                 (f32)show_auto_curation_button.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), 
-                                exclude_tag_num, 
                                 exclude_frag_idx);
                             // use the compressed_hic to calculate the frags_order directly
                             if (show_auto_curation_button.sort_mode == 0)
@@ -9285,6 +10523,9 @@ MainArgs {
                     Mouse_Invert = nk_check_label(NK_Context, "Invert Mouse Buttons", (s32)Mouse_Invert) ? 1 : 0;
 
                     nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
+                    Grey_Haplotigs = nk_check_label(NK_Context, "Grey out 'Haplotig'", (s32)Grey_Haplotigs) ? 1 : 0;
+
+                    nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
                     nk_label(NK_Context, "Gamma Min", NK_TEXT_LEFT);
                     s32 slider1 = nk_slider_float(NK_Context, 0, Color_Maps->controlPoints, 1.0f, 0.001f);
                     if (slider1)
@@ -9359,16 +10600,76 @@ MainArgs {
                     
                     if (File_Loaded)
                     {
-                        nk_layout_row_static(NK_Context, Screen_Scale.y * 30.0f, (s32)(Screen_Scale.x * 300), 1);
-                        if (nk_button_label(NK_Context, "Sort Map by Meta Data Tags")) SortMapByMetaTags();
+                        // nk_layout_row_static(NK_Context, Screen_Scale.y * 30.0f, (s32)(Screen_Scale.x * 300), 1);
+                        // if (nk_button_label(NK_Context, "Sort Map by Meta Data Tags")) SortMapByMetaTags();
+
+                        nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
+                        nk_label(NK_Context, "Sort Map by Meta Data Tags:", NK_TEXT_ALIGN_LEFT);
+                        static int NUM_TAGS = sizeof(Default_Tags) / sizeof(char *);
+                        static int selected_tags[64] = {0}; // Assuming a maximum of 64 tags
+                        static int tree_state = 0;
+
+                        // Tree tab for checkboxes
+                        if (nk_tree_push(NK_Context, NK_TREE_TAB, "Select Tags", NK_MINIMIZED))
+                        {
+                            nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 20.0f, 4); // Adjust layout for checkboxes
+                            for (int i = 0; i < NUM_TAGS; i++)
+                            {
+                                char tag_name[32];
+                                snprintf(tag_name, sizeof(tag_name), "%s", Default_Tags[i]);
+                                nk_checkbox_label(NK_Context, tag_name, &selected_tags[i]);
+                            }
+                            nk_tree_pop(NK_Context);
+                        }
+
+                        nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 3); // Layout for buttons
+                        if (nk_button_label(NK_Context, "Sort Selected"))
+                        {
+                            if (!sortMetaEdits)
+                            {
+                                u64 tag_mask = 0;
+                                for (int i = 0; i < NUM_TAGS; i++)
+                                {
+                                    if (selected_tags[i])
+                                    {
+                                        tag_mask |= (1ULL << i);
+                                    }
+                                }
+                                SortMapByMetaTags(tag_mask); // Pass the tag mask to the sorting function
+                            }
+                        }
+                        if (nk_button_label(NK_Context, "Sort All Tags"))
+                        {
+                            if (!sortMetaEdits)
+                            {
+                                u64 all_tags_mask = (1ULL << NUM_TAGS) - 1; // Create a mask with all bits set
+                                SortMapByMetaTags(all_tags_mask);
+                            }
+                        }
+                        if (nk_button_label(NK_Context, "Undo Sort"))
+                        {
+                            while (sortMetaEdits)
+                            {
+                                UndoMapEdit();
+                                sortMetaEdits--;
+                            }
+                        }
                     }
 
                     if (nk_tree_push(NK_Context, NK_TREE_TAB, "Colour Maps", NK_MINIMIZED))
                     {
+
+                        nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
+                        nk_checkbox_label(NK_Context, "Use Custom Order", &useCustomOrder);
+
+                        showUserProfileScreen = nk_button_label(NK_Context, "Edit Order");
+
                         nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
                         u32 currMap = Color_Maps->currMap;
-                        ForLoop(Color_Maps->nMaps)
+                        
+                        for (u32 i = 0; i < Color_Maps->nMaps; i++)
                         {
+                            u32 index = useCustomOrder ? GetOrderedColorMapIndex(i) : i;
                             currMap = nk_option_label(NK_Context, Color_Map_Names[index], currMap == index) ? index : currMap;
                             nk_image(NK_Context, Color_Maps->mapPreviews[index]);
                         }
@@ -9527,15 +10828,30 @@ MainArgs {
                             }
                         }
 
+                        // Input Sequences
                         {
                             nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
                             if (nk_tree_push(NK_Context, NK_TREE_TAB, "Input Sequences", NK_MINIMIZED))
-                            {
+                            {   
+                                nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 3);
+                                nk_label(NK_Context, "Search: ", NK_TEXT_LEFT);
+                                nk_edit_string_zero_terminated(NK_Context, NK_EDIT_FIELD, searchbuf, sizeof(searchbuf) - 1, nk_filter_default);
+                                caseSensitive_search_sequences = nk_check_label(NK_Context, "Case Sensitive", caseSensitive_search_sequences) ? 1 : 0;
+                                std::string searchbuf_str(searchbuf);
+
                                 nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
 
                                 ForLoop(Number_of_Original_Contigs)
                                 {
                                     original_contig *cont = Original_Contigs + index;
+
+                                    std::string name_str((char *)cont->name);
+                                    if (searchbuf_str.size()>0 && caseSensitive_search_sequences)
+                                    {
+                                        std::transform(name_str.begin(), name_str.end(), name_str.begin(), ::tolower);
+                                        std::transform(searchbuf_str.begin(), searchbuf_str.end(), searchbuf_str.begin(), ::tolower);
+                                    }
+                                    if (searchbuf_str.size()>0 && std::string((char *)cont->name).find(searchbuf_str) == std::string::npos) continue;
 
                                     char buff[128];
                                     stbsp_snprintf((char *)buff, sizeof(buff), "%s (%u)", (char *)cont->name, cont->nContigs);
@@ -9545,13 +10861,36 @@ MainArgs {
                                         nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
 
                                         ForLoop2(cont->nContigs)
-                                        {
+                                        {   
                                             stbsp_snprintf((char *)buff, sizeof(buff), "%u", index2 + 1);
                                             if (nk_button_label(NK_Context, (char *)buff))
                                             {
+                                                // f32 pos = (f32)((f64)cont->contigMapPixels[index2] / (f64)Number_of_Pixels_1D) - 0.5f;
+                                                // Camera_Position.x = pos;
+                                                // Camera_Position.y = -pos;
+
                                                 f32 pos = (f32)((f64)cont->contigMapPixels[index2] / (f64)Number_of_Pixels_1D) - 0.5f;
                                                 Camera_Position.x = pos;
                                                 Camera_Position.y = -pos;
+                                                Camera_Position.z = 1.0f;
+
+                                                f32 contigSizeInPixels = (f32)cont->contigMapPixels[index2];
+                                                f32 screenWidth = (f32)width;
+
+                                                // f32 zoomLevel =(f32)(contigSizeInPixels / (screenWidth * index2));
+                                                f32 zoomLevel = (f32)(contigSizeInPixels / (screenWidth));
+                                                ZoomCamera(zoomLevel);
+
+                                                // add a label / cover to show the fragments selected 
+                                                Selected_Sequence_Cover_Countor.set(
+                                                    index, 
+                                                    index2,
+                                                    GetTime(),
+                                                    0.,
+                                                    0.,
+                                                    cont->contigMapPixels[index2]);
+
+                                                Redisplay = 1;
                                             }
 
                                             if (nk_button_label(NK_Context, "Rebuild")) RebuildContig(cont->contigMapPixels[index2]);
@@ -9723,6 +11062,13 @@ MainArgs {
                 }
 
                 AboutWindowRun(NK_Context, (u32)showAboutScreen);
+
+                u08 state;
+                if ((state = UserProfileEditorRun("User profile editor", &saveBrowser, NK_Context, (u32)showUserProfileScreen, 1)))
+                {
+                    UserSaveState("trial", state & 2, saveBrowser.file);
+                    FileBrowserReloadDirectoryContent(&saveBrowser, saveBrowser.directory);
+                }
 
                 if (Deferred_Close_UI)
                 {

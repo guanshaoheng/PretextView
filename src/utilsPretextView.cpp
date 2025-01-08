@@ -230,3 +230,10 @@ void my_code_position_handler(const char* file, int line, const char* message) {
     }
     return ;
 }
+
+
+
+f64 GetTime() {
+    return std::chrono::duration<double>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+}

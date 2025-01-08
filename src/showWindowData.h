@@ -219,7 +219,8 @@ enum global_mode
     mode_edit = 1,
     mode_waypoint_edit = 2,
     mode_scaff_edit = 3,
-    mode_meta_edit = 4
+    mode_meta_edit = 4,
+    mode_extension = 5
 };
 
 

@@ -216,4 +216,6 @@ void my_code_position_handler(const char* file, int line, const char* message=nu
 #define MY_CHECK(MESSAGE) my_code_position_handler(__FILE__, __LINE__, MESSAGE)
 
 
+f64 GetTime(); // return current time in seconds
+
 #endif // UTILS_H
