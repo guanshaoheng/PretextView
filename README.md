@@ -45,7 +45,7 @@ The link score calculation method refers to [YaHS](https://github.com/c-zhou/yah
 
 ## Link score calculation 
 
-<img src="doc/YaHS link score.png" alt="" width="400">
+<img src="doc/YaHS link score.png" alt="" width="800">
 
 The score between two fragments represents the level of continuity. The higher score the better continuity.
 
@@ -86,10 +86,10 @@ where $f \in F$, and $F$ is the chain fused from $A_t$ and $B_h$. The score of $
 ---
 
 **Fuse mode:**  
-Runs the fuse process after Union Find. Suitable for samples with fewer than 800 fragments.
+Runs the fuse process after Union Find. Suitable for samples with **fewer than 800 fragments**.
 
 **Deep fuse:**  
-Runs the fuse process without using Union Find, suitable for samples with fewer than 100 fragments.
+Runs the fuse process without using Union Find, suitable for samples with **fewer than 100 fragments**.
 
 # Requirments, running
 OpenGL 3.3<br/>
