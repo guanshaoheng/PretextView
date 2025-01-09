@@ -3276,7 +3276,8 @@ Render() {
         // label to show the selected sequence
         if (Selected_Sequence_Cover_Countor.end_time > 0.)
         {   
-            if (GetTime() < Selected_Sequence_Cover_Countor.end_time)
+            f64 crt_time = GetTime();
+            if (crt_time < Selected_Sequence_Cover_Countor.end_time)
             {   
                 char buff[256];
                 f32 colour[4] = {1.0, 1.0, 1.0, 1.0};
@@ -3297,6 +3298,7 @@ Render() {
             else
             {
                 Selected_Sequence_Cover_Countor.clear();
+                Redisplay = 1;
             }
         }
 
@@ -8371,7 +8373,7 @@ SaveState(u64 headerHash, char *path = 0, u08 overwrite = 0)
         {
             ForLoop(4)
             {
-                *fileWriter++ = ((u08 *)&nEdits)[index];
+                *fileWriter++ = ((u08 *)&nEdits)[index]; // write number of edits
             }
 
             u32 editStackPtr = Map_Editor->editStackPtr == nEdits ? 0 : Map_Editor->editStackPtr;
@@ -8553,7 +8555,7 @@ SaveState(u64 headerHash, char *path = 0, u08 overwrite = 0)
         }
 
         FILE *file;
-        if (path)
+        if (path) // write to specific path
         {
             if (!overwrite)
             {
@@ -8570,22 +8572,22 @@ SaveState(u64 headerHash, char *path = 0, u08 overwrite = 0)
             fwrite(&SaveState_Magic_Tail_Manual, 1, 1, file);
             fwrite(&headerHash, 1, 8, file);
         }
-        else
+        else // write to auto path
         {
             file = fopen((const char *)SaveState_Path, "wb");
             fwrite(SaveState_Magic, 1, sizeof(SaveState_Magic), file);
             fwrite(&SaveState_Magic_Tail_Auto, 1, 1, file);
         }
         
-        fwrite(&nCommpressedBytes, 1, 4, file);
-        fwrite(&nFileBytes, 1, 4, file);
+        fwrite(&nCommpressedBytes, 1, 4, file); // size after  compression
+        fwrite(&nFileBytes, 1, 4, file);        // size before compression
         fwrite(compBuff, 1, nCommpressedBytes, file);
         fclose(file);
 
         FreeLastPushP(Loading_Arena); // compBuff
         FreeLastPushP(Loading_Arena); // fileContents
 
-        if (!path)
+        if (!path) // save the name SaveState_Name to file named as ptlsn 
         {
             u08 nameCache[17];
             CopyNullTerminatedString((u08 *)SaveState_Name, (u08 *)nameCache);
@@ -8620,7 +8622,7 @@ LoadState(u64 headerHash, char *path)
         FILE *file = 0;
         u08 fullLoad = 1;
         
-        if (path)
+        if (path) // load state file with a specific path
         {
             if ((file = fopen((const char *)path, "rb")))
             {
@@ -8664,7 +8666,7 @@ LoadState(u64 headerHash, char *path)
                 }
             }
         }
-        else
+        else // load state file with the auto path
         {
             ForLoop(16)
             {
@@ -9142,6 +9144,173 @@ LoadState(u64 headerHash, char *path)
 
     return(0);
 }
+
+
+// restore the state before curation
+global_function
+void
+restore_initial_state()
+{
+    u32 nBytesRead = 0;
+
+    // settings
+    {
+        theme th = (theme) 4;
+        SetTheme(NK_Context, th);
+
+        Waypoints_Always_Visible = 1;
+        Contig_Name_Labels->on   = 1;
+        Scale_Bars->on           = 1;
+        Grid->on                 = 1;
+        Contig_Ids->on           = 1;
+        Tool_Tip->on             = 1;
+        Mouse_Invert             = 0;
+        Scaffs_Always_Visible    = 1;
+        MetaData_Always_Visible  = 1;
+
+    }
+
+    // colours && size
+    {   
+        {
+            Scaff_Mode_Data->text = Yellow_Text_Float;
+            Scaff_Mode_Data->bg = Grey_Background;
+            Scaff_Mode_Data->size = DefaultScaffSize;
+        }
+
+        {
+            Waypoint_Mode_Data->base = Red_Full;
+            Waypoint_Mode_Data->selected = Blue_Full;
+            Waypoint_Mode_Data->text = Yellow_Text_Float;
+            Waypoint_Mode_Data->bg = Grey_Background;
+            Waypoint_Mode_Data->size = DefaultWaypointSize;
+        }
+
+        {
+            Edit_Mode_Colours->preSelect = Green_Float;
+            Edit_Mode_Colours->select = Blue_Float;
+            Edit_Mode_Colours->invSelect = Red_Float;
+            Edit_Mode_Colours->fg = Yellow_Text_Float;
+            Edit_Mode_Colours->bg = Grey_Background;
+        }
+
+        {
+            Contig_Name_Labels->on = 0;
+            Contig_Name_Labels->fg = Yellow_Text_Float;
+            Contig_Name_Labels->bg = Grey_Background;
+            Contig_Name_Labels->size = DefaultNameLabelTextSize;
+        }
+
+        {
+            Scale_Bars->on = 0;
+            Scale_Bars->fg = Red_Text_Float;
+            Scale_Bars->bg = Grey_Background;
+            Scale_Bars->size = DefaultScaleBarSize;
+        }
+
+        {
+            Grid->on = 1;
+            Grid->bg = Grey_Background;
+            Grid->size = DefaultGridSize;
+        }
+
+        {
+            Tool_Tip->on = 1;
+            Tool_Tip->fg = Yellow_Text_Float;
+            Tool_Tip->bg = Grey_Background;
+            Tool_Tip->size = DefaultToolTipTextSize;
+        }
+
+        {
+            Contig_Ids->on = 1;
+            Contig_Ids->size = DefaultContigIdSize;
+        }
+    }
+
+    // colour map
+    {   // set as the first colour map
+        Color_Maps->currMap = useCustomOrder ? userColourMapOrder.order[0] : 0;
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_BUFFER, Color_Maps->maps[Color_Maps->currMap]);
+        glActiveTexture(GL_TEXTURE0);
+    }
+
+    // gamma
+    {
+        Color_Maps->controlPoints[0] = 0.0f;
+        Color_Maps->controlPoints[1] = 0.5f;
+        Color_Maps->controlPoints[2] = 1.0f;
+
+        glUseProgram(Contact_Matrix->shaderProgram);
+        glUniform3fv(Color_Maps->cpLocation, 1, Color_Maps->controlPoints);
+    }
+
+    // camera
+    {
+        Camera_Position.x = 0.0f;
+        Camera_Position.y = 0.0f;
+        Camera_Position.z = 1.0f;
+    }
+
+    // edits
+    {
+        u32 nEdits  = my_Min(Edits_Stack_Size, Map_Editor->nEdits);
+        ForLoop(nEdits) UndoMapEdit();
+    }
+
+    // waypoints
+    {   
+        TraverseLinkedList(Waypoint_Editor->activeWaypoints.next, waypoint)
+        {
+            waypoint *tmp = node->prev;
+            RemoveWayPoint(node);
+            node = tmp;
+        }
+    }
+
+    // scaffs
+    {
+        ForLoop(Contigs->numberOfContigs) (Contigs->contigs + index)->scaffId = 0;
+        UpdateScaffolds();
+    }
+
+    // meta data
+    {
+        MetaData_Active_Tag = 0;
+
+        MetaData_Mode_Data->text = Yellow_Text_Float;
+        MetaData_Mode_Data->bg = Grey_Background;
+        MetaData_Mode_Data->size = DefaultMetaDataSize;
+
+        memset(Map_State->metaDataFlags, 0, Number_of_Pixels_1D * sizeof(u64));
+        
+        UpdateContigsFromMapState();
+
+        for (u32 i = 0; i < ArrayCount(Meta_Data->tags); i ++ ) Meta_Data->tags[i][0] = 0;
+        ForLoop(ArrayCount(Default_Tags)) strcpy((char *)Meta_Data->tags[MetaData_Active_Tag + index], Default_Tags[index]);
+    }
+
+    // extensions
+    {
+        TraverseLinkedList(Extensions.head, extension_node)
+        {
+            switch (node->type)
+            {
+                case extension_graph:
+                    {
+                        ((graph *)node->extension)->on = 0;
+                        ((graph *)node->extension)->nameOn = 0;
+                    }
+                    break;
+            }
+        }
+    }
+    
+
+    Redisplay = 1;
+
+}
+
 
 
 // User Profile
@@ -9851,6 +10020,9 @@ MainArgs {
     struct file_browser saveBrowser;
     struct file_browser loadBrowser;
     struct file_browser saveAGPBrowser;
+
+    u32 showClearCacheScreen = 0;
+
     struct media media;
     {
         media.icons.home = IconLoad(IconHome, IconHome_Size);
@@ -10000,6 +10172,7 @@ MainArgs {
                         showSaveStateScreen = nk_button_label(NK_Context, "Save State");
                         showLoadStateScreen = nk_button_label(NK_Context, "Load State");
                         showSaveAGPScreen = nk_button_label(NK_Context, "Generate AGP");
+                        if (nk_button_label(NK_Context, "Clear Cache")) showClearCacheScreen = 1; // used to clear cache for current opened sample
                     }
                     showUserProfileScreen = nk_button_label(NK_Context, "User Profile");
                     showAboutScreen = nk_button_label(NK_Context, "About");
@@ -11054,6 +11227,35 @@ MainArgs {
                     {
                         FenceIn(GenerateAGP(saveAGPBrowser.file, state & 2, state & 4, state & 8));
                         FileBrowserReloadDirectoryContent(&saveAGPBrowser, saveAGPBrowser.directory);
+                    }
+
+                    if (showClearCacheScreen)
+                    {   
+                        u32 window_height = 250;
+                        u32 Window_Width = (u32)((f32)window_height * 1.618);
+                        if (nk_begin(NK_Context, "Clear Cache", nk_rect(Screen_Scale.x * 600, Screen_Scale.y * 100, Screen_Scale.x * Window_Width, Screen_Scale.y * window_height),
+                                NK_WINDOW_BORDER|NK_WINDOW_NO_SCROLLBAR|NK_WINDOW_MOVABLE|NK_WINDOW_TITLE))
+                        {
+                            nk_layout_row_dynamic(NK_Context, 80, 1);
+                            nk_label(NK_Context, "Dangerous!!!", NK_TEXT_CENTERED);
+                            nk_label(NK_Context, "Clear the cache and restore to", NK_TEXT_CENTERED);
+                            nk_label(NK_Context, "initial state before curation?", NK_TEXT_CENTERED);
+
+                            nk_layout_row_dynamic(NK_Context, 80, 2);
+                            if (nk_button_label(NK_Context, "Yes"))
+                            {
+                                restore_initial_state();
+                                // nk_popup_close(NK_Context);
+                                showClearCacheScreen = 0;
+                            }
+                            if (nk_button_label(NK_Context, "No")) 
+                            {
+                                // nk_popup_close(NK_Context);
+                                showClearCacheScreen = 0;
+                            }
+
+                            nk_end(NK_Context);
+                        }
                     }
 
                     if (FileBrowserRun("Load State", &loadBrowser, NK_Context, (u32)showLoadStateScreen)) LoadState(headerHash, loadBrowser.file);

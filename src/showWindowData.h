@@ -172,7 +172,7 @@ struct device
 };
 
 
-struct ui_colour_element_bg
+struct ui_colour_element_bg // NOTE: don't change the order of the members, or the SaveState and LoadState function will break
 {
     u32 on;
     nk_colorf fg;
@@ -181,14 +181,14 @@ struct ui_colour_element_bg
 };
 
 
-struct ui_colour_element
+struct ui_colour_element // NOTE: don't change the order of the members, or the SaveState and LoadState function will break
 {
     u32 on;
     nk_colorf bg;
     f32 size;
 };
 
-struct edit_mode_colours
+struct edit_mode_colours // NOTE: don't change the order of the members, or the SaveState and LoadState function will break
 {
     nk_colorf preSelect;
     nk_colorf select;
@@ -197,16 +197,16 @@ struct edit_mode_colours
     nk_colorf bg;
 };
 
-struct waypoint_mode_data
+struct waypoint_mode_data  // NOTE: don't change the order of the members, or the SaveState and LoadState function will break
 {
-    nk_colorf base;
+    nk_colorf base; // sizeof(nk_colorf) == 16
     nk_colorf selected;
     nk_colorf text;
     nk_colorf bg;
     f32 size;
 };
 
-struct meta_mode_data
+struct meta_mode_data  // NOTE: don't change the order of the members, or the SaveState and LoadState function will break
 {
     nk_colorf text;
     nk_colorf bg;

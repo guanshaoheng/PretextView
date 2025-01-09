@@ -103,13 +103,13 @@ struct map_state
 
 // extension structures
 struct
-graph
+graph  // NOTE: don't change the order of the members, or the SaveState and LoadState function will break
 {
     u32 name[16];
-    u32 *data;    // save the data of the graph
+    u32 *data;    // save the data of the graph, 8 bytes
     GLuint vbo;
     GLuint vao;
-    editable_plot_shader *shader;
+    editable_plot_shader *shader; // 8
     f32 scale;
     f32 base;
     f32 lineSize;
