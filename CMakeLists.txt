@@ -9,21 +9,22 @@ if (APPLE)
     if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
         # Actions for arm64 architecture
         set(CMAKE_OSX_ARCHITECTURES "arm64")
-        message(STATUS "Arch: ${CMAKE_SYSTEM_PROCESSOR} thus build for ARM64 architecture.")
+        message(STATUS "Arch: ${CMAKE_SYSTEM_PROCESSOR}, thus build for ARM64 architecture.")
         # Set other ARM64-specific variables or flags here
     else()
         # Actions for other architectures (e.g., x86_64)
         set(CMAKE_OSX_ARCHITECTURES "x86_64")
-        message(STATUS "Arch: ${CMAKE_SYSTEM_PROCESSOR} thus build for x86_64 architecture.")
+        message(STATUS "Arch: ${CMAKE_SYSTEM_PROCESSOR}, thus build for x86_64 architecture.")
         # Set other x86_64-specific variables or flags here
+    message(STATUS "Install path: ${CMAKE_INSTALL_PREFIX}")
     endif()
 endif()
 
 
-set(CMAKE_C_STANDARD 17)   # 设置cpp版本
-set(CMAKE_CXX_STANDARD 17)   # 设置cpp版本
-set(CMAKE_C_STANDARD_REQUIRED ON)  # 设置cpp版本
-set(CMAKE_CXX_STANDARD_REQUIRED ON)  # 设置cpp版本
+set(CMAKE_C_STANDARD 17)   
+set(CMAKE_CXX_STANDARD 17)   
+set(CMAKE_C_STANDARD_REQUIRED ON)  
+set(CMAKE_CXX_STANDARD_REQUIRED ON)  
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Debug version")
@@ -132,7 +133,7 @@ set_target_properties(
 
 # Define shader files
 file(GLOB SHADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/shaderSource/*.shader")
-file(COPY ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource")
+# file(COPY ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource")
 file(GLOB TORCH_LIBRARIES "${CMAKE_CURRENT_SOURCE_DIR}/subprojects/libtorch/lib/*.dylib")
 
 # Define installation paths for macOS
@@ -145,6 +146,7 @@ if(APPLE)
     install(FILES ${SHADER_FILES} DESTINATION "${RESOURCES_DIR}/src/shaderSource") # Install shader files to Resources
     install(FILES Info.plist DESTINATION "${APPS}")  # Install Info.plist
     install(FILES icon.icns DESTINATION "${RESOURCES_DIR}")  # Install icon.icns
+    install(FILES  ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource") # Install the shaderSource
     install(FILES ${TORCH_LIBRARIES} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib") # Install the libtorch library
     install(TARGETS torchscatter DESTINATION "${CMAKE_INSTALL_PREFIX}/lib") # Install the torchscatter library
     install(TARGETS ${target_name} DESTINATION "${EXECUTABLE_DIR}") # Install the executable
