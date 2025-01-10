@@ -2240,27 +2240,34 @@ void DrawOutlinedText(
     const char *text, 
     f32 x, 
     f32 y, 
-    f32 offset = 1.0f)
+    f32 offset = 1.0f, 
+    bool outline_on = false)
 {
 
     nk_colorf outlineColor;
-    if (meta_outline->on == 2)
+    if (meta_outline->on == 1)
     {
-        outlineColor = {1.0f, 1.0f, 1.0f, 1.0f};
+        outlineColor = {0.0f, 0.0f, 0.0f, 1.0f}; // black
     }
     else
     {
-        outlineColor = {0.0f, 0.0f, 0.0f, 1.0f};
+        outlineColor = {1.0f, 1.0f, 1.0f, 1.0f}; // white 
     }
+
+    if (outline_on) 
+        outlineColor = {0.0f, 0.0f, 0.0f, 1.0f}; // black
 
     unsigned int outlineColorU32 = FourFloatColorToU32(outlineColor);
     unsigned int textColorU32 = FourFloatColorToU32(*colour);
 
-    fonsSetColor(FontStash_Context, outlineColorU32);
-    fonsDrawText(FontStash_Context, x - offset, y - offset, text, 0);
-    fonsDrawText(FontStash_Context, x + offset, y - offset, text, 0);
-    fonsDrawText(FontStash_Context, x - offset, y + offset, text, 0);
-    fonsDrawText(FontStash_Context, x + offset, y + offset, text, 0);
+    if (meta_outline->on > 0 || outline_on)
+    {
+        fonsSetColor(FontStash_Context, outlineColorU32);
+        fonsDrawText(FontStash_Context, x - offset, y - offset, text, 0);
+        fonsDrawText(FontStash_Context, x + offset, y - offset, text, 0);
+        fonsDrawText(FontStash_Context, x - offset, y + offset, text, 0);
+        fonsDrawText(FontStash_Context, x + offset, y + offset, text, 0);
+    }
 
     // // Draw the original text on top
     fonsSetColor(FontStash_Context, textColorU32);
@@ -3279,9 +3286,9 @@ Render() {
             f64 crt_time = GetTime();
             if (crt_time < Selected_Sequence_Cover_Countor.end_time)
             {   
-                char buff[256];
+                char buff[128];
                 f32 colour[4] = {1.0, 1.0, 1.0, 1.0};
-                snprintf(buff, 256, "%s (%u)", (char *)((Original_Contigs+Selected_Sequence_Cover_Countor.original_contig_index)->name), Selected_Sequence_Cover_Countor.idx_within_original_contig+1);
+                snprintf(buff, 128, "%s (%u)", (char *)((Original_Contigs+Selected_Sequence_Cover_Countor.original_contig_index)->name), Selected_Sequence_Cover_Countor.idx_within_original_contig+1);
 
                 f32 textWidth = fonsTextBounds(FontStash_Context, 0, 0, (char *)buff, 0, NULL);
                 ColourGenerator(65, colour);
@@ -3291,8 +3298,14 @@ Render() {
                     - (0.5f * textWidth);
                 f32 textY = ModelYToScreen( 0.5f - (f32)Selected_Sequence_Cover_Countor.map_loc / (f32)Number_of_Pixels_1D);
                 
-                DrawOutlinedText(FontStash_Context, (nk_colorf *)colour, (char *)buff, textX, textY, 2.0 );
-
+                glUseProgram(UI_Shader->shaderProgram);
+                DrawOutlinedText(
+                    FontStash_Context, 
+                    (nk_colorf *)colour, 
+                    (char *)buff, 
+                    textX, 
+                    textY, 
+                    3.0f, true);
                 Selected_Sequence_Cover_Countor.plotted = true;
             }
             else
@@ -7853,11 +7866,11 @@ global_function
 
             u08 select = meta_outline->on;
 
-            ForLoop(3)
+            for (u32 i = 0; i < 3; i++)
             {
-                if (nk_option_label(NK_Context, outlineColors[index], select == index))
+                if (nk_option_label(NK_Context, outlineColors[i], select == i))
                 {
-                    select = index;
+                    select = i;
                 }
             }
             if (meta_outline->on != select)
@@ -11019,12 +11032,12 @@ MainArgs {
                                     original_contig *cont = Original_Contigs + index;
 
                                     std::string name_str((char *)cont->name);
-                                    if (searchbuf_str.size()>0 && caseSensitive_search_sequences)
+                                    if (searchbuf_str.size()>0 && !caseSensitive_search_sequences)
                                     {
                                         std::transform(name_str.begin(), name_str.end(), name_str.begin(), ::tolower);
                                         std::transform(searchbuf_str.begin(), searchbuf_str.end(), searchbuf_str.begin(), ::tolower);
                                     }
-                                    if (searchbuf_str.size()>0 && std::string((char *)cont->name).find(searchbuf_str) == std::string::npos) continue;
+                                    if (searchbuf_str.size()>0 && name_str.find(searchbuf_str) == std::string::npos) continue;
 
                                     char buff[128];
                                     stbsp_snprintf((char *)buff, sizeof(buff), "%s (%u)", (char *)cont->name, cont->nContigs);
