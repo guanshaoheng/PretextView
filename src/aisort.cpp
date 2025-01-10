@@ -280,6 +280,28 @@ bool is_attachable(bool is_front, bool is_inversed, bool is_head_linked)
 }
 
 
+void initilise_chromosomes(
+    std::vector<std::deque<s32>>& chromosomes, 
+    std::vector<std::deque<s32>>& chromosomes_excluded, 
+    std::vector<s32>& chain_id, 
+    const u32& n, // total number of fragments
+    const LikelihoodTable& likelihood_table)
+{
+    for (u32 i=0; i < n; i++) 
+    {
+        if (likelihood_table.excluded_fragment_idx.count(i)!=0)  // excluded fragment
+        {
+            chromosomes_excluded.push_back({(s32)i+1});
+        }
+        else
+        {
+            chain_id[i] = chromosomes.size();
+            chromosomes.push_back({(s32)i+1});
+        }
+    }
+}
+
+
 void AiModel::sort_according_likelihood_unionFind(
     const LikelihoodTable& likelihood_table, 
     FragsOrder& frags_order, 
@@ -315,19 +337,8 @@ void AiModel::sort_according_likelihood_unionFind(
     // every fragment is initilised as a not-inverted chain
     std::vector<std::deque<s32>> chromosomes;
     std::vector<s32> chain_id(n, -1);
-    std::vector<std::deque<s32>> chromosomes_excluded(n);
-    for (u32 i=0; i < n; i++) 
-    {
-        if (likelihood_table.excluded_fragment_idx.count(i)!=0)  // excluded fragment
-        {
-            chromosomes_excluded.push_back({(s32)i+1});
-        }
-        else
-        {
-            chain_id[i] = chromosomes.size();
-            chromosomes.push_back({(s32)i+1});
-        }
-    }
+    std::vector<std::deque<s32>> chromosomes_excluded;
+    initilise_chromosomes(chromosomes, chromosomes_excluded, chain_id, n, likelihood_table);
 
     // Process links in order of decreasing score
     for (auto &lnk : all_links)
@@ -672,10 +683,10 @@ void AiModel::sort_according_likelihood_unionFind_doFuse(
     }
     // initialize the chromosomes and union-find
     // every fragment is initilised as a not-inverted chain
-    std::vector<std::deque<s32>> chromosomes(n);
-    for (u32 i=0; i < n; i++) chromosomes[i].push_back(i+1); 
-    std::vector<u32> chain_id(n);
-    std::iota(chain_id.begin(), chain_id.end(), 0);
+    std::vector<std::deque<s32>> chromosomes;
+    std::vector<s32> chain_id(n, -1);
+    std::vector<std::deque<s32>> chromosomes_excluded;
+    initilise_chromosomes(chromosomes, chromosomes_excluded, chain_id, n, likelihood_table);
 
     // Process links in order of decreasing score
     if (doStageOne)
@@ -811,7 +822,17 @@ void AiModel::sort_according_likelihood_unionFind_doFuse(
                 for (auto &val: b) len_b += frags->length[std::abs(val)-1];
                 return len_a > len_b;
             });
+        
+        std::sort(chromosomes_excluded.begin(), chromosomes_excluded.end(), 
+            [&frags](const std::deque<s32>& a, const std::deque<s32>& b) {
+                u32 len_a = 0, len_b = 0;
+                for (auto &val: a) len_a += frags->length[std::abs(val)-1];
+                for (auto &val: b) len_b += frags->length[std::abs(val)-1];
+                return len_a > len_b;
+            });
     }
+    // merge two vectors
+    chromosomes.insert(chromosomes.end(), chromosomes_excluded.begin(), chromosomes_excluded.end());
 
     frags_order.set_order(chromosomes);
 }
