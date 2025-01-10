@@ -133,7 +133,7 @@ set_target_properties(
 
 # Define shader files
 file(GLOB SHADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/shaderSource/*.shader")
-# file(COPY ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource")
+file(COPY ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource")
 file(GLOB TORCH_LIBRARIES "${CMAKE_CURRENT_SOURCE_DIR}/subprojects/libtorch/lib/*.dylib")
 
 # Define installation paths for macOS
