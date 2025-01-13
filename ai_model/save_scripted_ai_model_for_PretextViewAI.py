@@ -129,7 +129,7 @@ class Graph_HiC_Likelihood(nn.Module):
 if __name__ == "__main__":
     # Initialize the model and load its state_dict
     model = Graph_HiC_Likelihood()
-    checkpoint = torch.load("ai_model/checkpoint_20241129-19:29.pth", map_location=torch.device('cpu'))
+    checkpoint = torch.load("ai_model/checkpoint_20241129.pth", map_location=torch.device('cpu'))
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()  # Set the model to evaluation mode
 
