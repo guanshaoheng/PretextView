@@ -1,0 +1,30 @@
+name: Build and Test
+
+# 当 push 到 master 或者打开 Pull Request 时触发工作流
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ windows-latest, ubuntu-latest, macos-latest ]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Run install script on Unix (Linux/macOS)
+        if: runner.os != 'Windows_NT'
+        run: |
+          chmod +x ./install.cmake.sh
+          ./install.cmake.sh
+
+        # Windows 环境下运行 BAT 脚本
+      - name: Run install script on Windows
+        if: runner.os == 'Windows_NT'
+        run: .\install.cmake.bat
+

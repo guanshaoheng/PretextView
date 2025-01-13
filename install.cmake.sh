@@ -57,12 +57,10 @@ fi
 # Install OpenBLAS
 if [[ ! -d "subprojects/OpenBLAS/build" ]]; then
     cd subprojects/OpenBLAS
-    mkdir build && cd build
-    cmake -DCMAKE_BUILD_TYPE=Release -DNOFORTRAN=1 ../
-    make -j 8
-    cd ../../..
+    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DNOFORTRAN=1 
+    cmake --build build --config Release -j 8
+    cd ../..
 fi
-
 
 
 # ========= Icon =========
@@ -77,6 +75,12 @@ if [[ "$OS" == "Darwin" ]]; then
     rm -rf build_cmake  PretextViewAI.app PretextViewAI.dmg
     cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=PretextViewAI.app -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
     bash ./mac_dmg_generate.sh
+elif [[ "$OS" == "Linux" ]]; then
+    rm -rf build_cmake
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=PretextViewAI.linux -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
+else
+    echo "Unsupported platform: $OS"
+    exit 1
 fi
 
 # PretextViewAI.app/Contents/MacOS/PretextViewAI /Users/sg35/auto-curation/log/learning_notes/hic_curation/13 idLinTess1_1\ auto-curation/aPelFus1_1.pretext
