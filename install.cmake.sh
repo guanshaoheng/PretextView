@@ -1,56 +1,87 @@
 #!/bin/bash
 
+# ========= Architecture =========
 # Detect OS and Architecture
 OS=$(uname -s)
 ARCH=$(uname -m)
 
+echo "$OS - $ARCH"
+
+# ========= clone submodules =========
+git submodule update --init --recursive
+
+
+# ========= libtorch =========
 # Determine download URL based on OS and architecture
 if [[ "$OS" == "Linux" ]]; then
-    if [[ "$ARCH" == "x86_64" ]]; then
-        LIBTORCH_URL="https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.5.0%2Bcpu.zip"
+    LIBTORCH_URL="https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.5.0%2Bcpu.zip"
+elif [[ "$OS" == "Darwin" ]]; then
+    if [[ "$ARCH" == "arm64" ]]; then
+        LIBTORCH_URL="https://download.pytorch.org/libtorch/cpu/libtorch-macos-arm64-2.5.0.zip"
     else
-        echo "Unsupported architecture: $ARCH"
+        echo "Unsupported architecture: $OS - $ARCH"
         exit 1
     fi
-elif [[ "$OS" == "Darwin" ]]; then
-    LIBTORCH_URL="https://download.pytorch.org/libtorch/cpu/libtorch-macos-arm64-2.5.0.zip"
+elif [[ "$OS" == "WIN" ]]; then
+    LIBTORCH_URL="https://download.pytorch.org/libtorch/cpu/libtorch-win-shared-with-deps-2.5.1%2Bcpu.zip"
 else
-    echo "Unsupported OS: $OS"
+    echo "Unsupported platform: $OS"
     exit 1
 fi
-
 # Download the selected version
-echo "Downloading libtorch from $LIBTORCH_URL"
-curl -o libtorch.zip "$LIBTORCH_URL"
-
-# Unzip to a specific directory (e.g., /usr/local/libtorch)
+libtorch_zip_file="libtorch.zip"
 DEST_DIR="subprojects"
-mkdir -p "$DEST_DIR"
-unzip libtorch.zip -d "$DEST_DIR"
+mkdir -p "${DEST_DIR}"
+
+if [[ ! -d "${DEST_DIR}/libtorch" ]]; then
+    if [[ ! -f "${libtorch_zip_file}" ]]; then
+        echo "libtorch.zip not found. Downloading..."
+        curl -o "${libtorch_zip_file}" "$LIBTORCH_URL"
+    else
+        echo "${libtorch_zip_file} already exists. Skipping download."
+    fi
+    echo "Extracting libtorch.zip to ${DEST_DIR}/libtorch"
+    mkdir "$DEST_DIR"
+    unzip "${libtorch_zip_file}" -d "$DEST_DIR"
+else
+    echo "${DEST_DIR}/libtorch already exists. Skipping extraction."
+fi
 
 # Clean up
-rm libtorch.zip
-echo "libtorch has been downloaded and extracted to $DEST_DIR"
-
-# current, no Eigen is needed
-# # Eigen: download and compile 
-# wget -P subprojects https://gitlab.com/libeigen/eigen/-/archive/3.3.9/eigen-3.3.9.tar.gz
-# tar -xzvf subprojects/eigen-3.3.9.tar.gz -C subprojects
-# rm subprojects/eigen-3.3.9.tar.gz
-# mv subprojects/eigen-3.3.9 subprojects/eigen
-# cd subprojects/eigen
-# mkdir build && cd build
-# cmake .. -DCMAKE_INSTALL_PREFIX=../install_local && cmake --build . --config Release -j 6 && cmake --install .
+if [ -f "${libtorch_zip_file}" ]; then
+    rm ${libtorch_zip_file}
+fi
 
 
-# generate icon for PretextViewAI
-cd ico_design && cd ico_design &&  iconutil -c icns icon_v2.iconset && cd ..
+# ========= blas =========
+# Install OpenBLAS
+if [[ ! -d "subprojects/OpenBLAS/build" ]]; then
+    cd subprojects/OpenBLAS
+    mkdir build && cd build
+    cmake -DCMAKE_BUILD_TYPE=Release -DNOFORTRAN=1 ../
+    make -j 8
+    cd ../../..
+fi
 
 
+
+# ========= Icon =========
+## generate icon for PretextViewAI
+## which is already finished and pushed to the repo 
+# cd ico_design && cd ico_design &&  iconutil -c icns icon_v2.iconset && cd ..
+
+
+# ========= CMake compile and install =========
 # Finished: there are still problem for installation as the app can not find the LC_RPATH, need to fix this
-rm -rf build_cmake  PretextViewAI.app PretextViewAI.dmg
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=PretextViewAI.app -S . -B build_cmake  && cmake --build build_cmake  -j 8 && cmake --install build_cmake
- 
-PretextViewAI.app/Contents/MacOS/PretextViewAI /Users/sg35/auto-curation/log/learning_notes/hic_curation/13 idLinTess1_1\ auto-curation/aPelFus1_1.pretext
+if [[ "$OS" == "Darwin" ]]; then
+    rm -rf build_cmake  PretextViewAI.app PretextViewAI.dmg
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=PretextViewAI.app -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
+    bash ./mac_dmg_generate.sh
+fi
+
+# PretextViewAI.app/Contents/MacOS/PretextViewAI /Users/sg35/auto-curation/log/learning_notes/hic_curation/13 idLinTess1_1\ auto-curation/aPelFus1_1.pretext
+
+
+
 # test
 # install_name_tool -add_rpath subprojects/libtorch/lib app/bin/PretextView

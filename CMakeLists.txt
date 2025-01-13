@@ -1,30 +1,34 @@
 cmake_minimum_required(VERSION 3.17)
-project(PretextView VERSION "1.2.0")
-
-
-set(target_name PretextViewAI)
-
-
-if (APPLE)
-    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
-        # Actions for arm64 architecture
-        set(CMAKE_OSX_ARCHITECTURES "arm64")
-        message(STATUS "Arch: ${CMAKE_SYSTEM_PROCESSOR}, thus build for ARM64 architecture.")
-        # Set other ARM64-specific variables or flags here
-    else()
-        # Actions for other architectures (e.g., x86_64)
-        set(CMAKE_OSX_ARCHITECTURES "x86_64")
-        message(STATUS "Arch: ${CMAKE_SYSTEM_PROCESSOR}, thus build for x86_64 architecture.")
-        # Set other x86_64-specific variables or flags here
-    message(STATUS "Install path: ${CMAKE_INSTALL_PREFIX}")
-    endif()
-endif()
-
+project(PretextView VERSION "1.3.0")
 
 set(CMAKE_C_STANDARD 17)   
 set(CMAKE_CXX_STANDARD 17)   
 set(CMAKE_C_STANDARD_REQUIRED ON)  
 set(CMAKE_CXX_STANDARD_REQUIRED ON)  
+
+set(target_name PretextViewAI)
+
+
+if (APPLE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "10.10")
+    # define architecture-specific flags
+    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
+        set(CMAKE_OSX_ARCHITECTURES "arm64")
+        message(STATUS "Arch: ${CMAKE_SYSTEM_PROCESSOR}.")
+    else()
+        set(CMAKE_OSX_ARCHITECTURES "x86_64")
+        message(STATUS "Arch: ${CMAKE_SYSTEM_PROCESSOR}.")
+    endif()
+    message(STATUS "macOS version: ${CMAKE_OSX_DEPLOYMENT_TARGET}")
+elseif(WIN32)
+    message(STATUS "Windows")
+elseif(UNIX AND NOT APPLE)
+    message(STATUS "Linux")
+    message(FATAL_ERROR "Unsupported platform")
+endif()
+
+message(STATUS "Install path: ${CMAKE_INSTALL_PREFIX}")
+
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Debug version")
@@ -55,12 +59,13 @@ add_subdirectory(subprojects/libdeflate)
 add_subdirectory(subprojects/glm)
 
 set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
-add_subdirectory(subprojects/pytorch_scatter)
-
-set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
 find_package(Torch REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 message(STATUS "Torch found: ${TORCH_LIBRARIES}")
+
+set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
+add_subdirectory(subprojects/pytorch_scatter)
+
 
 
 find_library(OPENBLAS_LIB openblas PATHS subprojects/OpenBLAS/build/lib)
@@ -69,14 +74,6 @@ if(NOT OPENBLAS_LIB)
 else()
     message(STATUS "OpenBLAS found: ${OPENBLAS_LIB}")
 endif()
-
-
-# compile pytorch scatter library outside of this project
-# find_library(PYTORCH_EXTENSION_LIBRARY
-#     NAMES libtorchscatter.dylib
-#     PATHS subprojects/pytorch_scatter/build
-#     REQUIRED)
-# message(STATUS "Pytorch scatter found: ${PYTORCH_EXTENSION_LIBRARY}")
 
 
 add_library(aisort STATIC src/aisort.cpp )
@@ -109,20 +106,22 @@ else()
     message(STATUS "Release version: flag (${CMAKE_BUILD_TYPE}) without DEBUG")
 endif()
 target_link_libraries(${target_name} PRIVATE glfw libdeflate_static ${TORCH_LIBRARIES} aisort glm glad utilsPretextView copy_texture imgui ${OPENBLAS_LIB})   #  Eigen3::Eigen
-# 先添加这些库才能添加glfw静态库 （如果是添加动态库无所谓）
-# 定义需要的库列表，寻找这些库并且将这些库添加到make的目标中
-set(library_need Cocoa OpenGL IOKit CoreVideo) # 库名完全小写也可以，cmake文件的命令可以全部小写，目前看来是这样
+
+
 if (APPLE)
-    foreach (library ${library_need})
-        find_library(${library}_LIB ${library})
-        if (NOT ${library}_LIB)
-            message(FATAL_ERROR "${library} not found")
-        else()
-            message(STATUS "${library} found: ${${library}_LIB}")  
-        endif()
-        target_link_libraries(${target_name} PRIVATE ${${library}_LIB} )
-    endforeach()
+    set(library_need Cocoa OpenGL IOKit CoreVideo) 
+elseif(WIN32)
+    set(library_need gdi32 opengl32 kernel32 user32 shell32 Ole32)  
 endif()
+foreach (library ${library_need})
+    find_library(${library}_LIB ${library})
+    if (NOT ${library}_LIB)
+        message(FATAL_ERROR "${library} not found")
+    else()
+        message(STATUS "${library} found: ${${library}_LIB}")  
+    endif()
+    target_link_libraries(${target_name} PRIVATE ${${library}_LIB} )
+endforeach()
 
 
 # set the shared/dynamic library path for the installed binary
@@ -134,6 +133,8 @@ set_target_properties(
 # Define shader files
 file(GLOB SHADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/shaderSource/*.shader")
 file(COPY ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource")
+file(GLOB aimodel_files "${CMAKE_CURRENT_SOURCE_DIR}/ai_model/*")
+file(COPY ${aimodel_files} DESTINATION "${CMAKE_INSTALL_PREFIX}/ai_model")
 file(GLOB TORCH_LIBRARIES "${CMAKE_CURRENT_SOURCE_DIR}/subprojects/libtorch/lib/*.dylib")
 
 # Define installation paths for macOS
@@ -151,6 +152,14 @@ if(APPLE)
     install(TARGETS torchscatter DESTINATION "${CMAKE_INSTALL_PREFIX}/lib") # Install the torchscatter library
     install(TARGETS ${target_name} DESTINATION "${EXECUTABLE_DIR}") # Install the executable
 
-
-    # todo (shaoheng) copy ai model into 
+    # copy ai model into install dir
+    install(FILES ${aimodel_files} DESTINATION "${CMAKE_INSTALL_PREFIX}/ai_model")
+elseif(WIN32)
+    install(TARGETS ${target_name} DESTINATION "${CMAKE_INSTALL_PREFIX}")
+    install(TARGETS torchscatter DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
+    install(FILES ${TORCH_LIBRARIES} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
+    install(FILES ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource")
+    install(FILES ${aimodel_files} DESTINATION "${CMAKE_INSTALL_PREFIX}/ai_model")
+elseif(UNIX AND NOT APPLE)
+    message(FATAL_ERROR "Unsupported platform")
 endif()
