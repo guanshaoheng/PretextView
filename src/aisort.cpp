@@ -37,9 +37,10 @@ void sort_ai(){
 
 
 AiModel::AiModel()
-        :model_path("/Users/sg35/PretextView/ai_model/model_scripted.pt"),
+        :model_path("./ai_model/model_scripted.pt"),
         is_model_loaded_and_valid(false) 
-{
+{   
+    printf("[AI Model] Loading the model from %s\n", model_path.c_str());
     try {
         model = torch::jit::load(model_path);
         model.eval();

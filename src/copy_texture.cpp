@@ -1328,7 +1328,7 @@ void TexturesArray4AI::cal_mass_centre(const u32 &offset_row, const u32 &offset_
         }
     }
 
-    f32 data_sum = cblas_sasum(num_row * num_column, data_tmp, 1); // 99023.
+    f32 data_sum = cblas_sasum(num_row * num_column, data_tmp, 1); 
     if (data_sum < 1e-3)
     {
         mass_centre->row = 0.5f;
