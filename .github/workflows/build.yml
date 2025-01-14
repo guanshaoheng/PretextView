@@ -29,7 +29,8 @@ jobs:
       - name: Run install script on Windows
         if: runner.os == 'Windows'
         shell: cmd
-        run: install.cmake.bat
+        run: |
+          install.cmake.bat
 
       - name: Run install script on Unix (Linux/macOS)
         if: runner.os != 'Windows'
