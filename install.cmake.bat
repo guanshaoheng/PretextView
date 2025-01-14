@@ -55,15 +55,10 @@ REM ========= blas =========
 @REM     cd ..\..
 @REM )
 
-REM ========= Build the project =========
-if exist build_cmake (
-    rmdir /s /q build_cmake
-    echo "Removed existing build directory."
-)
 
 REM ========= pytorch_scatter =========
 cd .\subprojects\pytorch_scatter
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=subprojects\libtorch\share\cmake\Torch  -S . -B build && cmake --build build -j 8 
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=..\libtorch\share\cmake\Torch  -S . -B build && cmake --build build -j 8 
 if errorlevel 1 (
     echo "[Failed]: Compile pytorch_scatter."
     goto :error
@@ -72,6 +67,13 @@ else (
     echo "[Successed]: Compile pytorch_scatter."
 )
 cd ..\..
+
+
+REM ========= Build the project =========
+if exist build_cmake (
+    rmdir /s /q build_cmake
+    echo "Removed existing build directory."
+)
 
 cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_USE_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DCMAKE_INSTALL_PREFIX=PretextViewAI.windows -S . -B build_cmake
 if errorlevel 1 (
