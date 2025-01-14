@@ -13,4 +13,4 @@
 	url = https://github.com/ocornut/imgui.git
 [submodule "subprojects/pytorch_scatter"]
 	path = subprojects/pytorch_scatter
-	url = https://github.com/guanshaoheng/pytorch_scatter.git
+	url = https://github.com/guanshaoheng/pytorch_scatter.git 
