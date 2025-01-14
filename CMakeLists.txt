@@ -131,14 +131,22 @@ elseif(UNIX AND NOT APPLE)
 else()
     message(FATAL_ERROR "Unsupported platform")
 endif()
+
+
 foreach (library ${library_need})
-    find_library(${library}_LIB ${library})
-    if (NOT ${library}_LIB)
-        message(FATAL_ERROR "${library} not found")
-    else()
-        message(STATUS "${library} found: ${${library}_LIB}")  
+    if ( NOT WIN32)
+        find_library(${library}_LIB ${library})
+        if (NOT ${library}_LIB)
+            message(FATAL_ERROR "${library} not found")
+        else()
+            message(STATUS "${library} found: ${${library}_LIB}")  
+        endif()
+        target_link_libraries(${target_name} PRIVATE ${${library}_LIB} )
+    else() # WIN32
+        foreach (library ${library_need})
+            target_link_libraries(${target_name} PRIVATE ${library} )
+        endforeach()
     endif()
-    target_link_libraries(${target_name} PRIVATE ${${library}_LIB} )
 endforeach()
 
 
