@@ -47,6 +47,13 @@ else
     echo "${DEST_DIR}/libtorch already exists. Skipping extraction."
 fi
 
+if [[ -f "${DEST_DIR}/libtorch/CMakeLists.txt" ]]; then
+    echo "libtorch successfully installed."
+else
+    echo "libtorch installation failed."
+    exit 1
+fi
+
 # Clean up
 if [ -f "${libtorch_zip_file}" ]; then
     rm ${libtorch_zip_file}
