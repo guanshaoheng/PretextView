@@ -1,6 +1,6 @@
 name: Build and Test
 
-# 当 push 到 master 或者打开 Pull Request 时触发工作流
+# run the workflow on push to master branch or pull request to master branch
 on:
   push:
     branches: [ master ]

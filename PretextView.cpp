@@ -104,12 +104,7 @@ SOFTWARE.
 #include "showWindowData.h"
 
 
-#ifdef __APPLE__
 std::string shader_source_dir = getResourcesPath() + "/src/shaderSource/";
-#else
-    fprintf(stderr, "Only implemented on MacOS.\n");
-    assert(0);
-#endif // __APPLE__
 // Contact_Matrix->shaderProgram
 global_variable
 std::string
