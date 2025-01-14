@@ -4832,7 +4832,11 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
                 volatile texture_buffer *loadedTexture = 0; // 使用volatile锁放弃存取优化。如果优化（不使用volatile），该值存取会被优化，可能会存放在寄存器中，而不是每次访问该值都会从内存中读取
                 while (!loadedTexture)
                 {   
-                    __atomic_load(&Current_Loaded_Texture, &loadedTexture, 0);  // current_loaded_texture is a global variable saved the texture buffer with index Texture_Ptr (loading texture process is running in another thread)
+                    #ifndef _WIN32 // unix
+                    __atomic_load(&Current_Loaded_Texture, &loadedTexture, __ATOMIC_SEQ_CST);  
+                    #else // windows 
+                    loadedTexture = InterlockedCompareExchangePointer(&Current_Loaded_Texture, nullptr, nullptr);
+                    #endif // __WIN32
                 }  
                 u08 *texture = loadedTexture->texture; // 获取loadedtexture的texture的指针
                 
