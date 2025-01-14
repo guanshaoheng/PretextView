@@ -55,12 +55,12 @@ fi
 
 # ========= blas =========
 # Install OpenBLAS
-if [[ ! -d "subprojects/OpenBLAS/build" ]]; then
-    cd subprojects/OpenBLAS
-    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DNOFORTRAN=1 
-    cmake --build build --config Release -j 8
-    cd ../..
-fi
+# if [[ ! -d "subprojects/OpenBLAS/build" ]]; then
+#     cd subprojects/OpenBLAS
+#     cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DNOFORTRAN=1 
+#     cmake --build build --config Release -j 8
+#     cd ../..
+# fi
 
 
 # ========= Icon =========
@@ -74,7 +74,7 @@ fi
 if [[ "$OS" == "Darwin" ]]; then
     rm -rf build_cmake  PretextViewAI.app PretextViewAI.dmg
     cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=PretextViewAI.app -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
-    bash ./mac_dmg_generate.sh
+    # bash ./mac_dmg_generate.sh
 elif [[ "$OS" == "Linux" ]]; then
     rm -rf build_cmake
     cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=PretextViewAI.linux -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
