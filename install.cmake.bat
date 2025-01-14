@@ -38,17 +38,17 @@ if exist "%libtorch_zip_file%" (
 )
 
 REM ========= blas =========
-REM Install OpenBLAS if its build directory does not exist
-if not exist "subprojects\OpenBLAS\build" (
-    cd subprojects\OpenBLAS
-    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DNOFORTRAN=1
-    cmake --build build --config Release -j 8
-    if errorlevel 1 (
-        echo "OpenBLAS build failed."
-        goto :error_blas
-    )
-    cd ..\..
-)
+@REM REM Install OpenBLAS if its build directory does not exist
+@REM if not exist "subprojects\OpenBLAS\build" (
+@REM     cd subprojects\OpenBLAS
+@REM     cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DNOFORTRAN=1
+@REM     cmake --build build --config Release -j 8
+@REM     if errorlevel 1 (
+@REM         echo "OpenBLAS build failed."
+@REM         goto :error_blas
+@REM     )
+@REM     cd ..\..
+@REM )
 
 REM ========= Build the project =========
 if exist build_cmake (

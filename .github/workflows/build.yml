@@ -14,8 +14,17 @@ jobs:
         os: [ windows-latest, ubuntu-latest, macos-latest ]
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Check runner OS
+        run: echo "Runner OS is ${{ runner.os }}"
+
       - name: Checkout code
         uses: actions/checkout@v2
+
+        # Windows 环境下运行 BAT 脚本
+      - name: Run install script on Windows
+        if: runner.os == 'Windows_NT'
+        shell: cmd
+        run: install.cmake.bat
 
       - name: Run install script on Unix (Linux/macOS)
         if: runner.os != 'Windows_NT'
@@ -23,8 +32,4 @@ jobs:
           chmod +x ./install.cmake.sh
           ./install.cmake.sh
 
-        # Windows 环境下运行 BAT 脚本
-      - name: Run install script on Windows
-        if: runner.os == 'Windows_NT'
-        run: .\install.cmake.bat
 

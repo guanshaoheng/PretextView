@@ -25,7 +25,6 @@ SOFTWARE.
 #include <iostream>
 #include <utility>
 #include <fstream>
-#include <cblas.h>
 #include <random>
 
 #include "utilsPretextView.h"

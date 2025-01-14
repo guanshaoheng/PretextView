@@ -1296,6 +1296,20 @@ void cal_mask(f32* mask, u32 num)
 }
 
 
+template <typename T>
+T sum_of_array(const u32 N, const T *X, const u32 incX)
+{
+    T sum = 0;
+    if (N <= 0 || incX <= 0)
+        return sum;
+
+    for (u32 i = 0; i < N; i++) {
+        sum +=  X[i * incX];
+    }
+    return sum;
+}
+
+
 void TexturesArray4AI::cal_mass_centre(const u32 &offset_row, const u32 &offset_column, const u32 &num_row, const u32 &num_column, MassCentre* mass_centre) 
 {   
     if (num_row < 1 || num_column < 1)
@@ -1328,7 +1342,7 @@ void TexturesArray4AI::cal_mass_centre(const u32 &offset_row, const u32 &offset_
         }
     }
 
-    f32 data_sum = cblas_sasum(num_row * num_column, data_tmp, 1); 
+    f32 data_sum = sum_of_array(num_row * num_column, data_tmp, 1); 
     if (data_sum < 1e-3)
     {
         mass_centre->row = 0.5f;
@@ -1342,12 +1356,12 @@ void TexturesArray4AI::cal_mass_centre(const u32 &offset_row, const u32 &offset_
     f32 row_sum = 0.f, col_sum = 0.f;
     for (u32 i = 0; i < num_row; i++)
     {
-        f32 row_tmp = cblas_sasum(num_column, data_tmp + i * num_column, 1);
+        f32 row_tmp = sum_of_array(num_column, data_tmp + i * num_column, 1);
         row_sum += row_tmp * (f32)i;
     }
     for (u32 j = 0; j < num_column; j++)
     {
-        f32 col_tmp = cblas_sasum(num_row, data_tmp + j, num_column);
+        f32 col_tmp = sum_of_array(num_row, data_tmp + j, num_column);
         col_sum += col_tmp * (f32)j;
     }
     delete[] data_tmp;

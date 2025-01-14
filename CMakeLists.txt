@@ -48,8 +48,7 @@ include_directories(
     subprojects/glfw/include
     subprojects/libdeflate
     subprojects/glm
-    subprojects/OpenBLAS
-    subprojects/OpenBLAS/build
+
 )
 
 
@@ -66,13 +65,17 @@ set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
 add_subdirectory(subprojects/pytorch_scatter)
 
 
-
-find_library(OPENBLAS_LIB openblas PATHS subprojects/OpenBLAS/build/lib)
-if(NOT OPENBLAS_LIB)
-    message(FATAL_ERROR "OpenBLAS not found")
-else()
-    message(STATUS "OpenBLAS found: ${OPENBLAS_LIB}")
-endif()
+# OpenBLAS, which was required before, now is not used
+# include_directories(
+#     subprojects/OpenBLAS
+#     subprojects/OpenBLAS/build
+# )
+# find_library(OPENBLAS_LIB openblas PATHS subprojects/OpenBLAS/build/lib)
+# if(NOT OPENBLAS_LIB)
+#     message(FATAL_ERROR "OpenBLAS not found")
+# else()
+#     message(STATUS "OpenBLAS found: ${OPENBLAS_LIB}")
+# endif()
 
 
 add_library(aisort STATIC src/aisort.cpp )
@@ -104,7 +107,19 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 else()
     message(STATUS "Release version: flag (${CMAKE_BUILD_TYPE}) without DEBUG")
 endif()
-target_link_libraries(${target_name} PRIVATE glfw libdeflate_static ${TORCH_LIBRARIES} aisort glm glad utilsPretextView copy_texture imgui ${OPENBLAS_LIB})   #  Eigen3::Eigen
+target_link_libraries(
+    ${target_name} PRIVATE 
+    glfw 
+    libdeflate_static 
+    ${TORCH_LIBRARIES} 
+    aisort 
+    glm 
+    glad 
+    utilsPretextView 
+    copy_texture 
+    imgui 
+    # ${OPENBLAS_LIB} # which is used before
+)   #  Eigen3::Eigen
 
 
 if (APPLE)
