@@ -37,6 +37,13 @@ if not exist "%DEST_DIR%\libtorch" (
     echo %DEST_DIR%\libtorch already exists. Skipping extraction.
 )
 
+if exist "%DEST_DIR%\libtorch\share\cmake\Torch\TorchConfig.cmake" (
+    echo libtorch successfully installed.
+) else (
+    echo libtorch installation failed.
+    goto :error
+)
+
 REM Clean up the zip file if it exists
 if exist "%libtorch_zip_file%" (
     del "%libtorch_zip_file%"

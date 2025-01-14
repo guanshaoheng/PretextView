@@ -43,11 +43,12 @@ if [[ ! -d "${DEST_DIR}/libtorch" ]]; then
     echo "Extracting libtorch.zip to ${DEST_DIR}/libtorch"
     mkdir "$DEST_DIR"
     unzip -qq "${libtorch_zip_file}" -d "$DEST_DIR"
+    echo "Extracted libtorch.zip to ${DEST_DIR}/libtorch"
 else
     echo "${DEST_DIR}/libtorch already exists. Skipping extraction."
 fi
 
-if [[ -f "${DEST_DIR}/libtorch/CMakeLists.txt" ]]; then
+if [[ -f "${DEST_DIR}/libtorch/share/cmake/Torch/TorchConfig.cmake" ]]; then
     echo "libtorch successfully installed."
 else
     echo "libtorch installation failed."
