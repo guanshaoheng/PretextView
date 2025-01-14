@@ -1495,7 +1495,7 @@ static void fill_0_with_neighbor(u32* original_data, u32* processed_data, u32 le
         while (left >= 0 && original_data[left] == 0) left--;
         while (right < len && original_data[right] == 0) right++;
 
-        if (left >= 0 and right < len) processed_data[i] = (original_data[left] + original_data[right]) >> 1;
+        if (left >= 0 && right < len) processed_data[i] = (original_data[left] + original_data[right]) >> 1;
         else if (left >= 0) processed_data[i] = original_data[left];
         else if (right < len) processed_data[i] = original_data[right];
         else processed_data[i] = 0;
