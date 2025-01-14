@@ -183,14 +183,14 @@ if(APPLE)
     install(FILES icon.icns DESTINATION "${RESOURCES_DIR}")  # Install icon.icns
     install(FILES  ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource") # Install the shaderSource
     install(FILES ${TORCH_LIBRARIES} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib") # Install the libtorch library
-    install(TARGETS torchscatter DESTINATION "${CMAKE_INSTALL_PREFIX}/lib") # Install the torchscatter library
+    install(TARGETS ${torchscatter} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib") # Install the torchscatter library
     install(TARGETS ${target_name} DESTINATION "${EXECUTABLE_DIR}") # Install the executable
 
     # copy ai model into install dir
     install(FILES ${aimodel_files} DESTINATION "${CMAKE_INSTALL_PREFIX}/ai_model")
 else() # WIN32, UNIX and NOT APPLE
     install(TARGETS ${target_name} DESTINATION "${CMAKE_INSTALL_PREFIX}")
-    install(TARGETS torchscatter DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
+    install(TARGETS ${torchscatter} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
     install(FILES ${TORCH_LIBRARIES} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
     install(FILES ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource")
     install(FILES ${aimodel_files} DESTINATION "${CMAKE_INSTALL_PREFIX}/ai_model")
