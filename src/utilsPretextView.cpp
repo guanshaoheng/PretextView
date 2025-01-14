@@ -220,6 +220,39 @@ std::string getResourcesPath()
 }
 #endif // __APPLE__
 
+#ifdef __linux__
+std::string getResourcesPath() {
+    char exePath[PATH_MAX] = {0};
+    ssize_t count = readlink("/proc/self/exe", exePath, PATH_MAX);
+    if (count != -1) {
+        exePath[count] = '\0'; // Null-terminate the path
+        std::string path(exePath);
+        size_t pos = path.find_last_of('/');
+        if (pos != std::string::npos) {
+            std::string dir = path.substr(0, pos);
+            return dir + "/resources";
+        }
+    }
+    return "";
+}
+#endif // __linux__
+
+#ifdef _WIN32
+std::string getResourcesPath() {
+    char exePath[MAX_PATH] = {0};
+    GetModuleFileNameA(NULL, exePath, MAX_PATH);
+    std::string path(exePath);
+    size_t pos = path.find_last_of("\\/");
+    if (pos != std::string::npos) {
+        std::string dir = path.substr(0, pos);
+        return dir + "\\resources";
+    }
+    return "";
+}
+#endif // _WIN32
+
+
+
 
 void my_code_position_handler(const char* file, int line, const char* message) {
     if (0)
@@ -234,6 +267,6 @@ void my_code_position_handler(const char* file, int line, const char* message) {
 
 
 f64 GetTime() {
-    return std::chrono::duration<double>(
+    return std::chrono::duration<f64>(
         std::chrono::system_clock::now().time_since_epoch()).count();
 }

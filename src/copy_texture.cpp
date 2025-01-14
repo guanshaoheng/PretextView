@@ -178,12 +178,7 @@ TexturesArray4AI::TexturesArray4AI(
     }
     MY_CHECK(0);
     // Shader setup and texture binding
-    #ifdef __APPLE__
     std::string shader_source_dir = getResourcesPath() + "/src/shaderSource/";
-    #else
-        fprintf(stderr, "Only implemented on MacOS.\n");
-        assert(0);
-    #endif // __APPLE__
     MY_CHECK(shader_source_dir.c_str());
     auto VertexSource_Texture = readShaderSource( shader_source_dir + "contactMatrixVertexHIC.shader");
     auto FragmentSource_Texture = readShaderSource( shader_source_dir + "contactMatrixFragmentHIC.shader");
@@ -1038,7 +1033,7 @@ void TexturesArray4AI::cal_graphData(
         u32 num_selected_edges = num_full_edges * selected_edges_ratio, num_random_selected_edges = num_full_edges * random_selected_edges_ratio;
         num_edges = num_selected_edges + num_random_selected_edges;
         // select #(selected_edges_ratio*num_full_edges) edges with the highest average hic score
-        std::priority_queue<std::pair<f32, u32>, std::vector<std::pair<f32, u32>>, std::greater<>> pq;  // score, id, put the smallest score on the top
+        std::priority_queue<std::pair<f32, u32>, std::vector<std::pair<f32, u32>>, std::greater<std::pair<f32, u32>>> pq;  // score, id, put the smallest score on the top
         std::vector<u32> remainning_edges_idx;
         {
             u32 cnt = 0;

@@ -31,6 +31,9 @@ SOFTWARE.
 #include <numeric>
 #include <cassert>
 #include <vector>
+#include <chrono>
+#include <unordered_set>
+#include <queue>
 
 
 #include <glm/glm.hpp>
@@ -204,11 +207,21 @@ void pop_nk_style(nk_context *ctx, u32 num_color_pushed=3);
 
 #ifdef __APPLE__
 #include <CoreFoundation/CoreFoundation.h>
-
 // Function to get the path to the Resources directory
 std::string getResourcesPath();
-
 #endif // __APPLE__
+
+
+#ifdef __linux__
+#include <unistd.h>
+#include <limits.h>
+std::string getResourcesPath();
+#endif
+
+#ifdef _WIN32
+#include <windows.h>
+std::string getResourcesPath();
+#endif
 
 
 void my_code_position_handler(const char* file, int line, const char* message=nullptr);
