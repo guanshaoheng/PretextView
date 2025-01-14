@@ -73,7 +73,6 @@ fi
 # Finished: there are still problem for installation as the app can not find the LC_RPATH, need to fix this
 if [[ "$OS" == "Darwin" ]]; then
     rm -rf build_cmake  PretextViewAI.app PretextViewAI.dmg
-    cmake  -S . -B build
     cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_USE_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DCMAKE_INSTALL_PREFIX=PretextViewAI.app -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
     # bash ./mac_dmg_generate.sh
 elif [[ "$OS" == "Linux" ]]; then

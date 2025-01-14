@@ -27,7 +27,8 @@ if not exist "%DEST_DIR%\libtorch" (
     )
     echo Extracting libtorch.zip to %DEST_DIR%\libtorch...
     REM Extract using PowerShell Expand-Archive (force overwrite if needed)
-    powershell -Command "Expand-Archive -Path '%libtorch_zip_file%' -DestinationPath '%DEST_DIR%' -Force" > NUL 2>&1
+    start /wait powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Force -Path '%libtorch_zip_file%' -DestinationPath '%DEST_DIR%'" >NUL 2>&1
+    echo Extraction completed.
 ) else (
     echo %DEST_DIR%\libtorch already exists. Skipping extraction.
 )
@@ -53,21 +54,33 @@ REM ========= blas =========
 REM ========= Build the project =========
 if exist build_cmake (
     rmdir /s /q build_cmake
+    echo "Removed existing build directory."
 )
 cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_USE_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DCMAKE_INSTALL_PREFIX=PretextViewAI.windows -S . -B build_cmake
 if errorlevel 1 (
     echo "CMake configuration failed."
     goto :error
 )
+else (
+    echo "CMake configuration completed successfully."
+)
+
 cmake --build build_cmake -j 8
 if errorlevel 1 (
     echo "Build failed."
     goto :error
 )
+else (
+    echo "Build completed successfully."
+)
+
 cmake --install build_cmake
 if errorlevel 1 (
     echo "Install failed."
     goto :error
+)
+else (
+    echo "Install completed successfully."
 )
 
 echo Build and installation completed successfully.
