@@ -10,7 +10,7 @@ set(target_name PretextViewAI)
 
 
 if (APPLE)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "10.10")
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "10.12" CACHE STRING "Minimum OS X deployment version" FORCE) # required by libtorch
     # define architecture-specific flags
     if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
         set(CMAKE_OSX_ARCHITECTURES "arm64")
