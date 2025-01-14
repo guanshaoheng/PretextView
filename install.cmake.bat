@@ -27,7 +27,7 @@ if not exist "%DEST_DIR%\libtorch" (
     )
     echo Extracting libtorch.zip to %DEST_DIR%\libtorch...
     REM Extract using PowerShell Expand-Archive (force overwrite if needed)
-    powershell -Command "Expand-Archive -Path '%libtorch_zip_file%' -DestinationPath '%DEST_DIR%' -Force"
+    powershell -Command "Expand-Archive -Path '%libtorch_zip_file%' -DestinationPath '%DEST_DIR%' -Force" > NUL 2>&1
 ) else (
     echo %DEST_DIR%\libtorch already exists. Skipping extraction.
 )
@@ -54,7 +54,7 @@ REM ========= Build the project =========
 if exist build_cmake (
     rmdir /s /q build_cmake
 )
-cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_USE_WAYLAND=OFF -DCMAKE_INSTALL_PREFIX=PretextViewAI.windows -S . -B build_cmake
+cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_USE_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DCMAKE_INSTALL_PREFIX=PretextViewAI.windows -S . -B build_cmake
 if errorlevel 1 (
     echo "CMake configuration failed."
     goto :error
@@ -75,10 +75,5 @@ goto :eof
 
 :error
 echo An error occurred during the build process.
-exit /b 1
-goto :eof
-
-:error_blas
-echo An error occurred during the OpenBLAS build process.
 exit /b 1
 goto :eof

@@ -74,11 +74,11 @@ fi
 if [[ "$OS" == "Darwin" ]]; then
     rm -rf build_cmake  PretextViewAI.app PretextViewAI.dmg
     cmake  -S . -B build
-    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=PretextViewAI.app -DGLFW_USE_WAYLAND=OFF -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
+    cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_USE_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DCMAKE_INSTALL_PREFIX=PretextViewAI.app -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
     # bash ./mac_dmg_generate.sh
 elif [[ "$OS" == "Linux" ]]; then
     rm -rf build_cmake
-    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=PretextViewAI.linux -DGLFW_USE_WAYLAND=OFF -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
+    cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DCMAKE_INSTALL_PREFIX=PretextViewAI.linux -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
 else
     echo "Unsupported platform: $OS"
     exit 1
