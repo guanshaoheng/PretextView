@@ -6,6 +6,10 @@ SET CXX=clang-cl
 SET WINDRES=rc
 
 
+REM ========= pull git repo =========
+git submodule update --init --recursive
+
+
 REM ========= libtorch =========
 set "LIBTORCH_URL=https://download.pytorch.org/libtorch/cpu/libtorch-win-shared-with-deps-2.5.1%%2Bcpu.zip"
 set "libtorch_zip_file=libtorch.zip"
