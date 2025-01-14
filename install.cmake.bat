@@ -54,7 +54,7 @@ REM ========= Build the project =========
 if exist build_cmake (
     rmdir /s /q build_cmake
 )
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=PretextViewAI.install -S . -B build_cmake
+cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_USE_WAYLAND=OFF -DCMAKE_INSTALL_PREFIX=PretextViewAI.windows -S . -B build_cmake
 if errorlevel 1 (
     echo "CMake configuration failed."
     goto :error

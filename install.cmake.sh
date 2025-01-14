@@ -42,7 +42,7 @@ if [[ ! -d "${DEST_DIR}/libtorch" ]]; then
     fi
     echo "Extracting libtorch.zip to ${DEST_DIR}/libtorch"
     mkdir "$DEST_DIR"
-    unzip "${libtorch_zip_file}" -d "$DEST_DIR"
+    unzip -qq "${libtorch_zip_file}" -d "$DEST_DIR"
 else
     echo "${DEST_DIR}/libtorch already exists. Skipping extraction."
 fi
@@ -73,11 +73,12 @@ fi
 # Finished: there are still problem for installation as the app can not find the LC_RPATH, need to fix this
 if [[ "$OS" == "Darwin" ]]; then
     rm -rf build_cmake  PretextViewAI.app PretextViewAI.dmg
-    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=PretextViewAI.app -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
+    cmake  -S . -B build
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=PretextViewAI.app -DGLFW_USE_WAYLAND=OFF -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
     # bash ./mac_dmg_generate.sh
 elif [[ "$OS" == "Linux" ]]; then
     rm -rf build_cmake
-    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=PretextViewAI.linux -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=PretextViewAI.linux -DGLFW_USE_WAYLAND=OFF -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
 else
     echo "Unsupported platform: $OS"
     exit 1
