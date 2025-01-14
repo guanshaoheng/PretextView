@@ -4836,11 +4836,10 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
                     __atomic_load(&Current_Loaded_Texture, &loadedTexture, __ATOMIC_SEQ_CST); 
                     #else // windows 
                     // loadedTexture = InterlockedCompareExchangePointer(&Current_Loaded_Texture, nullptr, nullptr);
-                    loadedTexture = (texture_buffer *)InterlockedCompareExchangePointer(
-                        reinterpret_cast<void *volatile *>(&Current_Loaded_Texture),
-                        nullptr,
-                        nullptr
-                    ); 
+                    loadedTexture = (texture_buffer*)InterlockedCompareExchangePointer(
+                         (PVOID volatile*)&Current_Loaded_Texture, 
+                         NULL, 
+                         NULL);
                     #endif // __WIN32
                 }  
                 u08 *texture = loadedTexture->texture; // 获取loadedtexture的texture的指针
