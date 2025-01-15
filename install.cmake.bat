@@ -44,8 +44,7 @@ if exist "%DEST_DIR%\libtorch\share\cmake\Torch\TorchConfig.cmake" (
     goto :error
 )
 
-if exist "%DEST_DIR%\libtorch\include\ATen\OpMathType.h" 
-(
+if exist "%DEST_DIR%\libtorch\include\ATen\OpMathType.h" (
     echo "%DEST_DIR%\libtorch\include\ATen\OpMathType.h found"
 ) else (
     echo "Fatal error: %DEST_DIR%\libtorch\include\ATen\OpMathType.h not found."
