@@ -26,14 +26,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
 
-      - name: Patch PyTorch static constexpr on Windows
-        if: ${{ runner.os == 'Windows' }}
-        run: |
-          Torch_DIR="subprojects\libtorch"
-          sed -i '31,38c\
-          TORCH_API void lazy_init_num_threads();' ${Torch_DIR}/include/ATen/Parallel.h
-        shell: bash
-
       - name: Run install script on Windows
         if: runner.os == 'Windows'
         shell: cmd
