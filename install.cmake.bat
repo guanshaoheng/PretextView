@@ -44,6 +44,13 @@ if exist "%DEST_DIR%\libtorch\share\cmake\Torch\TorchConfig.cmake" (
     goto :error
 )
 
+if exist "%DEST_DIR%\libtorch\include\include\ATen\OpMathType.h" (
+    echo "%DEST_DIR%\libtorch\include\include\ATen\OpMathType.h found"
+) else (
+    echo "Fatal error: %DEST_DIR%\libtorch\include\include\ATen\OpMathType.h not found."
+    goto :error
+)
+
 REM Clean up the zip file if it exists
 if exist "%libtorch_zip_file%" (
     del "%libtorch_zip_file%"
