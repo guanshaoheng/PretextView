@@ -41,7 +41,7 @@ if not exist "%DEST_DIR%\libtorch" (
 if exist "%DEST_DIR%\libtorch\share\cmake\Torch\TorchConfig.cmake" (
     echo libtorch successfully installed.
 ) else (
-    echo libtorch installation failed.
+    echo "[fatal error]: no %DEST_DIR%\libtorch\share\cmake\Torch\TorchConfig.cmake"
     goto :error
 )
 

@@ -41,3 +41,4 @@ include/GLFW/glfw3native.h
 include/libdeflate.h
 src/aisort_cz.cpp
 src/aisort_cz.h
+PretextViewAI.zip
