@@ -12,7 +12,7 @@ git submodule update --init --recursive
 
 REM ========= libtorch =========
 @REM set "LIBTORCH_URL=https://download.pytorch.org/libtorch/cpu/libtorch-win-shared-with-deps-latest.zip"
-set "LIBTORCH_URL=https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.5.0%2Bcpu.zip"
+set "LIBTORCH_URL=https://download.pytorch.org/libtorch/cpu/libtorch-win-shared-with-deps-2.5.1%2Bcpu.zip"
 set "libtorch_zip_file=libtorch.zip"
 set "DEST_DIR=subprojects"
 
@@ -32,7 +32,7 @@ if not exist "%DEST_DIR%\libtorch" (
     )
     echo Extracting libtorch.zip to %DEST_DIR%\libtorch...
     REM Extract using PowerShell Expand-Archive (force overwrite if needed)
-    start /wait powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Force -Path '%libtorch_zip_file%' -DestinationPath '%DEST_DIR%'" REM >NUL 2>&1
+    start /wait powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Force -Path '%libtorch_zip_file%' -DestinationPath '%DEST_DIR%'" >NUL 2>&1
     echo Extraction completed.
 ) else (
     echo %DEST_DIR%\libtorch already exists. Skipping extraction.
