@@ -11,7 +11,8 @@ git submodule update --init --recursive
 
 
 REM ========= libtorch =========
-set "LIBTORCH_URL=https://download.pytorch.org/libtorch/cpu/libtorch-win-shared-with-deps-latest.zip"
+@REM set "LIBTORCH_URL=https://download.pytorch.org/libtorch/cpu/libtorch-win-shared-with-deps-latest.zip"
+set "LIBTORCH_URL=https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.5.0%2Bcpu.zip"
 set "libtorch_zip_file=libtorch.zip"
 set "DEST_DIR=subprojects"
 
@@ -44,7 +45,8 @@ if exist "%DEST_DIR%\libtorch\share\cmake\Torch\TorchConfig.cmake" (
     goto :error
 )
 
-if exist "%DEST_DIR%\libtorch\include\ATen\OpMathType.h" (
+if exist "%DEST_DIR%\libtorch\include\ATen\OpMathType.h" 
+(
     echo "%DEST_DIR%\libtorch\include\ATen\OpMathType.h found"
 ) else (
     echo "Fatal error: %DEST_DIR%\libtorch\include\ATen\OpMathType.h not found."
