@@ -61,17 +61,8 @@ find_package(Torch REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 message(STATUS "Torch found: ${TORCH_LIBRARIES}")
 
-if (NOT WIN32)
-    set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
-    add_subdirectory(subprojects/pytorch_scatter)
-else()
-    find_library(torchscatter torchscatter PATHS subprojects/pytorch_scatter/build)
-    if (NOT torchscatter)
-        message(FATAL_ERROR "torchscatter not found")
-    else()
-        message(STATUS "torchscatter found: ${torchscatter}")
-    endif()
-endif()
+set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
+add_subdirectory(subprojects/pytorch_scatter)
 
 
 # OpenBLAS, which was required before, now is not used
