@@ -48,7 +48,6 @@ include_directories(
     subprojects/glfw/include
     subprojects/libdeflate
     subprojects/glm
-    subprojects/libtorch/include 
 )
 
 
