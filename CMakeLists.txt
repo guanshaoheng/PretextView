@@ -55,12 +55,13 @@ add_subdirectory(subprojects/glfw)
 add_subdirectory(subprojects/libdeflate)
 add_subdirectory(subprojects/glm)
 
-# set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
-# find_package(Torch REQUIRED)
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-# message(STATUS "Torch found: ${TORCH_LIBRARIES}")
-
 set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
+find_package(Torch REQUIRED)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
+message(STATUS "Torch found: ${TORCH_LIBRARIES}")
+
+
+set(CMAKE_PREFIX_PATH "../libtorch/share/cmake/Torch")
 add_subdirectory(subprojects/pytorch_scatter)
 
 
@@ -80,7 +81,7 @@ add_subdirectory(subprojects/pytorch_scatter)
 add_library(aisort STATIC src/aisort.cpp )
 target_link_libraries(
     aisort PRIVATE 
-    # ${TORCH_LIBRARIES} 
+    ${TORCH_LIBRARIES} 
     ${torchscatter})
 
 
