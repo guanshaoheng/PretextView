@@ -78,6 +78,7 @@ find_package(Torch REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 message(STATUS "Torch found: ${TORCH_LIBRARIES}")
 # set(CMAKE_PREFIX_PATH "../libtorch/share/cmake/Torch")
+set(WITH_PYTHON OFF CACHE BOOL "Disable Python integration for pytorch_scatter" FORCE)
 add_subdirectory(subprojects/pytorch_scatter)
 
 
