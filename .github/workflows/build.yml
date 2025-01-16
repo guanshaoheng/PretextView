@@ -32,13 +32,16 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       
-      - name: Set Python3 executable environment variable
+      - name: Set Python3 executable environment variable for Mac or Linux
+        if: ${{ runner.os != 'Windows' }}
         run: |
-          if [ "${{ runner.os }}" = "Windows_NT" ]; then
-            echo "PYTHON3_EXECUTABLE=${{ env.pythonLocation }}\python.exe" >> $GITHUB_ENV
-          else
-            echo "PYTHON3_EXECUTABLE=$(which python)" >> $GITHUB_ENV
-          fi
+          echo "PYTHON3_EXECUTABLE=$(which python)" >> $GITHUB_ENV
+      
+      - name: Set Python3 executable environment variable for Windows
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          Add-Content -Path $env:GITHUB_ENV -Value "PYTHON3_EXECUTABLE=$($env:pythonLocation)\python.exe"
 
       - name: Free Disk Space (Ubuntu)
         if: ${{ runner.os == 'Linux' }}
