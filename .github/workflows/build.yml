@@ -12,11 +12,12 @@ jobs:
     strategy:
       matrix:
         os: [ windows-latest, ubuntu-latest, macos-latest ]
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
         torch-version: [2.5.0]  # [2.3.0, 2.4.0, 2.5.0]
         cuda-version: ['cpu'] # 'cu118', 'cu121', 'cu124'
-        # exclude:
-        #   - torch-version: 2.5.0
-        #     python-version: '3.8'
+        exclude:
+          - torch-version: 2.5.0
+            python-version: '3.8'
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -26,26 +27,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Set Python3 executable environment variable
+        run: |
+          if [ "${{ runner.os }}" = "Windows_NT" ]; then
+            echo "PYTHON3_EXECUTABLE=${{ env.pythonLocation }}\python.exe" >> $GITHUB_ENV
+          else
+            echo "PYTHON3_EXECUTABLE=$(which python)" >> $GITHUB_ENV
+          fi
+
       - name: Free Disk Space (Ubuntu)
         if: ${{ runner.os == 'Linux' }}
         uses: jlumbroso/free-disk-space@main
 
-      - name: Install PyTorch ${{ matrix.torch-version }}+${{ matrix.cuda-version }} for Mac and Windows
-        if: runner.os == 'Windows' || runner.os == 'macOS'
+      - name: Install PyTorch ${{ matrix.torch-version }}+${{ matrix.cuda-version }}
         run: |
           pip install numpy
-          pip install torch
+          pip install torch==${{ matrix.torch-version }} --extra-index-url https://download.pytorch.org/whl/${{ matrix.cuda-version }}
           python -c "import torch; print('PyTorch:', torch.__version__)"
           python -c "import torch; print('CUDA:', torch.version.cuda)"
-
-      - name: Install PyTorch ${{ matrix.torch-version }}+${{ matrix.cuda-version }} for Linux
-        run: |
-        if: runner.os == 'Linux'
-          pip install numpy
-          pip3 install torch --index-url https://download.pytorch.org/whl/${{ matrix.cuda-version }}
-          python -c "import torch; print('PyTorch:', torch.__version__)"
-          python -c "import torch; print('CUDA:', torch.version.cuda)"
-
 
       - name: install GL and x11 for Linux
         if: runner.os == 'Linux'
