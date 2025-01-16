@@ -174,6 +174,12 @@ file(COPY ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource"
 file(GLOB aimodel_files "${CMAKE_CURRENT_SOURCE_DIR}/ai_model/*")
 file(COPY ${aimodel_files} DESTINATION "${CMAKE_INSTALL_PREFIX}/ai_model")
 
+foreach(lib IN LISTS TORCH_LIBRARIES)  #  append the valid torch libraries from torch_libaries
+  if(EXISTS "${lib}")
+    list(APPEND VALID_TORCH_LIBS "${lib}")
+  endif()
+endforeach()
+
 # Define installation paths for macOS
 # CMAKE_INSTALL_PREFIX = PretextView.app
 if(APPLE)
@@ -190,7 +196,10 @@ if(APPLE)
     install(FILES Info.plist DESTINATION "${APPS}")  # Install Info.plist
     install(FILES icon.icns DESTINATION "${RESOURCES_DIR}")  # Install icon.icns
     install(FILES  ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource") # Install the shaderSource
-    install(FILES ${TORCH_LIBRARIES} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib") # Install the libtorch library
+    if(VALID_TORCH_LIBS)  # install the torch libraries
+        install(FILES ${VALID_TORCH_LIBS}
+            DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
+    endif()
     install(TARGETS ${torchscatter} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib") # Install the torchscatter library
     install(TARGETS ${target_name} DESTINATION "${EXECUTABLE_DIR}") # Install the executable
 
@@ -203,7 +212,10 @@ else() # WIN32, UNIX and NOT APPLE
             INSTALL_RPATH "@executable_path/lib") 
     install(TARGETS ${target_name} DESTINATION "${CMAKE_INSTALL_PREFIX}")
     install(TARGETS ${torchscatter} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
-    install(FILES ${TORCH_LIBRARIES} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
+    if(VALID_TORCH_LIBS)  # install the torch libraries
+        install(FILES ${VALID_TORCH_LIBS}
+            DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
+    endif()
     install(FILES ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource")
     install(FILES ${aimodel_files} DESTINATION "${CMAKE_INSTALL_PREFIX}/ai_model")
 endif()
