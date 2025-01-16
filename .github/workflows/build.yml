@@ -30,12 +30,22 @@ jobs:
         if: ${{ runner.os == 'Linux' }}
         uses: jlumbroso/free-disk-space@main
 
-      - name: Install PyTorch ${{ matrix.torch-version }}+${{ matrix.cuda-version }}
+      - name: Install PyTorch ${{ matrix.torch-version }}+${{ matrix.cuda-version }} for Mac and Windows
+        if: runner.os == 'Windows' || runner.os == 'macOS'
         run: |
           pip install numpy
-          pip install torch==${{ matrix.torch-version }} --extra-index-url https://download.pytorch.org/whl/${{ matrix.cuda-version }}
+          pip install torch
           python -c "import torch; print('PyTorch:', torch.__version__)"
           python -c "import torch; print('CUDA:', torch.version.cuda)"
+
+      - name: Install PyTorch ${{ matrix.torch-version }}+${{ matrix.cuda-version }} for Linux
+        run: |
+        if: runner.os == 'Linux'
+          pip install numpy
+          pip3 install torch --index-url https://download.pytorch.org/whl/${{ matrix.cuda-version }}
+          python -c "import torch; print('PyTorch:', torch.__version__)"
+          python -c "import torch; print('CUDA:', torch.version.cuda)"
+
 
       - name: install GL and x11 for Linux
         if: runner.os == 'Linux'
