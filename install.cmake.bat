@@ -86,17 +86,15 @@ cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -
 if errorlevel 1 (
     echo "CMake configuration failed."
     goto :error
-)
-else (
+) else (
     echo "CMake configuration completed successfully."
 )
 
-cmake --build build_cmake -j 8 --config Release
+cmake --build build_cmake --config Release
 if errorlevel 1 (
     echo "Build failed."
     goto :error
-)
-else (
+) else (
     echo "Build completed successfully."
 )
 
@@ -104,11 +102,9 @@ cmake --install build_cmake --config Release
 if errorlevel 1 (
     echo "Install failed."
     goto :error
-)
-else (
+) else (
     echo "Install completed successfully."
 )
-
 echo Build and installation completed successfully.
 goto :eof
 
