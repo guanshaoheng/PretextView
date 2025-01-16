@@ -37,7 +37,7 @@ if not exist "%DEST_DIR%\libtorch" (
     )
     echo Extracting libtorch.zip to %DEST_DIR%\libtorch...
     REM Extract using PowerShell Expand-Archive (force overwrite if needed)
-    start /wait powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Force -Path '%libtorch_zip_file%' -DestinationPath '%DEST_DIR%'" >NUL 2>&1
+    powershell -Command "Expand-Archive -Path '%libtorch_zip_file%' -DestinationPath '%DEST_DIR%' -Force" >NUL 2>&1
     echo Extraction completed.
 ) else (
     echo %DEST_DIR%\libtorch already exists. Skipping extraction.
