@@ -82,7 +82,7 @@ if exist build_cmake (
     echo "Removed existing build directory."
 )
 
-cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_USE_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=PretextViewAI.windows -DCMAKE_PREFIX_PATH=%python_path% -S . -B build_cmake
+cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=PretextViewAI.windows -DCMAKE_PREFIX_PATH=%python_path% -S . -B build_cmake
 if errorlevel 1 (
     echo "CMake configuration failed."
     goto :error

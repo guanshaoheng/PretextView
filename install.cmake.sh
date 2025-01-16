@@ -100,7 +100,7 @@ else
     exit 1
 fi
 
-cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_USE_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=${install_path} -DCMAKE_PREFIX_PATH=${python_path} -S . -B build_cmake  && cmake --build build_cmake && cmake --install build_cmake
+cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=${install_path} -DCMAKE_PREFIX_PATH=${python_path} -S . -B build_cmake  && cmake --build build_cmake && cmake --install build_cmake
 
 
 # PretextViewAI.app/Contents/MacOS/PretextViewAI /Users/sg35/auto-curation/log/learning_notes/hic_curation/13 idLinTess1_1\ auto-curation/aPelFus1_1.pretext
