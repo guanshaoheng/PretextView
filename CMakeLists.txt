@@ -8,7 +8,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(target_name PretextViewAI)
 
-
 if (APPLE)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum OS X deployment version" FORCE) # required by libtorch
     # define architecture-specific flags
@@ -169,23 +168,20 @@ foreach (library ${library_need})
     endif()
 endforeach()
 
-
-# set the shared/dynamic library path for the installed binary
-set_target_properties(
-    ${target_name} 
-    PROPERTIES 
-    INSTALL_RPATH "@executable_path/../../lib")  
-
 # Define shader files
 file(GLOB SHADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/shaderSource/*.shader")
 file(COPY ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource")
 file(GLOB aimodel_files "${CMAKE_CURRENT_SOURCE_DIR}/ai_model/*")
 file(COPY ${aimodel_files} DESTINATION "${CMAKE_INSTALL_PREFIX}/ai_model")
-file(GLOB TORCH_LIBRARIES "${CMAKE_CURRENT_SOURCE_DIR}/subprojects/libtorch/lib/*.dylib")
 
 # Define installation paths for macOS
 # CMAKE_INSTALL_PREFIX = PretextView.app
 if(APPLE)
+    # set the shared/dynamic library path for the installed binary
+    set_target_properties(
+        ${target_name} 
+        PROPERTIES 
+        INSTALL_RPATH "@executable_path/../../lib")  
     set(APPS "${CMAKE_INSTALL_PREFIX}/Contents")
     set(EXECUTABLE_DIR "${APPS}/MacOS")
     set(RESOURCES_DIR "${APPS}/Resources")
@@ -201,6 +197,10 @@ if(APPLE)
     # copy ai model into install dir
     install(FILES ${aimodel_files} DESTINATION "${CMAKE_INSTALL_PREFIX}/ai_model")
 else() # WIN32, UNIX and NOT APPLE
+    set_target_properties(
+            ${target_name} 
+            PROPERTIES 
+            INSTALL_RPATH "@executable_path/lib") 
     install(TARGETS ${target_name} DESTINATION "${CMAKE_INSTALL_PREFIX}")
     install(TARGETS ${torchscatter} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
     install(FILES ${TORCH_LIBRARIES} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")

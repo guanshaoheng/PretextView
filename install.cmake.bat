@@ -2,8 +2,8 @@
 
 
 REM Expecting the Torch path as the first argument
-set "python_path=%~1"
-echo Python path received: %python_path%
+set "cmake_prefix_path_tmp=%~1"
+echo cmake_prefix_path_tmp received: %cmake_prefix_path_tmp%
 REM ... use %TORCH_PATH% as needed ...
 
 
@@ -82,7 +82,7 @@ if exist build_cmake (
     echo "Removed existing build directory."
 )
 
-cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=PretextViewAI.windows -DCMAKE_PREFIX_PATH=%python_path% -S . -B build_cmake
+cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=PretextViewAI.windows -DCMAKE_PREFIX_PATH=%cmake_prefix_path_tmp% -S . -B build_cmake
 if errorlevel 1 (
     echo "CMake configuration failed."
     goto :error
