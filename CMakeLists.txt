@@ -55,22 +55,22 @@ add_subdirectory(subprojects/libdeflate)
 add_subdirectory(subprojects/glm)
 
 
-# if (WITH_PYTHON)
-#   add_definitions(-DWITH_PYTHON)
-#   find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
-#   message(STATUS "Python found: ${Python3_EXECUTABLE}")
-#   execute_process(
-#     COMMAND "${Python3_EXECUTABLE}" -c "import torch; print(torch.__path__[0])"
-#     OUTPUT_VARIABLE TORCH_PYTHON_PATH
-#     OUTPUT_STRIP_TRAILING_WHITESPACE
-#   )
-#   if (TORCH_PYTHON_PATH)
-#     message(STATUS "Torch installed in Python at: ${TORCH_PYTHON_PATH}")
-#   else()
-#     message(FATAL_ERROR "Torch not found in Python")
-#   endif()
-#   list(APPEND CMAKE_PREFIX_PATH "${TORCH_PYTHON_PATH}/share/cmake/Torch")
-# endif()
+if (WITH_PYTHON)
+  add_definitions(-DWITH_PYTHON)
+  find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+  message(STATUS "Python found: ${Python3_EXECUTABLE}")
+  execute_process(
+    COMMAND "${Python3_EXECUTABLE}" -c "import torch; print(torch.__path__[0])"
+    OUTPUT_VARIABLE TORCH_PYTHON_PATH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  if (TORCH_PYTHON_PATH)
+    message(STATUS "Torch installed in Python at: ${TORCH_PYTHON_PATH}")
+  else()
+    message(FATAL_ERROR "Torch not found in Python")
+  endif()
+  list(APPEND CMAKE_PREFIX_PATH "${TORCH_PYTHON_PATH}/share/cmake/Torch")
+endif()
 
 # set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
 message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")

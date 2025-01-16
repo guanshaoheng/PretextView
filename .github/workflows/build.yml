@@ -67,15 +67,17 @@ jobs:
         shell: cmd
         env:
           TORCH_PATH: ${{ env.TORCH_PATH }}
+          PYTHON3_EXECUTABLE: ${{ env.PYTHON3_EXECUTABLE }}
         run: |
-          install.cmake.bat %TORCH_PATH%
+          install.cmake.bat %TORCH_PATH% %PYTHON3_EXECUTABLE%
 
       - name: Run install script on Unix (Linux/macOS)
         if: runner.os != 'Windows'
         env:
           TORCH_PATH: ${{ env.TORCH_PATH }}
+          PYTHON3_EXECUTABLE: ${{ env.PYTHON3_EXECUTABLE }}
         run: |
           chmod +x ./install.cmake.sh
-          ./install.cmake.sh ${TORCH_PATH}
+          ./install.cmake.sh ${TORCH_PATH} ${PYTHON3_EXECUTABLE}
 
 
