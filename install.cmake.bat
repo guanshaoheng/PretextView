@@ -2,10 +2,8 @@
 
 
 REM Expecting the Torch path as the first argument
-set "TORCH_PATH=%~1"
-set "PYTHON3_EXECUTABLE=%~2"
-echo Torch path received: %TORCH_PATH%
-echo Python3 executable path received: %PYTHON3_EXECUTABLE%
+set "python_path=%~1"
+echo Python path received: %python_path%
 REM ... use %TORCH_PATH% as needed ...
 
 
@@ -78,26 +76,13 @@ REM ========= blas =========
 @REM )
 
 
-REM ========= pytorch_scatter =========
-cd .\subprojects\pytorch_scatter
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=..\libtorch\share\cmake\Torch  -S . -B build && cmake --build build -j 8 
-if errorlevel 1 (
-    echo "[Failed]: Compile pytorch_scatter."
-    goto :error
-)
-else (
-    echo "[Successed]: Compile pytorch_scatter."
-)
-cd ..\..
-
-
 REM ========= Build the project =========
 if exist build_cmake (
     rmdir /s /q build_cmake
     echo "Removed existing build directory."
 )
 
-cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_USE_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=PretextViewAI.windows -DCMAKE_PREFIX_PATH=%TORCH_PATH% -DPython3_EXECUTABLE=%PYTHON3_EXECUTABLE% -S . -B build_cmake
+cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_USE_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=PretextViewAI.windows -DCMAKE_PREFIX_PATH=%python_path% -S . -B build_cmake
 if errorlevel 1 (
     echo "CMake configuration failed."
     goto :error

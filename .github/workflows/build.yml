@@ -43,10 +43,6 @@ jobs:
         run: |
           Add-Content -Path $env:GITHUB_ENV -Value "PYTHON3_EXECUTABLE=$($env:pythonLocation)\python.exe"
 
-      - name: Free Disk Space (Ubuntu)
-        if: ${{ runner.os == 'Linux' }}
-        uses: jlumbroso/free-disk-space@main
-
       - name: Install PyTorch ${{ matrix.torch-version }}+${{ matrix.cuda-version }}
         shell: bash
         run: |
@@ -66,18 +62,20 @@ jobs:
         if: runner.os == 'Windows'
         shell: cmd
         env:
+          pythonLocation: ${{ env.pythonLocation }}
           TORCH_PATH: ${{ env.TORCH_PATH }}
           PYTHON3_EXECUTABLE: ${{ env.PYTHON3_EXECUTABLE }}
         run: |
-          install.cmake.bat %TORCH_PATH% %PYTHON3_EXECUTABLE%
+          install.cmake.bat %pythonLocation%
 
       - name: Run install script on Unix (Linux/macOS)
         if: runner.os != 'Windows'
         env:
+          pythonLocation: ${{ env.pythonLocation }}
           TORCH_PATH: ${{ env.TORCH_PATH }}
           PYTHON3_EXECUTABLE: ${{ env.PYTHON3_EXECUTABLE }}
         run: |
           chmod +x ./install.cmake.sh
-          ./install.cmake.sh ${TORCH_PATH} ${PYTHON3_EXECUTABLE}
+          ./install.cmake.sh ${pythonLocation}
 
 

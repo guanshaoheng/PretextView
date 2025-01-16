@@ -1,13 +1,12 @@
 #!/bin/bash
 
 # ========= TORCH_PATH =========
-TORCH_PATH=$1
-PYTHON3_EXECUTABLE=$2
-if [[ -z "$TORCH_PATH" && -z "$PYTHON3_EXECUTABLE" ]]; then
-    echo "Usage: $0 <path-to-libtorch> <path-to-python-interpreter>"
+python_path=$1
+if [[ -z "$python_path" ]]; then
+    echo "Usage: $0 <path-to-python>"
     exit 1
 else
-    echo "Using libtorch path: $TORCH_PATH"
+    echo "Using python path: $python_path"
 fi
 
 # ========= Architecture =========
@@ -90,16 +89,19 @@ git submodule update --init --recursive
 # ========= CMake compile and install =========
 # Finished: there are still problem for installation as the app can not find the LC_RPATH, need to fix this
 if [[ "$OS" == "Darwin" ]]; then
-    rm -rf build_cmake  PretextViewAI.app PretextViewAI.dmg
-    cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_USE_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF  -DCMAKE_INSTALL_PREFIX=PretextViewAI.app -DCMAKE_PREFIX_PATH=${TORCH_PATH} -DPython3_EXECUTABLE=${PYTHON3_EXECUTABLE} -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
+    install_path=PretextViewAI.app 
+    rm -rf build_cmake ${install_path} PretextViewAI.dmg
     # bash ./mac_dmg_generate.sh
 elif [[ "$OS" == "Linux" ]]; then
-    rm -rf build_cmake
-    cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF  -DCMAKE_INSTALL_PREFIX=PretextViewAI.linux -DCMAKE_PREFIX_PATH=${TORCH_PATH} -DPython3_EXECUTABLE=${PYTHON3_EXECUTABLE} -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
+    install_path=PretextViewAI.linux 
+    rm -rf build_cmake ${install_path}
 else
     echo "Unsupported platform: $OS"
     exit 1
 fi
+
+cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_USE_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=${install_path} -DCMAKE_PREFIX_PATH=${python_path} -S . -B build_cmake  && cmake --build build_cmake && cmake --install build_cmake
+
 
 # PretextViewAI.app/Contents/MacOS/PretextViewAI /Users/sg35/auto-curation/log/learning_notes/hic_curation/13 idLinTess1_1\ auto-curation/aPelFus1_1.pretext
 
