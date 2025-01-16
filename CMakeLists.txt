@@ -50,18 +50,20 @@ include_directories(
     subprojects/glm
 )
 
-
 add_subdirectory(subprojects/glfw)
 add_subdirectory(subprojects/libdeflate)
 add_subdirectory(subprojects/glm)
 
-set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
+
+if (WITH_PYTHON)
+  add_definitions(-DWITH_PYTHON)
+  find_package(Python3 COMPONENTS Development)
+endif()
+# set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
 find_package(Torch REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 message(STATUS "Torch found: ${TORCH_LIBRARIES}")
-
-
-set(CMAKE_PREFIX_PATH "../libtorch/share/cmake/Torch")
+# set(CMAKE_PREFIX_PATH "../libtorch/share/cmake/Torch")
 add_subdirectory(subprojects/pytorch_scatter)
 
 
