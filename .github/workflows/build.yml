@@ -53,7 +53,7 @@ jobs:
           pip install numpy
           pip install torch==${{ matrix.torch-version }} --extra-index-url https://download.pytorch.org/whl/${{ matrix.cuda-version }}
           python -c "import torch; print('PyTorch:', torch.__version__); print('CUDA:', torch.version.cuda); print('Path:', torch.__path__[0])"
-          torch_path=$(python -c "import torch; print(torch.__path__[0])")
+          torch_path=$(python -c "import torch; print(torch.__path__[0] + '/share/cmake/Torch/')")
           echo "TORCH_PATH=$torch_path" >> $GITHUB_ENV
 
       - name: install GL and x11 for Linux
