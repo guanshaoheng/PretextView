@@ -128,7 +128,6 @@ else()
 endif()
 target_link_libraries(
     ${target_name} PRIVATE 
-    glfw 
     libdeflate_static 
     ${TORCH_LIBRARIES} 
     aisort 
@@ -137,6 +136,7 @@ target_link_libraries(
     utilsPretextView 
     copy_texture 
     imgui 
+    glfw 
     # ${OPENBLAS_LIB} # which is used before
 )   #  Eigen3::Eigen
 
