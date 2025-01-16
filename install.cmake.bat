@@ -2,8 +2,8 @@
 
 
 REM Expecting the Torch path as the first argument
-set "cmake_prefix_path_tmp=%~1"
-echo cmake_prefix_path_tmp received: %cmake_prefix_path_tmp%
+set "cmake_prefix_path_tmp=subprojects/libtorch/share/cmake"
+echo cmake_prefix_path_tmp: %cmake_prefix_path_tmp%
 REM ... use %TORCH_PATH% as needed ...
 
 
@@ -16,51 +16,51 @@ REM ========= pull git repo =========
 git submodule update --init --recursive
 
 
-@REM REM ========= libtorch =========
-@REM set "LIBTORCH_URL=https://download.pytorch.org/libtorch/cpu/libtorch-win-shared-with-deps-2.5.1%%2Bcpu.zip"
-@REM set "libtorch_zip_file=libtorch.zip"
-@REM set "DEST_DIR=subprojects"
+REM ========= libtorch =========
+set "LIBTORCH_URL=https://download.pytorch.org/libtorch/cpu/libtorch-win-shared-with-deps-2.5.1%%2Bcpu.zip"
+set "libtorch_zip_file=libtorch.zip"
+set "DEST_DIR=subprojects"
 
-@REM REM Create the destination directory if it does not exist
-@REM if not exist "%DEST_DIR%" (
-@REM     mkdir "%DEST_DIR%"
-@REM )
+REM Create the destination directory if it does not exist
+if not exist "%DEST_DIR%" (
+    mkdir "%DEST_DIR%"
+)
 
-@REM REM Check if the libtorch folder exists in DEST_DIR
-@REM if not exist "%DEST_DIR%\libtorch" (
-@REM     REM Check if libtorch.zip exists
-@REM     if not exist "%libtorch_zip_file%" (
-@REM         echo libtorch.zip not found. Downloading...
-@REM         curl -L -o "%libtorch_zip_file%" "%LIBTORCH_URL%"
-@REM     ) else (
-@REM         echo %libtorch_zip_file% already exists. Skipping download.
-@REM     )
-@REM     echo Extracting libtorch.zip to %DEST_DIR%\libtorch...
-@REM     REM Extract using PowerShell Expand-Archive (force overwrite if needed)
-@REM     start /wait powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Force -Path '%libtorch_zip_file%' -DestinationPath '%DEST_DIR%'" >NUL 2>&1
-@REM     echo Extraction completed.
-@REM ) else (
-@REM     echo %DEST_DIR%\libtorch already exists. Skipping extraction.
-@REM )
+REM Check if the libtorch folder exists in DEST_DIR
+if not exist "%DEST_DIR%\libtorch" (
+    REM Check if libtorch.zip exists
+    if not exist "%libtorch_zip_file%" (
+        echo libtorch.zip not found. Downloading...
+        curl -L -o "%libtorch_zip_file%" "%LIBTORCH_URL%"
+    ) else (
+        echo %libtorch_zip_file% already exists. Skipping download.
+    )
+    echo Extracting libtorch.zip to %DEST_DIR%\libtorch...
+    REM Extract using PowerShell Expand-Archive (force overwrite if needed)
+    start /wait powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Force -Path '%libtorch_zip_file%' -DestinationPath '%DEST_DIR%'" >NUL 2>&1
+    echo Extraction completed.
+) else (
+    echo %DEST_DIR%\libtorch already exists. Skipping extraction.
+)
 
-@REM if exist "%DEST_DIR%\libtorch\share\cmake\Torch\TorchConfig.cmake" (
-@REM     echo libtorch successfully installed.
-@REM ) else (
-@REM     echo "[fatal error]: no %DEST_DIR%\libtorch\share\cmake\Torch\TorchConfig.cmake"
-@REM     goto :error
-@REM )
+if exist "%DEST_DIR%\libtorch\share\cmake\Torch\TorchConfig.cmake" (
+    echo libtorch successfully installed.
+) else (
+    echo "[fatal error]: no %DEST_DIR%\libtorch\share\cmake\Torch\TorchConfig.cmake"
+    goto :error
+)
 
-@REM if exist "%DEST_DIR%\libtorch\include\ATen\OpMathType.h" (
-@REM     echo "%DEST_DIR%\libtorch\include\ATen\OpMathType.h found"
-@REM ) else (
-@REM     echo "Fatal error: %DEST_DIR%\libtorch\include\ATen\OpMathType.h not found."
-@REM     goto :error
-@REM )
+if exist "%DEST_DIR%\libtorch\include\ATen\OpMathType.h" (
+    echo "%DEST_DIR%\libtorch\include\ATen\OpMathType.h found"
+) else (
+    echo "Fatal error: %DEST_DIR%\libtorch\include\ATen\OpMathType.h not found."
+    goto :error
+)
 
-@REM REM Clean up the zip file if it exists
-@REM if exist "%libtorch_zip_file%" (
-@REM     del "%libtorch_zip_file%"
-@REM )
+REM Clean up the zip file if it exists
+if exist "%libtorch_zip_file%" (
+    del "%libtorch_zip_file%"
+)
 
 REM ========= blas =========
 @REM REM Install OpenBLAS if its build directory does not exist
