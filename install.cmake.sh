@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# ========= TORCH_PATH =========
+TORCH_PATH=$1
+
 # ========= Architecture =========
 # Detect OS and Architecture
 OS=$(uname -s)
@@ -81,11 +84,11 @@ git submodule update --init --recursive
 # Finished: there are still problem for installation as the app can not find the LC_RPATH, need to fix this
 if [[ "$OS" == "Darwin" ]]; then
     rm -rf build_cmake  PretextViewAI.app PretextViewAI.dmg
-    cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_USE_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=ON -DCMAKE_INSTALL_PREFIX=PretextViewAI.app -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
+    cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_USE_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=ON -DCMAKE_INSTALL_PREFIX=PretextViewAI.app -DCMAKE_PREFIX_PATH=${TORCH_PATH} -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
     # bash ./mac_dmg_generate.sh
 elif [[ "$OS" == "Linux" ]]; then
     rm -rf build_cmake
-    cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=ON -DCMAKE_INSTALL_PREFIX=PretextViewAI.linux -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
+    cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=ON -DCMAKE_INSTALL_PREFIX=PretextViewAI.linux -DCMAKE_PREFIX_PATH=${TORCH_PATH} -S . -B build_cmake  && cmake --build build_cmake -j 8 && cmake --install build_cmake
 else
     echo "Unsupported platform: $OS"
     exit 1

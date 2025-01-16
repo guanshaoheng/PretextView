@@ -1,6 +1,12 @@
 @ECHO OFF
 
 
+REM Expecting the Torch path as the first argument
+set "TORCH_PATH=%~1"
+echo Torch path received: %TORCH_PATH%
+REM ... use %TORCH_PATH% as needed ...
+
+
 SET CC=clang-cl
 SET CXX=clang-cl
 SET WINDRES=rc
@@ -89,7 +95,7 @@ if exist build_cmake (
     echo "Removed existing build directory."
 )
 
-cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_USE_WAYLAND=OFF -DGLFW_BUILD_X11=OFF  -DWITH_PYTHON=ON -DCMAKE_INSTALL_PREFIX=PretextViewAI.windows -S . -B build_cmake
+cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_USE_WAYLAND=OFF -DGLFW_BUILD_X11=OFF  -DWITH_PYTHON=ON -DCMAKE_INSTALL_PREFIX=PretextViewAI.windows -DCMAKE_PREFIX_PATH=%TORCH_PATH% -S . -B build_cmake
 if errorlevel 1 (
     echo "CMake configuration failed."
     goto :error
