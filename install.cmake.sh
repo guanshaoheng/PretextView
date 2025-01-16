@@ -2,6 +2,12 @@
 
 # ========= TORCH_PATH =========
 TORCH_PATH=$1
+if [[ -z "$TORCH_PATH" ]]; then
+    echo "Usage: $0 <path-to-libtorch>"
+    exit 1
+else
+    echo "Using libtorch path: $TORCH_PATH"
+fi
 
 # ========= Architecture =========
 # Detect OS and Architecture
