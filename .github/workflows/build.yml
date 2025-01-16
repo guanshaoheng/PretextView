@@ -14,9 +14,9 @@ jobs:
         os: [ windows-latest, ubuntu-latest, macos-latest ]
         torch-version: [2.5.0]  # [2.3.0, 2.4.0, 2.5.0]
         cuda-version: ['cpu'] # 'cu118', 'cu121', 'cu124'
-        exclude:
-          - torch-version: 2.5.0
-            python-version: '3.8'
+        # exclude:
+        #   - torch-version: 2.5.0
+        #     python-version: '3.8'
 
     runs-on: ${{ matrix.os }}
     steps:
