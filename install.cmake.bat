@@ -91,7 +91,7 @@ else (
     echo "CMake configuration completed successfully."
 )
 
-cmake --build build_cmake -j 8
+cmake --build build_cmake -j 8 --config Release
 if errorlevel 1 (
     echo "Build failed."
     goto :error
@@ -100,7 +100,7 @@ else (
     echo "Build completed successfully."
 )
 
-cmake --install build_cmake
+cmake --install build_cmake --config Release
 if errorlevel 1 (
     echo "Install failed."
     goto :error
