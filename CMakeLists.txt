@@ -50,8 +50,14 @@ include_directories(
 )
 
 add_subdirectory(subprojects/glfw)
-add_subdirectory(subprojects/libdeflate)
 add_subdirectory(subprojects/glm)
+
+find_library(lib_deflate_static deflate PATHS subprojects/libdeflate/build)
+if(NOT lib_deflate_static)
+    message(FATAL_ERROR "lib_deflate_static not found")
+else()
+    message(STATUS "lib_deflate_static found: ${lib_deflate_static}")
+endif()
 
 
 # if (WITH_PYTHON)
@@ -131,7 +137,7 @@ else()
 endif()
 target_link_libraries(
     ${target_name} PRIVATE 
-    libdeflate_static 
+    ${lib_deflate_static} 
     ${TORCH_LIBRARIES} 
     aisort 
     glm 

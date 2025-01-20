@@ -16,6 +16,17 @@ REM ========= pull git repo =========
 git submodule update --init --recursive
 
 
+REM ========= deflate =========
+cd subprojects\libdeflate
+cmake -DCMAKE_BUILD_TYPE=Release -S . -B build && cmake --build build --target libdeflate_static
+if errorlevel 1 (
+    echo "CMake delfate failed."
+    goto :error
+) else (
+    echo "CMake delfate completed successfully."
+)
+cd ..\..\
+
 REM ========= libtorch =========
 set "LIBTORCH_URL=https://download.pytorch.org/libtorch/cpu/libtorch-win-shared-with-deps-2.5.1%%2Bcpu.zip"
 set "libtorch_zip_file=libtorch.zip"
@@ -87,7 +98,7 @@ if exist app (
     echo "Removed existing app directory."
 )
 
-cmake -DCMAKE_BUILD_TYPE=Release -DLIBDEFLATE_BUILD_PROGRAMS=OFF  -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=app -DCMAKE_PREFIX_PATH=%cmake_prefix_path_tmp% -S . -B build_cmake
+cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=app -DCMAKE_PREFIX_PATH=%cmake_prefix_path_tmp% -S . -B build_cmake
 if errorlevel 1 (
     echo "CMake configuration failed."
     goto :error

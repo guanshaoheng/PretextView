@@ -74,6 +74,12 @@ fi
 # cd ico_design && cd ico_design &&  iconutil -c icns icon_v2.iconset && cd ..
 
 
+# ========= libdeflate =========
+cd subprojects/libdeflate
+cmake -DCMAKE_BUILD_TYPE=Release -S . -B build && cmake --build build --target libdeflate_static
+cd ../../
+
+
 # ========= CMake compile and install =========
 # Finished: there are still problem for installation as the app can not find the LC_RPATH, need to fix this
 build_dir="build_cmake"
@@ -85,14 +91,9 @@ else
     exit 1
 fi
 
-cmake -DCMAKE_BUILD_TYPE=Release  -DLIBDEFLATE_BUILD_PROGRAMS=OFF -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=${install_path} -DCMAKE_PREFIX_PATH=${cmake_prefix_path_tmp} -S . -B ${build_dir}  # && cmake --build ${build_dir} --config Release && cmake --install ${build_dir}
+cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=${install_path} -DCMAKE_PREFIX_PATH=${cmake_prefix_path_tmp} -S . -B ${build_dir}  # && cmake --build ${build_dir} --config Release && cmake --install ${build_dir}
 
 cmake --build build_cmake --target package
-
-
-# if [[ "$OS" == "Darwin" ]]; then
-#     bash ./mac_dmg_generate.sh
-# fi
 
 
 # PretextViewAI.app/Contents/MacOS/PretextViewAI /Users/sg35/auto-curation/log/learning_notes/hic_curation/13 idLinTess1_1\ auto-curation/aPelFus1_1.pretext
