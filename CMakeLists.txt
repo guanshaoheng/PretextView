@@ -229,15 +229,15 @@ elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux") # WIN32, UNIX and NOT APPLE
     install(FILES ${aimodel_files} DESTINATION "${CMAKE_INSTALL_PREFIX}/ai_model")
 else () # windows
     message(STATUS "[Cmake Install]: Windows")
-    set_target_properties(
-        ${target_name} 
-        PROPERTIES 
-        INSTALL_RPATH "@executable_path/lib")
+    # set_target_properties(
+    #     ${target_name} 
+    #     PROPERTIES 
+    #     INSTALL_RPATH "@executable_path/lib")
     install(
         TARGETS ${target_name}
         RUNTIME DESTINATION .
         COMPONENT Runtime)
-    install(FILES ${torch_copy_libs} DESTINATION "lib") # libtorch
+    install(FILES ${torch_copy_libs} DESTINATION .) # libtorch
     install(FILES ${SHADER_FILES}    DESTINATION "src/shaderSource")
     install(FILES ${aimodel_files}   DESTINATION "ai_model")
 endif()
