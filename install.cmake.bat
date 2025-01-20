@@ -123,7 +123,7 @@ if errorlevel 1 (
 @REM )
 @REM echo Build and installation completed successfully.
 
-cmake --build build_cmake --target package
+cmake --build build_cmake --target package --config Release
 if errorlevel 1 (
     echo "Package failed."
     goto :error

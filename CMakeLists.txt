@@ -215,23 +215,28 @@ if(APPLE)
     install(FILES ${SHADER_FILES}
             DESTINATION "${target_name}.app/Contents/Resources/src/shaderSource" )
 
-else() # WIN32, UNIX and NOT APPLE
+elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux") # WIN32, UNIX and NOT APPLE
     set_target_properties(
             ${target_name} 
             PROPERTIES 
             INSTALL_RPATH "@executable_path/lib")
-    if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
-        set(app_dir "${CMAKE_INSTALL_PREFIX}/${target_name}.linux")
-    else()
-        set(app_dir "${CMAKE_INSTALL_PREFIX}/${target_name}.windows")
-    endif()
-    install(
-        TARGETS ${target_name} 
-        RUNTIME DESTINATION "${app_dir}"
+    install(TARGETS ${target_name}
+        RUNTIME DESTINATION .
         COMPONENT Runtime)
-    install(FILES ${torch_copy_libs} DESTINATION "${app_dir}/lib") # libtorch
-    install(FILES ${SHADER_FILES} DESTINATION "${app_dir}/src/shaderSource")
-    install(FILES ${aimodel_files} DESTINATION "${app_dir}/ai_model")
+    install(FILES ${torch_copy_libs} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib") # libtorch
+    install(FILES ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource")
+    install(FILES ${aimodel_files} DESTINATION "${CMAKE_INSTALL_PREFIX}/ai_model")
+else () # windows
+    set_target_properties(
+        ${target_name} 
+        PROPERTIES 
+        INSTALL_RPATH "@executable_path/lib")
+    install(TARGETS ${target_name}
+        RUNTIME DESTINATION .
+        COMPONENT Runtime)
+    install(FILES ${torch_copy_libs} DESTINATION "lib") # libtorch
+    install(FILES ${SHADER_FILES} DESTINATION "src/shaderSource")
+    install(FILES ${aimodel_files} DESTINATION "ai_model")
 endif()
 
 
