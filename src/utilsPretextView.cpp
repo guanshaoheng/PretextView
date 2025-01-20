@@ -230,7 +230,7 @@ std::string getResourcesPath() {
         size_t pos = path.find_last_of('/');
         if (pos != std::string::npos) {
             std::string dir = path.substr(0, pos);
-            return dir + "/resources";
+            return dir ;
         }
     }
     return "";
@@ -245,7 +245,7 @@ std::string getResourcesPath() {
     size_t pos = path.find_last_of("\\/");
     if (pos != std::string::npos) {
         std::string dir = path.substr(0, pos);
-        return dir + "\\resources";
+        return dir ;
     }
     return "";
 }

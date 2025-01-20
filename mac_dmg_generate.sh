@@ -8,5 +8,5 @@ create-dmg \
     --window-size 800 400 \
     --icon-size 100 \
     --app-drop-link 600 185 \
-    PretextViewAI.dmg \
-    PretextViewAI.app 
+    app/PretextViewAI.dmg \
+    app/PretextViewAI.app 

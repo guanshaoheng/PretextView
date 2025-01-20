@@ -82,7 +82,12 @@ if exist build_cmake (
     echo "Removed existing build directory."
 )
 
-cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=PretextViewAI.windows -DCMAKE_PREFIX_PATH=%cmake_prefix_path_tmp% -S . -B build_cmake
+if exist app (
+    rmdir /s /q app
+    echo "Removed existing app directory."
+)
+
+cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=app -DCMAKE_PREFIX_PATH=%cmake_prefix_path_tmp% -S . -B build_cmake
 if errorlevel 1 (
     echo "CMake configuration failed."
     goto :error
@@ -106,6 +111,15 @@ if errorlevel 1 (
     echo "Install completed successfully."
 )
 echo Build and installation completed successfully.
+
+cmake --build build_cmake --target package
+if errorlevel 1 (
+    echo "Package failed."
+    goto :error
+) else (
+    echo "Package completed successfully."
+)
+echo Finished successfully.
 goto :eof
 
 :error

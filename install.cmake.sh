@@ -68,16 +68,6 @@ if [ -f "${libtorch_zip_file}" ]; then
 fi
 
 
-# ========= blas =========
-# Install OpenBLAS
-# if [[ ! -d "subprojects/OpenBLAS/build" ]]; then
-#     cd subprojects/OpenBLAS
-#     cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DNOFORTRAN=1 
-#     cmake --build build --config Release -j 8
-#     cd ../..
-# fi
-
-
 # ========= Icon =========
 ## generate icon for PretextViewAI
 ## which is already finished and pushed to the repo 
@@ -86,18 +76,19 @@ fi
 
 # ========= CMake compile and install =========
 # Finished: there are still problem for installation as the app can not find the LC_RPATH, need to fix this
-if [[ "$OS" == "Darwin" ]]; then
-    install_path=PretextViewAI.app 
-    rm -rf build_cmake ${install_path} PretextViewAI.dmg
-elif [[ "$OS" == "Linux" ]]; then
-    install_path=PretextViewAI.linux 
-    rm -rf build_cmake ${install_path}
+build_dir="build_cmake"
+install_path="app"
+if [[ "$OS" == "Darwin" ||  "$OS" == "Linux" ]]; then
+    rm -rf ${build_dir} ${install_path} 
 else
     echo "Unsupported platform: $OS"
     exit 1
 fi
 
-cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=${install_path} -DCMAKE_PREFIX_PATH=${cmake_prefix_path_tmp} -S . -B build_cmake  && cmake --build build_cmake --config Release && cmake --install build_cmake
+cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=${install_path} -DCMAKE_PREFIX_PATH=${cmake_prefix_path_tmp} -S . -B ${build_dir}  && cmake --build ${build_dir} --config Release && cmake --install ${build_dir}
+
+cmake --build build --target package
+
 
 # if [[ "$OS" == "Darwin" ]]; then
 #     bash ./mac_dmg_generate.sh
