@@ -197,6 +197,7 @@ file(GLOB torch_copy_libs "${TORCH_INSTALL_PREFIX}/lib/*")
 # CMAKE_INSTALL_PREFIX = PretextView.app
 if(APPLE)
     # set the shared/dynamic library path for the installed binary
+    message(STATUS "[Cmake Install]: Mac")
     set_target_properties(
         ${target_name} 
         PROPERTIES 
@@ -214,8 +215,8 @@ if(APPLE)
             DESTINATION "${target_name}.app/Contents/Resources/ai_model" )
     install(FILES ${SHADER_FILES}
             DESTINATION "${target_name}.app/Contents/Resources/src/shaderSource" )
-
 elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux") # WIN32, UNIX and NOT APPLE
+    message(STATUS "[Cmake Install]: Linux")
     set_target_properties(
             ${target_name} 
             PROPERTIES 
@@ -227,16 +228,18 @@ elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux") # WIN32, UNIX and NOT APPLE
     install(FILES ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource")
     install(FILES ${aimodel_files} DESTINATION "${CMAKE_INSTALL_PREFIX}/ai_model")
 else () # windows
+    message(STATUS "[Cmake Install]: Windows")
     set_target_properties(
         ${target_name} 
         PROPERTIES 
         INSTALL_RPATH "@executable_path/lib")
-    install(TARGETS ${target_name}
+    install(
+        TARGETS ${target_name}
         RUNTIME DESTINATION .
         COMPONENT Runtime)
     install(FILES ${torch_copy_libs} DESTINATION "lib") # libtorch
-    install(FILES ${SHADER_FILES} DESTINATION "src/shaderSource")
-    install(FILES ${aimodel_files} DESTINATION "ai_model")
+    install(FILES ${SHADER_FILES}    DESTINATION "src/shaderSource")
+    install(FILES ${aimodel_files}   DESTINATION "ai_model")
 endif()
 
 
@@ -246,16 +249,17 @@ set(CPACK_PACKAGE_NAME ${target_name})
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/guanshaoheng/PretextView")
-set(CPACK_PACKAGE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/icon.icns)
 set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENCE.txt")
 
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Darwin") # macOS
-    message(STATUS "[CPack]: Generate on MacOS")
+    message(STATUS "[CPack]: Generate on Mac")
     set(CPACK_GENERATOR "DragNDrop")
     set(CPACK_DMG_VOLUME_NAME "${target_name} Installer")
     set(CPACK_DMG_FORMAT "UDZO") 
+    set(CPACK_PACKAGE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/icon.icns)
 elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux") # Linux (Ubuntu)
+    message(STATUS "[CPack]: Generate on Linux")
     set(CPACK_GENERATOR "DEB")
     set(CPACK_DEBIAN_HARDLINKS OFF)
     set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Shaoheng Guan") 
@@ -263,10 +267,11 @@ elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux") # Linux (Ubuntu)
     set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6 (>= 2.29)")
     set(CPACK_DEBIAN_PACKAGE_SECTION "utils") 
 elseif(WIN32) # Windows
+    message(STATUS "[CPack]: Generate on Windows")
     set(CPACK_GENERATOR "NSIS")
     set(CPACK_NSIS_DISPLAY_NAME "${target_name}")
     set(CPACK_NSIS_PACKAGE_NAME "${target_name} Installer")
-    set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/icon.icns") 
+    # set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/icon.icns") 
     set(CPACK_NSIS_HELP_LINK "https://github.com/guanshaoheng/PretextView") 
     set(CPACK_NSIS_URL_INFO_ABOUT "https://github.com/guanshaoheng/PretextView") 
 endif()
