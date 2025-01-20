@@ -39,4 +39,14 @@ jobs:
           chmod +x ./install.cmake.sh
           ./install.cmake.sh 
 
-
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: "${{ matrix.os }}-packages"
+          path: |
+            build_cmake/*.deb
+            build_cmake/*.dmg
+            build_cmake/*.exe
+            build_cmake/*.zip
+            build_cmake/*.msi
+  
