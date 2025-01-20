@@ -76,7 +76,7 @@ fi
 
 # ========= libdeflate =========
 cd subprojects/libdeflate
-cmake -DCMAKE_BUILD_TYPE=Release -S . -B build && cmake --build build --target libdeflate_static
+cmake -DCMAKE_BUILD_TYPE=Release -S . -B build && cmake --build build --target libdeflate_static --config Release
 cd ../../
 
 

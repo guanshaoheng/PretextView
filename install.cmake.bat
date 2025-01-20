@@ -18,7 +18,7 @@ git submodule update --init --recursive
 
 REM ========= deflate =========
 cd subprojects\libdeflate
-cmake -DCMAKE_BUILD_TYPE=Release -S . -B build && cmake --build build --target libdeflate_static
+cmake -DCMAKE_BUILD_TYPE=Release -S . -B build && cmake --build build --config Release --target libdeflate_static 
 if errorlevel 1 (
     echo "CMake delfate failed."
     goto :error

@@ -52,7 +52,8 @@ include_directories(
 add_subdirectory(subprojects/glfw)
 add_subdirectory(subprojects/glm)
 
-find_library(lib_deflate_static deflate PATHS subprojects/libdeflate/build)
+
+find_library(lib_deflate_static deflate PATHS subprojects/libdeflate/build/debug subprojects/libdeflate/build/Release subprojects/libdeflate/build/release)
 if(NOT lib_deflate_static)
     message(FATAL_ERROR "lib_deflate_static not found")
 else()
