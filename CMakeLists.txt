@@ -213,7 +213,8 @@ else() # WIN32, UNIX and NOT APPLE
     endif()
     install(
         TARGETS ${target_name} 
-        RUNTIME DESTINATION "${app_dir}")
+        RUNTIME DESTINATION "${app_dir}"
+        COMPONENT Runtime)
     install(FILES ${torch_copy_libs} DESTINATION "${app_dir}/lib") # libtorch
     install(FILES ${SHADER_FILES} DESTINATION "${app_dir}/src/shaderSource")
     install(FILES ${aimodel_files} DESTINATION "${app_dir}/ai_model")
@@ -237,11 +238,11 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Darwin") # macOS
     set(CPACK_DMG_FORMAT "UDZO") 
 elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux") # Linux (Ubuntu)
     set(CPACK_GENERATOR "DEB")
+    set(CPACK_DEBIAN_HARDLINKS OFF)
     set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Shaoheng Guan") 
     set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "This is ${target_name}, HiC map viewer, editor with AI-powered automatic curation.")
     set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6 (>= 2.29)")
     set(CPACK_DEBIAN_PACKAGE_SECTION "utils") 
-    set(CPACK_DEBIAN_HARDLINKS OFF)
 elseif(WIN32) # Windows
     set(CPACK_GENERATOR "NSIS")
     set(CPACK_NSIS_DISPLAY_NAME "${target_name}")

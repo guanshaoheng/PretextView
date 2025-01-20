@@ -95,22 +95,22 @@ if errorlevel 1 (
     echo "CMake configuration completed successfully."
 )
 
-cmake --build build_cmake --config Release
-if errorlevel 1 (
-    echo "Build failed."
-    goto :error
-) else (
-    echo "Build completed successfully."
-)
+@REM cmake --build build_cmake --config Release
+@REM if errorlevel 1 (
+@REM     echo "Build failed."
+@REM     goto :error
+@REM ) else (
+@REM     echo "Build completed successfully."
+@REM )
 
-cmake --install build_cmake --config Release
-if errorlevel 1 (
-    echo "Install failed."
-    goto :error
-) else (
-    echo "Install completed successfully."
-)
-echo Build and installation completed successfully.
+@REM cmake --install build_cmake --config Release
+@REM if errorlevel 1 (
+@REM     echo "Install failed."
+@REM     goto :error
+@REM ) else (
+@REM     echo "Install completed successfully."
+@REM )
+@REM echo Build and installation completed successfully.
 
 cmake --build build_cmake --target package
 if errorlevel 1 (
