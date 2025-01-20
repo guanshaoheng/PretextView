@@ -85,7 +85,7 @@ else
     exit 1
 fi
 
-cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=${install_path} -DCMAKE_PREFIX_PATH=${cmake_prefix_path_tmp} -S . -B ${build_dir}  # && cmake --build ${build_dir} --config Release && cmake --install ${build_dir}
+cmake -DCMAKE_BUILD_TYPE=Release  -DLIBDEFLATE_BUILD_PROGRAMS=OFF -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=${install_path} -DCMAKE_PREFIX_PATH=${cmake_prefix_path_tmp} -S . -B ${build_dir}  # && cmake --build ${build_dir} --config Release && cmake --install ${build_dir}
 
 cmake --build build_cmake --target package
 
