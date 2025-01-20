@@ -647,6 +647,15 @@ global_variable
 u32
 Loading = 0;
 
+
+global_variable
+u32
+Yahs_sorting = 0;
+
+global_variable s32 ai_sort_button = 0; 
+global_variable s32 yahs_sort_button = 0;
+
+
 global_function
 s32
 RearrangeMap(u32 pixelFrom, u32 pixelTo, s32 delta, u08 snap = 0, bool update_contigs_flag=true);
@@ -1610,7 +1619,7 @@ global_function
 void
 MouseMove(GLFWwindow* window, f64 x, f64 y)
 {
-    if (Loading)
+    if (Loading || Yahs_sorting)
     {
         return;
     }
@@ -1923,7 +1932,7 @@ Mouse(GLFWwindow* window, s32 button, s32 action, s32 mods)
     s32 primaryMouse = Mouse_Invert ? GLFW_MOUSE_BUTTON_RIGHT : GLFW_MOUSE_BUTTON_LEFT;
     s32 secondaryMouse = Mouse_Invert ? GLFW_MOUSE_BUTTON_LEFT : GLFW_MOUSE_BUTTON_RIGHT;    
     
-    if (Loading)
+    if (Loading || Yahs_sorting)
     {
         return;
     }
@@ -2043,7 +2052,7 @@ global_function
 void
 Scroll(GLFWwindow* window, f64 x, f64 y)
 {
-    if (Loading)
+    if (Loading || Yahs_sorting)
     {
         return;
     }
@@ -2697,7 +2706,7 @@ Render() {
     }
 
     // Text / UI Rendering
-    if (Contig_Name_Labels->on || Scale_Bars->on || Tool_Tip->on || UI_On || Loading || Edit_Mode || Waypoint_Edit_Mode || Waypoints_Always_Visible || Scaff_Edit_Mode || Scaffs_Always_Visible || MetaData_Edit_Mode || MetaData_Always_Visible || graphNamesOn)
+    if (Contig_Name_Labels->on || Scale_Bars->on || Tool_Tip->on || UI_On || Loading || Yahs_sorting || Edit_Mode || Waypoint_Edit_Mode || Waypoints_Always_Visible || Scaff_Edit_Mode || Scaffs_Always_Visible || MetaData_Edit_Mode || MetaData_Always_Visible || graphNamesOn)
     {
         f32 textNormalMat[16];
         f32 textRotMat[16];
@@ -4150,6 +4159,25 @@ Render() {
 
             ChangeSize((s32)width, (s32)height);
         }
+
+
+        if (Yahs_sorting)
+        {
+            u32 colour = glfonsRGBA(Theme_Colour.r, Theme_Colour.g, Theme_Colour.b, Theme_Colour.a);
+
+            fonsClearState(FontStash_Context);
+            fonsSetSize(FontStash_Context, 64.0f * Screen_Scale.x);
+            fonsSetAlign(FontStash_Context, FONS_ALIGN_CENTER | FONS_ALIGN_MIDDLE);
+            fonsSetFont(FontStash_Context, Font_Bold);
+            fonsSetColor(FontStash_Context, colour);
+
+            glUseProgram(UI_Shader->shaderProgram);
+            glUniformMatrix4fv(Flat_Shader->matLocation, 1, GL_FALSE, textNormalMat);
+            glViewport(0, 0, (s32)width, (s32)height);
+            fonsDrawText(FontStash_Context, width * 0.5f, height * 0.5f, "YaHS Sorting...", 0);
+
+            ChangeSize((s32)width, (s32)height);
+        }
     }
 }
 
@@ -4396,7 +4424,7 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
         return(fileErr);
     }
     
-    FenceIn(File_Loaded = 0);  // 在线程保护的情况下更新全局变量 File_Loaded
+    FenceIn(File_Loaded = 0); 
 
     static u32 reload = 0;
     
@@ -6143,6 +6171,80 @@ void AutoCurationFromFragsOrder(
 }
 
 
+global_function
+void
+Sort_yahs(char* currFileName)
+{   
+    if (!currFileName || !Yahs_sorting) return;
+    
+    fprintf(stdout, "========================\n");
+    fprintf(stdout, "[YaHS Sort] start...\n");
+    fprintf(stdout, "[YaHS Sort] smallest_frag_size_in_pixel: %d\n", show_auto_curation_button.smallest_frag_size_in_pixel);
+    fprintf(stdout, "[YaHS Sort] link_score_threshold:        %.3f\n", show_auto_curation_button.link_score_threshold);
+    fprintf(stdout, "[YaHS Sort] Sort mode:                   %s\n", show_auto_curation_button.get_sort_mode_name().c_str());
+    // compress the HiC data
+    auto texture_array_4_ai = TexturesArray4AI(Number_of_Textures_1D, Texture_Resolution, (char*)currFileName, Contigs);
+
+    // prepare before reading textures
+    f32 original_control_points[3];
+    prepare_before_copy(original_control_points);
+    texture_array_4_ai.copy_buffer_to_textures_dynamic(Contact_Matrix, false);
+    restore_settings_after_copy(original_control_points);
+    texture_array_4_ai.cal_compressed_hic(
+        Contigs, 
+        Extensions, 
+        false, 
+        false);
+    FragsOrder frags_order(texture_array_4_ai.get_num_frags()); // intilize the frags_order with the number of fragments including the filtered out ones
+    // exclude the fragments with first two tags during the auto curationme
+    std::vector<std::string> exclude_tags = {"haplotig", "unloc"};
+    std::vector<s32> exclude_frag_idx = get_exclude_metaData_idx(exclude_tags);
+    LikelihoodTable likelihood_table(
+        texture_array_4_ai.get_frags(), 
+        texture_array_4_ai.get_compressed_hic(), 
+        (f32)show_auto_curation_button.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), 
+        exclude_frag_idx);
+    // use the compressed_hic to calculate the frags_order directly
+    if (show_auto_curation_button.sort_mode == 0)
+    {
+        ai_model->sort_according_likelihood_unionFind( 
+            likelihood_table, 
+            frags_order, 
+            show_auto_curation_button.link_score_threshold, 
+            texture_array_4_ai.get_frags());
+    }
+    else if (show_auto_curation_button.sort_mode == 1)
+    {
+        ai_model->sort_according_likelihood_unionFind_doFuse( 
+            likelihood_table, 
+            frags_order, 
+            show_auto_curation_button.link_score_threshold, 
+            texture_array_4_ai.get_frags(), true, true);
+    }
+    else if (show_auto_curation_button.sort_mode == 2)
+    {
+        ai_model->sort_according_likelihood_unionFind_doFuse( 
+            likelihood_table, 
+            frags_order, 
+            show_auto_curation_button.link_score_threshold, 
+            texture_array_4_ai.get_frags(), false, true);
+    }
+    else 
+    {
+        fprintf(stderr, "[YaHS Sort] Error: Unknown sort mode (%d)\n", show_auto_curation_button.sort_mode);
+        assert(0);
+    }
+    AutoCurationFromFragsOrder(
+        &frags_order, 
+        Contigs,
+        Map_State);
+    std::cout << std::endl;
+    Yahs_sorting = 0;
+
+    return;
+}
+
+
 // set the vertex array for the contact matrix
 // copy_flag: if true, show full texture for copy the texture to array on cpu
 global_function
@@ -6532,7 +6634,7 @@ global_function
 void
 KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
 {
-    if (!Loading && (action != GLFW_RELEASE || key == GLFW_KEY_SPACE || key == GLFW_KEY_A || key == GLFW_KEY_LEFT_SHIFT))
+    if (!Loading && !Yahs_sorting && (action != GLFW_RELEASE || key == GLFW_KEY_SPACE || key == GLFW_KEY_A || key == GLFW_KEY_LEFT_SHIFT))
     {
         if (UI_On)
         {
@@ -10091,6 +10193,14 @@ MainArgs {
             Redisplay = 1;
         }
 
+        if (Yahs_sorting)
+        {
+            if (currFileName) SaveState(headerHash);
+            Sort_yahs((char*)currFileName);
+            Yahs_sorting = 0;
+            Redisplay = 1;
+        }
+
         if (UI_On) 
         {
             glfwSetCursor(window, arrowCursor);
@@ -10193,16 +10303,15 @@ MainArgs {
                     showUserProfileScreen = nk_button_label(NK_Context, "User Profile");
                     showAboutScreen = nk_button_label(NK_Context, "About");
 
-
                     // AI & YaHS sort button 
                     struct nk_color sort_button_normal = nk_rgb(153, 50, 204); 
                     struct nk_color sort_button_hover  = nk_rgb(186, 85, 211); 
                     struct nk_color sort_button_active = nk_rgb(128, 0, 128);  
                     push_nk_style(NK_Context, sort_button_normal, sort_button_hover, sort_button_active);
                     nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 3);
-                    s32 ai_sort_button = nk_button_label(NK_Context, "AI Sort");
+                    ai_sort_button = nk_button_label(NK_Context, "AI Sort");
                     bounds = nk_widget_bounds(NK_Context);
-                    s32 yahs_sort_button = nk_button_label(NK_Context, "YaHS Sort");
+                    yahs_sort_button = nk_button_label(NK_Context, "YaHS Sort");
                     // AI sort button
                     {
                         if (ai_sort_button && currFileName)
@@ -10245,71 +10354,7 @@ MainArgs {
                     }
                     // YaHS sort button
                     {   
-                        if (yahs_sort_button && currFileName)
-                        {   
-                            fprintf(stdout, "========================\n");
-                            fprintf(stdout, "[YaHS Sort] start...\n");
-                            fprintf(stdout, "[YaHS Sort] smallest_frag_size_in_pixel: %d\n", show_auto_curation_button.smallest_frag_size_in_pixel);
-                            fprintf(stdout, "[YaHS Sort] link_score_threshold:        %.3f\n", show_auto_curation_button.link_score_threshold);
-                            fprintf(stdout, "[YaHS Sort] Sort mode:                   %s\n", show_auto_curation_button.get_sort_mode_name().c_str());
-                            // compress the HiC data
-                            auto texture_array_4_ai = TexturesArray4AI(Number_of_Textures_1D, Texture_Resolution, (char*)currFileName, Contigs);
-
-                            // prepare before reading textures
-                            f32 original_control_points[3];
-                            prepare_before_copy(original_control_points);
-                            texture_array_4_ai.copy_buffer_to_textures_dynamic(Contact_Matrix, false);
-                            restore_settings_after_copy(original_control_points);
-                            texture_array_4_ai.cal_compressed_hic(
-                                Contigs, 
-                                Extensions, 
-                                false, 
-                                false);
-                            FragsOrder frags_order(texture_array_4_ai.get_num_frags()); // intilize the frags_order with the number of fragments including the filtered out ones
-                            // exclude the fragments with first two tags during the auto curationme
-                            std::vector<std::string> exclude_tags = {"haplotig", "unloc"};
-                            std::vector<s32> exclude_frag_idx = get_exclude_metaData_idx(exclude_tags);
-                            LikelihoodTable likelihood_table(
-                                texture_array_4_ai.get_frags(), 
-                                texture_array_4_ai.get_compressed_hic(), 
-                                (f32)show_auto_curation_button.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), 
-                                exclude_frag_idx);
-                            // use the compressed_hic to calculate the frags_order directly
-                            if (show_auto_curation_button.sort_mode == 0)
-                            {
-                                ai_model->sort_according_likelihood_unionFind( 
-                                    likelihood_table, 
-                                    frags_order, 
-                                    show_auto_curation_button.link_score_threshold, 
-                                    texture_array_4_ai.get_frags());
-                            }
-                            else if (show_auto_curation_button.sort_mode == 1)
-                            {
-                                ai_model->sort_according_likelihood_unionFind_doFuse( 
-                                    likelihood_table, 
-                                    frags_order, 
-                                    show_auto_curation_button.link_score_threshold, 
-                                    texture_array_4_ai.get_frags(), true, true);
-                            }
-                            else if (show_auto_curation_button.sort_mode == 2)
-                            {
-                                ai_model->sort_according_likelihood_unionFind_doFuse( 
-                                    likelihood_table, 
-                                    frags_order, 
-                                    show_auto_curation_button.link_score_threshold, 
-                                    texture_array_4_ai.get_frags(), false, true);
-                            }
-                            else 
-                            {
-                                fprintf(stderr, "[YaHS Sort] Error: Unknown sort mode (%d)\n", show_auto_curation_button.sort_mode);
-                                assert(0);
-                            }
-                            AutoCurationFromFragsOrder(
-                                &frags_order, 
-                                Contigs,
-                                Map_State);
-                            std::cout << std::endl;
-                        }  
+                        if (yahs_sort_button) Yahs_sorting = 1;
                         // window to set the parameters for sort
                         if (nk_contextual_begin(NK_Context, 0, nk_vec2(Screen_Scale.x * 480, Screen_Scale.y * 400), bounds))
                         {
@@ -11250,7 +11295,7 @@ MainArgs {
                         u32 window_height = 250;
                         u32 Window_Width = (u32)((f32)window_height * 1.618);
                         if (nk_begin(NK_Context, "Clear Cache", nk_rect(Screen_Scale.x * 600, Screen_Scale.y * 100, Screen_Scale.x * Window_Width, Screen_Scale.y * window_height),
-                                NK_WINDOW_BORDER|NK_WINDOW_NO_SCROLLBAR|NK_WINDOW_MOVABLE|NK_WINDOW_TITLE))
+                                NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_TITLE))
                         {
                             nk_layout_row_dynamic(NK_Context, 80, 1);
                             nk_label(NK_Context, "Dangerous!!!", NK_TEXT_CENTERED);

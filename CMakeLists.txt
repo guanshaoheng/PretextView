@@ -190,8 +190,16 @@ endforeach()
 file(GLOB SHADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/shaderSource/*.shader")
 file(GLOB aimodel_files "${CMAKE_CURRENT_SOURCE_DIR}/ai_model/*")
 file(GLOB torch_copy_libs "${TORCH_INSTALL_PREFIX}/lib/*")
-# file(COPY ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource")
-# file(COPY ${aimodel_files} DESTINATION "${CMAKE_INSTALL_PREFIX}/ai_model")
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    if (APPLE)
+        file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist" DESTINATION "${target_name}.app/Contents")
+        file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/icon.icns" DESTINATION "${target_name}.app/Contents/Resources" )
+        file(COPY ${SHADER_FILES} DESTINATION "${target_name}.app/Contents/Resources/src/shaderSource")
+        file(COPY ${aimodel_files} DESTINATION "${target_name}.app/Contents/Resources/ai_model")
+    else()
+        message(FATAL_ERROR "Debug is current only implemented on Mac.")
+    endif()
+endif()
 
 # Define installation paths for macOS
 # CMAKE_INSTALL_PREFIX = PretextView.app

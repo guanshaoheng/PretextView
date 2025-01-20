@@ -811,7 +811,7 @@ void AiModel::sort_according_likelihood_unionFind_doFuse(
     }
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<f64> elapsed_seconds = end_time-start_time;
-    fprintf(stdout, "Time elapsed for fusing: %.2fs\n", elapsed_seconds.count());
+    fprintf(stdout, "[Fusing]: consumed time %.2fs\n", elapsed_seconds.count());
 
     // sort the chromosomes according to the length
     if (frags)
