@@ -187,20 +187,6 @@ if(APPLE)
         ${target_name} 
         PROPERTIES 
         INSTALL_RPATH "@executable_path/../Frameworks")
-    # set(app_dir "${CMAKE_INSTALL_PREFIX}/${target_name}.app")
-    # set(contents_dir "${app_dir}/Contents")
-    # set(frameworks_dir "${contents_dir}/Frameworks")
-    # set(resources_dir "${contents_dir}/Resources")
-    # install(
-    #     TARGETS ${target_name} 
-    #     BUNDLE DESTINATION ${CMAKE_INSTALL_PREFIX} 
-    #     RUNTIME DESTINATION bin)
-    # install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/Info.plist DESTINATION "${contents_dir}")  # Install Info.plist
-    # install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/icon.icns DESTINATION "${resources_dir}")  # Install icon.icns
-    # install(FILES ${torch_copy_libs} DESTINATION "${frameworks_dir}") # libtorch
-    # install(FILES ${aimodel_files} DESTINATION "${resources_dir}/ai_model")
-    # install(FILES ${SHADER_FILES}  DESTINATION "${resources_dir}/src/shaderSource") # Install shader files to Resources
-
     install(TARGETS ${target_name}
             BUNDLE DESTINATION .
             COMPONENT Runtime)
@@ -255,6 +241,7 @@ elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux") # Linux (Ubuntu)
     set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "This is ${target_name}, HiC map viewer, editor with AI-powered automatic curation.")
     set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6 (>= 2.29)")
     set(CPACK_DEBIAN_PACKAGE_SECTION "utils") 
+    set(CPACK_DEBIAN_HARDLINKS OFF)
 elseif(WIN32) # Windows
     set(CPACK_GENERATOR "NSIS")
     set(CPACK_NSIS_DISPLAY_NAME "${target_name}")
