@@ -7082,11 +7082,7 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                     break;
 
                 case GLFW_KEY_Q:
-                    if (Edit_Mode && action == GLFW_PRESS)
-                    {
-                        UndoMapEdit();
-                    }
-                    if (Select_Sort_Area_Mode && action == GLFW_PRESS)
+                    if (Edit_Mode || Select_Sort_Area_Mode)
                     {
                         UndoMapEdit();
                     }
@@ -7182,7 +7178,7 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                     break;
 
                 case GLFW_KEY_W:
-                    if ((Edit_Mode || Select_Sort_Area_Mode) && action == GLFW_PRESS)
+                    if (Edit_Mode || Select_Sort_Area_Mode)
                     {
                         RedoMapEdit();
                     }
@@ -10615,7 +10611,11 @@ MainArgs {
                     }
                     // YaHS sort button
                     {   
-                        if (yahs_sort_button) Yahs_sorting = 1;
+                        if (yahs_sort_button) 
+                        {
+                            Yahs_sorting = 1;
+                            auto_curation_state.clear();
+                        }
                         // window to set the parameters for sort
                         if (nk_contextual_begin(NK_Context, 0, nk_vec2(Screen_Scale.x * 480, Screen_Scale.y * 400), bounds))
                         {
