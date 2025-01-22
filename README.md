@@ -49,12 +49,12 @@ Enter scaffolding mode with the 's' key.
 
 ## Select sort area model (`K`)
 
-In YaHS sort, it will defaultly run sort globally without sort area selected. Or it will only sort the selected area. 
+After click `YaHS sort` button in the main UI, it will defaultly run sort globally. If enter the the `select sort area mode`(by pressing `K`), it can sort only the selected area with pressing `Space` after selecting at least 3 contigs. 
 
 Enter the select sort area mode by pressing `K`.
 - `Left mouse click`: select / un-select area for sorting.
 - `S`: clear all the select area.
-- `Space`: YaHS sort the select area (NOTE: only work if select at least 3 fragments)
+- `Space`: call `YaHS sort` to sort the select area **(NOTE: only work if select at least 3 fragments)**.
 - `Q/W`: quit/redo edit (currently will change the edit made globally not only the edit made within the selected area, so use this with caution as it can change also other parts)
 
 ## Sort fragments according to link score
