@@ -220,43 +220,8 @@ enum global_mode
     mode_waypoint_edit = 2,
     mode_scaff_edit = 3,
     mode_meta_edit = 4,
-    mode_extension = 5
-};
-
-
-struct ShowAutoCurationButton
-{
-
-    // Variables to store the current values
-    u32 smallest_frag_size_in_pixel = 2;
-    f32 link_score_threshold = 0.4f;
-
-    // Variables for the editing UI state
-    bool show_yahs_erase_confirm_popup = false;
-    bool show_yahs_redo_confirm_popup = false;
-    //sorting mode
-    u32 sort_mode = 0; // 0: union find, 1: fuse union find, 2 deep fuse
-    std::vector<std::string> sort_mode_names = {"Union Find", "Fuse Union Find", "Deep Fuse"};
-    u08 frag_size_buf[16];
-    u08 score_threshold_buf[16];
-    ShowAutoCurationButton()
-    {
-        set_buf();
-    }
-
-    void set_buf()
-    {
-        memset(frag_size_buf, 0, 16);
-        memset(score_threshold_buf, 0, 16);
-        snprintf((char*)frag_size_buf, sizeof(frag_size_buf), "%u", smallest_frag_size_in_pixel);
-        memset(score_threshold_buf, 0, sizeof(score_threshold_buf));
-        snprintf((char*)score_threshold_buf, sizeof(score_threshold_buf), "%.3f", link_score_threshold);
-    }
-
-    std::string get_sort_mode_name() const
-    {
-        return sort_mode_names[sort_mode];
-    }
+    mode_extension = 5,
+    mode_selectExclude_sort_area = 6
 };
 
 

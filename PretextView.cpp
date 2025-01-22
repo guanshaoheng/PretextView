@@ -38,6 +38,7 @@ SOFTWARE.
 
 
 #include "utilsPretextView.h"
+#include "auto_curation_state.h"
 
 #include "TextureLoadQueue.cpp"  // 
 #include "ColorMapData.cpp"      // add color maps 
@@ -615,6 +616,7 @@ Global_Mode = mode_normal;
 #define Scaff_Edit_Mode (Global_Mode == mode_scaff_edit)
 #define MetaData_Edit_Mode (Global_Mode == mode_meta_edit)
 #define Extension_Mode (Global_Mode == mode_extension)
+#define Select_Sort_Area_Mode (Global_Mode == mode_selectExclude_sort_area)
 
 global_variable
 s32
@@ -781,7 +783,7 @@ Map_State;
 #include "copy_texture.h"
 // define the struct to store the ai model mask
 std::unique_ptr<AiModel> ai_model = nullptr;
-global_variable auto show_auto_curation_button=ShowAutoCurationButton();
+global_variable auto auto_curation_state=AutoCurationState();
 
 
 global_function
@@ -1746,7 +1748,12 @@ MouseMove(GLFWwindow* window, f64 x, f64 y)
 
             redisplay = 1;
         }
-        else if (Tool_Tip->on || Waypoint_Edit_Mode || Scaff_Edit_Mode || MetaData_Edit_Mode)
+        else if (
+            Tool_Tip->on || 
+            Waypoint_Edit_Mode || 
+            Scaff_Edit_Mode || 
+            MetaData_Edit_Mode || 
+            Select_Sort_Area_Mode)
         {
             s32 w, h;
             glfwGetWindowSize(window, &w, &h);
@@ -1831,9 +1838,9 @@ MouseMove(GLFWwindow* window, f64 x, f64 y)
                     u32 contigId = Map_State->contigIds[pixel];
                     Map_State->scaffIds[pixel] = Scaff_Painting_Id;
 
+                    // set the pixels with same contig_id into the same scaff
                     u32 testPixel = pixel;
                     while (testPixel && (Map_State->contigIds[testPixel - 1] == contigId)) Map_State->scaffIds[--testPixel] = Scaff_Painting_Id;
-
                     testPixel = pixel;
                     while ((testPixel < (Number_of_Pixels_1D - 1)) && (Map_State->contigIds[testPixel + 1] == contigId)) Map_State->scaffIds[++testPixel] = Scaff_Painting_Id;
 
@@ -1845,6 +1852,10 @@ MouseMove(GLFWwindow* window, f64 x, f64 y)
                 }
 
                 UpdateContigsFromMapState();
+            }
+            else if (Select_Sort_Area_Mode)
+            {   
+                auto_curation_state.update_sort_area(Tool_Tip_Move.pixels.x, Map_State, Number_of_Pixels_1D);
             }
             else if (
                 MetaData_Edit_Mode && 
@@ -1949,7 +1960,7 @@ Mouse(GLFWwindow* window, s32 button, s32 action, s32 mods)
             Deferred_Close_UI = 1;
         }
     }
-    else
+    else // UI not on 
     {
         if (button == primaryMouse && Edit_Mode && action == GLFW_PRESS)
         {
@@ -2006,6 +2017,16 @@ Mouse(GLFWwindow* window, s32 button, s32 action, s32 mods)
             Scaff_Painting_Id = 0;
             MouseMove(window, x, y);
             UpdateScaffolds();
+        }
+        else if (button == primaryMouse && Select_Sort_Area_Mode && action  == GLFW_PRESS)
+        {
+            auto_curation_state.select_mode = 1;
+            MouseMove(window, x, y);
+        }
+        else if (button == primaryMouse && Select_Sort_Area_Mode && action == GLFW_RELEASE)
+        {
+            auto_curation_state.select_mode = 0;
+            MouseMove(window, x, y);
         }
         else if (button == primaryMouse && MetaData_Edit_Mode && action == GLFW_PRESS)
         {
@@ -3449,7 +3470,8 @@ Render() {
                 glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
 
                 glUseProgram(UI_Shader->shaderProgram);
-                for (u32 i=0; i< helpTexts.size() ; i++) {
+                for (u32 i=0; i< helpTexts.size() ; i++) 
+                {
                     fonsDrawText(
                         FontStash_Context, 
                         width - spacing - textWidth, 
@@ -3458,7 +3480,137 @@ Render() {
                         0);
                 }
             }
-        }
+        } // scaff_mode
+
+        // draw the screen for select fragments for sorting
+        if (File_Loaded && !UI_On && Select_Sort_Area_Mode)
+        {   
+            f32 lh = 0.f;
+            f32 start_fraction = (f32)auto_curation_state.get_start()/(f32)Number_of_Pixels_1D;
+            f32 end_fraction   = (f32)auto_curation_state.get_end()  /(f32)Number_of_Pixels_1D;
+
+            // selected frags into a string
+            std::vector<u32> selected_frag_ids;
+            auto_curation_state.get_selected_fragments(selected_frag_ids, Map_State, Number_of_Pixels_1D);
+            std::stringstream ss;
+            if (selected_frag_ids.size() > 0) ss << selected_frag_ids[0];
+            for (u32 i = 1; i < selected_frag_ids.size(); i++) ss <<", " << selected_frag_ids[i] ;
+            std::string selectedFragmentsStr = "Selected fragments: " + ss.str();
+            std::string start_and_end_pixel_str = "Select range: " + std::to_string(auto_curation_state.get_start()) + " - " + std::to_string(auto_curation_state.get_end());
+
+            { // draw the help text in the bottom right corner
+                fonsSetFont(FontStash_Context, Font_Bold);
+                fonsSetSize(FontStash_Context, 24.0f * Screen_Scale.x);
+                fonsVertMetrics(FontStash_Context, 0, 0, &lh);
+                fonsSetColor(FontStash_Context, FourFloatColorToU32(Scaff_Mode_Data->text));
+
+                std::vector<char*> helpTexts = {
+                    (char *)"Select/Exclude area for sorting",
+                    (char *)"K: exit",
+                    (char *)"S: clear select area",
+                    (char *)"Q/W: quit/redo edit",
+                    (char *)"Space: YaHS sort",
+                    (char *)"Left Click: select/unselect the fragment",
+                    (char *)selectedFragmentsStr.c_str(),
+                    (char *)start_and_end_pixel_str.c_str()
+                };
+
+                f32 textBoxHeight = (f32)helpTexts.size() * (lh + 1.0f) - 1.0f;
+                f32 spacing = 10.0f;
+
+                f32 textWidth = 0.f; 
+                for (auto* i :helpTexts){
+                    textWidth = my_Max(textWidth, fonsTextBounds(FontStash_Context, 0, 0, i, 0, NULL));
+                } 
+                textWidth = my_Min(textWidth, width - 2 * spacing);
+
+                glUseProgram(Flat_Shader->shaderProgram);
+                glUniform4fv(Flat_Shader->colorLocation, 1, (f32 *)&Scaff_Mode_Data->bg);
+                point2f vert[4];
+                vert[0].x = width - spacing - textWidth; vert[0].y = height - spacing - textBoxHeight;
+                vert[1].x = width - spacing - textWidth; vert[1].y = height - spacing;
+                vert[2].x = width - spacing;             vert[2].y = height - spacing;
+                vert[3].x = width - spacing;             vert[3].y = height - spacing - textBoxHeight;
+                
+                u32 ptr = 0;
+                glBindBuffer(GL_ARRAY_BUFFER, Edit_Mode_Data->vbos[ptr]);
+                glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
+                glBindVertexArray(Edit_Mode_Data->vaos[ptr++]);
+                glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
+
+                glUseProgram(UI_Shader->shaderProgram);
+
+                for (int i = 0; i < helpTexts.size(); i++)
+                {
+                    fonsDrawText(
+                        FontStash_Context, 
+                        width - spacing - textWidth, 
+                        height - spacing - textBoxHeight + (i * (lh + 1.0f)), 
+                        helpTexts[i], 
+                        0);
+                }
+            }
+
+            { // paint the selected area
+                if (start_fraction >= 0 && end_fraction >= 0 )
+                {   
+                    u32 ptr = 0;
+                    point2f vert[4];
+
+                    // draw the start & end point
+                    {   
+                        f32 line_width = 0.002f / Camera_Position.z;
+                        f32 mask_color[4] = {1.0f, 0.f, 0.f, 0.8f};
+                        glUseProgram(Flat_Shader->shaderProgram);
+                        glUniform4fv(Flat_Shader->colorLocation, 1, (GLfloat *)&mask_color);
+                        for (auto loc_fraction : {start_fraction, end_fraction})
+                        {   
+                            vert[0].x = ModelXToScreen(loc_fraction - 0.5f - line_width);  vert[0].y = ModelYToScreen(0.5f - loc_fraction + line_width);
+                            vert[1].x = ModelXToScreen(loc_fraction - 0.5f - line_width);  vert[1].y = ModelYToScreen(0.5f - loc_fraction - line_width);
+                            vert[2].x = ModelXToScreen(loc_fraction - 0.5f + line_width);  vert[2].y = ModelYToScreen(0.5f - loc_fraction - line_width);
+                            vert[3].x = ModelXToScreen(loc_fraction - 0.5f + line_width);  vert[3].y = ModelYToScreen(0.5f - loc_fraction + line_width);
+
+                            glBindBuffer(GL_ARRAY_BUFFER, Scaff_Bar_Data->vbos[ptr]);
+                            glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
+                            glBindVertexArray(Scaff_Bar_Data->vaos[ptr++]);
+                            glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
+                        }
+                    }
+
+                    // draw the cover on selected area
+                    {   
+                        f32 mask_color[4] = {0.906f, 0.03921f, 0.949f, 0.5f}; 
+                        vert[0].x = ModelXToScreen(start_fraction - 0.5f);     vert[0].y = ModelYToScreen(0.5f - start_fraction);
+                        vert[1].x = ModelXToScreen(start_fraction - 0.5f);     vert[1].y = ModelYToScreen(0.5f - end_fraction);
+                        vert[2].x = ModelXToScreen(end_fraction - 0.5f);       vert[2].y = ModelYToScreen(0.5f - end_fraction);
+                        vert[3].x = ModelXToScreen(end_fraction - 0.5f);       vert[3].y = ModelYToScreen(0.5f - start_fraction);
+
+                        f32 font_color[4] = {0.f, 0.f, 0.f, 1.f};
+                        u32 colour = FourFloatColorToU32(*((nk_colorf *)font_color));
+
+                        glUseProgram(Flat_Shader->shaderProgram);
+                        glUniform4fv(Flat_Shader->colorLocation, 1, (GLfloat *)&mask_color);
+
+                        glBindBuffer(GL_ARRAY_BUFFER, Scaff_Bar_Data->vbos[ptr]);
+                        glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
+                        glBindVertexArray(Scaff_Bar_Data->vaos[ptr++]);
+                        glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
+
+                        glUseProgram(UI_Shader->shaderProgram);
+                        fonsSetColor(FontStash_Context, colour);
+
+                        char buff[256];
+                        f32 lh = 0.0f;
+                        stbsp_snprintf(buff, sizeof(buff), "%s (%d) Pixs: %s", auto_curation_state.selected_or_exclude==0?"Select" :"Exclude", std::abs(auto_curation_state.get_end() - auto_curation_state.get_start()), ss.str().c_str());
+                        f32 textWidth = fonsTextBounds(FontStash_Context, 0, 0, buff, 0, NULL);
+                        fonsDrawText(
+                            FontStash_Context, 
+                            ModelXToScreen( 0.5f * (end_fraction + start_fraction ) - 0.5f) - (0.5f * textWidth), 
+                            ModelYToScreen(0.5f - 0.5f*(start_fraction + end_fraction)) - lh * 0.5f, buff, 0);
+                    }
+                }
+            }
+        } // select_sort_area
 
         // Meta Tags
         if (File_Loaded && (MetaData_Edit_Mode || MetaData_Always_Visible))
@@ -3483,13 +3635,12 @@ Render() {
             fonsSetFont(FontStash_Context, Font_Bold);
             fonsVertMetrics(FontStash_Context, 0, 0, &lh);
 
-            f32 position = 0.0f;
-            f32 start = 0.0f;
+            f32 end_contig = 0.0f, start_contig = 0.0f;
             u32 scaffId = Contigs->contigs->scaffId;
             ForLoop(Contigs->numberOfContigs)
             {
                 contig *cont = Contigs->contigs + index;
-                position += ((f32)cont->length / (f32)Number_of_Pixels_1D); // end of the contig
+                end_contig += ((f32)cont->length / (f32)Number_of_Pixels_1D); // end of the contig
                 if (*cont->metaDataFlags)
                 {
                     u32 tmp = 0;
@@ -3501,12 +3652,12 @@ Render() {
                             f32 textWidth = fonsTextBounds(FontStash_Context, 0, 0, (char *)Meta_Data->tags[index2], 0, NULL);
                             ColourGenerator(index2 + 1, colour);
                             // fonsSetColor(FontStash_Context, FourFloatColorToU32(*((nk_colorf *)colour)));
-                            // fonsDrawText(FontStash_Context, ModelXToScreen(0.5f * (position + start - 1.0f)) - (0.5f * textWidth), ModelYToScreen((0.5f * (1.0f - position - start))) - (lh * (f32)(++tmp)), (char *)Meta_Data->tags[index2], 0);
+                            // fonsDrawText(FontStash_Context, ModelXToScreen(0.5f * (end_contig + start_contig - 1.0f)) - (0.5f * textWidth), ModelYToScreen((0.5f * (1.0f - end_contig - start_contig))) - (lh * (f32)(++tmp)), (char *)Meta_Data->tags[index2], 0);
                             if (meta_outline->on)
                             {
                                 // position of text
-                                f32 textX = ModelXToScreen(0.5f * (position + start - 1.0f)) - (0.5f * textWidth);
-                                f32 textY = ModelYToScreen((0.5f * (1.0f - position - start))) - (lh * (f32)(++tmp));
+                                f32 textX = ModelXToScreen(0.5f * (end_contig + start_contig - 1.0f)) - (0.5f * textWidth);
+                                f32 textY = ModelYToScreen((0.5f * (1.0f - end_contig - start_contig))) - (lh * (f32)(++tmp));
 
                                 DrawOutlinedText(FontStash_Context, (nk_colorf *)colour, (char *)Meta_Data->tags[index2], textX, textY);
                             }
@@ -3515,8 +3666,8 @@ Render() {
                                 fonsSetColor(FontStash_Context, FourFloatColorToU32(*((nk_colorf *)colour)));
                                 fonsDrawText(
                                     FontStash_Context,
-                                    ModelXToScreen(0.5f * (position + start - 1.0f)) - (0.5f * textWidth), 
-                                    ModelYToScreen((0.5f * (1.0f - position - start))) - (lh * (f32)(++tmp)), 
+                                    ModelXToScreen(0.5f * (end_contig + start_contig - 1.0f)) - (0.5f * textWidth), 
+                                    ModelYToScreen((0.5f * (1.0f - end_contig - start_contig))) - (lh * (f32)(++tmp)), 
                                     (char *)Meta_Data->tags[index2], 
                                     0);
                             }
@@ -3531,10 +3682,10 @@ Render() {
 
                     if (haplotigTagged && Grey_Haplotigs)
                     {
-                        vert[0].x = ModelXToScreen(start - 0.5f);     vert[0].y = ModelYToScreen(0.5f - start);
-                        vert[1].x = ModelXToScreen(start - 0.5f);     vert[1].y = ModelYToScreen(0.5f - position);
-                        vert[2].x = ModelXToScreen(position - 0.5f);  vert[2].y = ModelYToScreen(0.5f - position);
-                        vert[3].x = ModelXToScreen(position - 0.5f);  vert[3].y = ModelYToScreen(0.5f - start);
+                        vert[0].x = ModelXToScreen(start_contig - 0.5f);     vert[0].y = ModelYToScreen(0.5f - start_contig);
+                        vert[1].x = ModelXToScreen(start_contig - 0.5f);     vert[1].y = ModelYToScreen(0.5f - end_contig);
+                        vert[2].x = ModelXToScreen(end_contig - 0.5f);       vert[2].y = ModelYToScreen(0.5f - end_contig);
+                        vert[3].x = ModelXToScreen(end_contig - 0.5f);       vert[3].y = ModelYToScreen(0.5f - start_contig);
 
                         ColourGenerator((u32)scaffId, (f32 *)barColour);
                         u32 colour = FourFloatColorToU32(*((nk_colorf *)barColour));
@@ -3551,7 +3702,7 @@ Render() {
                         fonsSetColor(FontStash_Context, colour);
                     }
                 }
-                start = position;
+                start_contig = end_contig;
                 scaffId = cont->scaffId;
             }
 
@@ -4503,6 +4654,7 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
             Contact_Matrix->vbos = nullptr;
         }
         ResetMemoryArenaP(arena); // release all the memory allocated, avoid memory leak
+        auto_curation_state.clear();
     }
 
     // File Contents
@@ -6059,10 +6211,12 @@ void EraseAllEdits(map_editor* map_editor_, u32 max_edit_recorded=Edits_Stack_Si
 void AutoCurationFromFragsOrder(
     const FragsOrder* frags_order_,
     contigs* contigs_,
-    map_state* map_state_) 
+    map_state* map_state_, 
+    SelectArea* select_area=nullptr) 
 {   
+    u08 using_select_area = (select_area && select_area->select_flag)? 1 : 0;
     u32 num_frags = contigs_->numberOfContigs;
-    if (num_frags != frags_order_->get_num_frags()) 
+    if (!using_select_area && num_frags != frags_order_->get_num_frags()) 
     {
         fprintf(stderr, "Number of contigs(%d) and fragsOrder.num_frags(%d) do not match.\n", num_frags, frags_order_->get_num_frags());
         return;
@@ -6073,7 +6227,15 @@ void AutoCurationFromFragsOrder(
     // check the difference between the contigs, order and the new frags order
     u32 start_loc = 0;
     std::vector<std::pair<s32, s32>> current_order(num_frags);
-    const std::vector<s32> predicted_order = frags_order_->get_order_without_chromosomeInfor(); // start from 1
+    std::vector<s32> predicted_order = frags_order_->get_order_without_chromosomeInfor(); // start from 1
+    if (using_select_area)
+    {
+        std::vector<s32> full_predicted_order(num_frags);
+        std::iota(full_predicted_order.begin(), full_predicted_order.end(), 1);
+        for (u32 i=0; i< select_area->selected_frag_ids.size(); i++) 
+            full_predicted_order[select_area->selected_frag_ids[i]] = (predicted_order[i]>0?1:-1) * (select_area->selected_frag_ids[0] + std::abs(predicted_order[i]));
+        predicted_order = full_predicted_order;
+    }
     for (s32 i = 0; i < num_frags; ++i) current_order[i] = {i+1, contigs_->contigs[i].length}; // start from 1
     auto move_current_order_element = [&current_order, &num_frags](u32 from, u32 to)
     {
@@ -6179,22 +6341,41 @@ Sort_yahs(char* currFileName)
     
     fprintf(stdout, "========================\n");
     fprintf(stdout, "[YaHS Sort] start...\n");
-    fprintf(stdout, "[YaHS Sort] smallest_frag_size_in_pixel: %d\n", show_auto_curation_button.smallest_frag_size_in_pixel);
-    fprintf(stdout, "[YaHS Sort] link_score_threshold:        %.3f\n", show_auto_curation_button.link_score_threshold);
-    fprintf(stdout, "[YaHS Sort] Sort mode:                   %s\n", show_auto_curation_button.get_sort_mode_name().c_str());
+    fprintf(stdout, "[YaHS Sort] smallest_frag_size_in_pixel: %d\n", auto_curation_state.smallest_frag_size_in_pixel);
+    fprintf(stdout, "[YaHS Sort] link_score_threshold:        %.3f\n", auto_curation_state.link_score_threshold);
+    fprintf(stdout, "[YaHS Sort] Sort mode:                   %s\n", auto_curation_state.get_sort_mode_name().c_str());
     // compress the HiC data
     auto texture_array_4_ai = TexturesArray4AI(Number_of_Textures_1D, Texture_Resolution, (char*)currFileName, Contigs);
 
     // prepare before reading textures
     f32 original_control_points[3];
     prepare_before_copy(original_control_points);
-    texture_array_4_ai.copy_buffer_to_textures_dynamic(Contact_Matrix, false);
+    texture_array_4_ai.copy_buffer_to_textures_dynamic(Contact_Matrix, false); // copy the remapped data which is reordered according to the Map_State
     restore_settings_after_copy(original_control_points);
+
+    // check if select the area for sorting
+    SelectArea selected_area;
+    auto_curation_state.get_selected_fragments(selected_area.selected_frag_ids, Map_State, Number_of_Pixels_1D);
+    if (auto_curation_state.get_start() >=0 && auto_curation_state.get_end() >= 0 && selected_area.selected_frag_ids.size() > 0)
+    {   
+        fprintf(stdout, "Using selected area for sorting:\n");
+        fprintf(stdout, "Selected pixel range: %d ~ %d\n", auto_curation_state.get_start(), auto_curation_state.get_end());
+        std::stringstream ss; 
+        ss << selected_area.selected_frag_ids[0];
+        for (u32 i = 1; i < selected_area.selected_frag_ids.size(); ++i) ss << ", " << selected_area.selected_frag_ids[i];
+        fprintf(stdout, "Selected fragments: %s\n\n", ss.str().c_str());
+        selected_area.select_flag = true;
+        selected_area.start_pixel = auto_curation_state.get_start();
+        selected_area.end_pixel = auto_curation_state.get_end();
+    }
+
     texture_array_4_ai.cal_compressed_hic(
         Contigs, 
         Extensions, 
         false, 
-        false);
+        false, 
+        &selected_area
+    );
     FragsOrder frags_order(texture_array_4_ai.get_num_frags()); // intilize the frags_order with the number of fragments including the filtered out ones
     // exclude the fragments with first two tags during the auto curationme
     std::vector<std::string> exclude_tags = {"haplotig", "unloc"};
@@ -6202,42 +6383,44 @@ Sort_yahs(char* currFileName)
     LikelihoodTable likelihood_table(
         texture_array_4_ai.get_frags(), 
         texture_array_4_ai.get_compressed_hic(), 
-        (f32)show_auto_curation_button.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), 
-        exclude_frag_idx);
+        (f32)auto_curation_state.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), 
+        exclude_frag_idx, 
+        Number_of_Pixels_1D);
     // use the compressed_hic to calculate the frags_order directly
-    if (show_auto_curation_button.sort_mode == 0)
+    if (auto_curation_state.sort_mode == 0)
     {
         ai_model->sort_according_likelihood_unionFind( 
             likelihood_table, 
             frags_order, 
-            show_auto_curation_button.link_score_threshold, 
+            auto_curation_state.link_score_threshold, 
             texture_array_4_ai.get_frags());
     }
-    else if (show_auto_curation_button.sort_mode == 1)
+    else if (auto_curation_state.sort_mode == 1)
     {
         ai_model->sort_according_likelihood_unionFind_doFuse( 
             likelihood_table, 
             frags_order, 
-            show_auto_curation_button.link_score_threshold, 
+            auto_curation_state.link_score_threshold, 
             texture_array_4_ai.get_frags(), true, true);
     }
-    else if (show_auto_curation_button.sort_mode == 2)
+    else if (auto_curation_state.sort_mode == 2)
     {
         ai_model->sort_according_likelihood_unionFind_doFuse( 
             likelihood_table, 
             frags_order, 
-            show_auto_curation_button.link_score_threshold, 
+            auto_curation_state.link_score_threshold, 
             texture_array_4_ai.get_frags(), false, true);
     }
     else 
     {
-        fprintf(stderr, "[YaHS Sort] Error: Unknown sort mode (%d)\n", show_auto_curation_button.sort_mode);
+        fprintf(stderr, "[YaHS Sort] Error: Unknown sort mode (%d)\n", auto_curation_state.sort_mode);
         assert(0);
     }
     AutoCurationFromFragsOrder(
         &frags_order, 
         Contigs,
-        Map_State);
+        Map_State, 
+        &selected_area);
     std::cout << std::endl;
     Yahs_sorting = 0;
 
@@ -6565,6 +6748,41 @@ ToggleMetaDataMode(GLFWwindow* window)
     return(result);
 }
 
+
+global_function
+u32
+ToggleSelectSortAreaMode(GLFWwindow* window)
+{
+    u32 result = 1;
+
+    if (Select_Sort_Area_Mode)
+    {
+        Global_Mode = mode_normal;
+        if (Tool_Tip->on)
+        {
+            f64 mousex, mousey;
+            glfwGetCursorPos(window, &mousex, &mousey);
+            MouseMove(window, mousex, mousey);
+        }
+    }
+    else if (Normal_Mode)
+    {
+        Global_Mode = mode_selectExclude_sort_area;
+        f64 mousex, mousey;
+        glfwGetCursorPos(window, &mousex, &mousey);
+        MouseMove(window, mousex, mousey);
+    }
+    else
+    {
+        result = 0;
+    }
+
+    return(result);
+
+}
+
+
+
 global_function
 void
 ToggleToolTip(GLFWwindow* window)
@@ -6751,21 +6969,220 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
             u32 keyPressed = 1;
 
             switch (key)
-            {
-                case GLFW_KEY_J:
-                    JumpToDiagonal(window);
+            {   
+                
+                case GLFW_KEY_A:
+                    if (Scaff_Edit_Mode)
+                    {
+                        if (action != GLFW_RELEASE) Scaff_FF_Flag |= 1;
+                        else Scaff_FF_Flag &= ~1;
+                    }
+                    else keyPressed = 0;
                     break;
 
-                case GLFW_KEY_X:
-                    keyPressed = ToggleExtensionMode(window);
+                case GLFW_KEY_B:
+                    Scale_Bars->on = !Scale_Bars->on;
+                    break;
+
+                case GLFW_KEY_C:
+                    if (!Extensions.head) break;
+                    TraverseLinkedList(Extensions.head, extension_node)
+                    {
+                        switch (node->type)
+                        {
+                        case extension_graph:
+                        {
+
+                            graph *gph = (graph *)node->extension;
+                            if (strcmp((char *)gph->name, "coverage") == 0)
+                            {
+                                gph->on = !gph->on;
+                                break;
+                            }
+                        }
+                        }
+                    }
+                    break;
+
+                case GLFW_KEY_D:
+                    if (Scaff_Edit_Mode && (mods & GLFW_MOD_SHIFT))
+                    {
+                        ForLoop(Contigs->numberOfContigs) (Contigs->contigs + index)->scaffId = 0;
+                        UpdateScaffolds();
+                    }
+                    else if (MetaData_Edit_Mode && (mods & GLFW_MOD_SHIFT)) memset(Map_State->metaDataFlags, 0, Number_of_Pixels_1D * sizeof(u64));
+                    else keyPressed = 0;
                     break;
 
                 case GLFW_KEY_E:
                     keyPressed = ToggleEditMode(window);
                     break;
 
-                case GLFW_KEY_W:
+                case GLFW_KEY_F:
+                    break;
+
+                case GLFW_KEY_G:
+                    if (!Extensions.head) break;
+                    TraverseLinkedList(Extensions.head, extension_node)
+                    {
+                        switch (node->type)
+                        {
+                        case extension_graph:
+                        {
+
+                            graph *gph = (graph *)node->extension;
+                            if (strcmp((char *)gph->name, "gap") == 0)
+                            {
+                                gph->on = !gph->on;
+                                break;
+                            }
+                        }
+                        }
+                    }
+                    break;
+
+                case GLFW_KEY_H:
+                    break;
+
+                case GLFW_KEY_I:
+                    Contig_Ids->on = !Contig_Ids->on;
+                    break;
+
+                case GLFW_KEY_J:
+                    JumpToDiagonal(window);
+                    break;
+
+                case GLFW_KEY_K:
+                    keyPressed = ToggleSelectSortAreaMode(window);
+                    break;
+
+                case GLFW_KEY_L:
+                    if (Waypoint_Edit_Mode)
+                    {
+                        Long_Waypoints_Mode = (Long_Waypoints_Mode +1) % 3; 
+                    }
+                    else
+                    {
+                        Grid->on = !Grid->on;
+                    }
+                    break;
+
+                case GLFW_KEY_M:
+                    keyPressed = ToggleMetaDataMode(window);
+                    break;
+
+                case GLFW_KEY_N:
+                    Contig_Name_Labels->on = !Contig_Name_Labels->on;
+                    break;
+
+                case GLFW_KEY_O:
+                    break;
+                
+                case GLFW_KEY_P:
+                    break;
+
+                case GLFW_KEY_Q:
+                    if (Edit_Mode && action == GLFW_PRESS)
+                    {
+                        UndoMapEdit();
+                    }
+                    if (Select_Sort_Area_Mode && action == GLFW_PRESS)
+                    {
+                        UndoMapEdit();
+                    }
+                    else
+                    {
+                        keyPressed = 0;
+                    }
+                    break;
+
+                case GLFW_KEY_R:
+                    if (mods == GLFW_MOD_CONTROL)
+                    {
+                        Loading = 1;
+                    }
+                    else if (Extension_Mode && Extensions.head)
+                    {
+                        TraverseLinkedList(Extensions.head, extension_node)
+                        {
+                            switch (node->type)
+                            {
+                            case extension_graph:
+                            {
+                                graph *gph = (graph *)node->extension;
+                                if (strcmp((char *)gph->name, "repeat_density") == 0)
+                                {
+                                    gph->on = !gph->on;
+                                    break;
+                                }
+                            }
+                            }
+                        }
+                        break;
+                    }
+                    else
+                    {
+                        keyPressed = 0;
+                    }
+                    break;
+
+                case GLFW_KEY_S:
                     if (Edit_Mode)
+                    {
+                        Edit_Pixels.snap = !Edit_Pixels.snap;
+                    }
+                    else if (mods & GLFW_MOD_SHIFT)
+                    {
+                        Scaffs_Always_Visible = Scaffs_Always_Visible ? 0 : 1;
+                    }
+                    else if (Select_Sort_Area_Mode)
+                    {
+                        auto_curation_state.clear();
+                    }
+                    else
+                    {
+                        keyPressed = ToggleScaffMode(window);
+                    }
+                    break;
+
+                case GLFW_KEY_T:
+                    if (Extension_Mode && Extensions.head)
+                    {
+                        TraverseLinkedList(Extensions.head, extension_node)
+                        {
+                            switch (node->type)
+                            {
+                            case extension_graph:
+                            {
+
+                                graph *gph = (graph *)node->extension;
+                                if (strcmp((char *)gph->name, "telomere") == 0)
+                                {
+                                    gph->on = !gph->on;
+                                    break;
+                                }
+                            }
+                            }
+                        }
+                        break;
+                    }
+                    else
+                    {
+                        ToggleToolTip(window);
+                    }
+                    break;
+
+                case GLFW_KEY_U:
+                    UI_On = !UI_On;
+                    ++NK_Device->lastContextMemory[0];
+                    Mouse_Move.x = Mouse_Move.y = -1;
+                    break;
+
+                case GLFW_KEY_V:
+                    break;
+
+                case GLFW_KEY_W:
+                    if ((Edit_Mode || Select_Sort_Area_Mode) && action == GLFW_PRESS)
                     {
                         RedoMapEdit();
                     }
@@ -6775,17 +7192,16 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                     }
                     break;
 
-                case GLFW_KEY_Q:
-                    if (Edit_Mode)
-                    {
-                        UndoMapEdit();
-                    }
-                    else
-                    {
-                        keyPressed = 0;
-                    }
+                case GLFW_KEY_X:
+                    keyPressed = ToggleExtensionMode(window);
                     break;
-                
+
+                case GLFW_KEY_Y:
+                    break;
+
+                case GLFW_KEY_Z:
+                    break;
+
                 case GLFW_KEY_SPACE:
                     if (Edit_Mode && !Edit_Pixels.editing && action == GLFW_PRESS)
                     {
@@ -6830,120 +7246,19 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                         MetaData_Edit_State = action == GLFW_PRESS ? 2 : 0;
                         MouseMove(window, x, y);
                     }
+                    else if (Select_Sort_Area_Mode && action == GLFW_PRESS)
+                    {   
+                        std::vector<u32> frags_id;
+                        auto_curation_state.get_selected_fragments(frags_id, Map_State, Number_of_Pixels_1D);
+                        if (frags_id.size() >= 3)
+                        {
+                            Yahs_sorting = 1;
+                        }
+                    }
                     else
                     {
                         keyPressed = 0;
                     }
-                    break;
-                
-                case GLFW_KEY_T:
-                    if (Extension_Mode && Extensions.head)
-                    {
-                        TraverseLinkedList(Extensions.head, extension_node)
-                        {
-                            switch (node->type)
-                            {
-                            case extension_graph:
-                            {
-
-                                graph *gph = (graph *)node->extension;
-                                if (strcmp((char *)gph->name, "telomere") == 0)
-                                {
-                                    gph->on = !gph->on;
-                                    break;
-                                }
-                            }
-                            }
-                        }
-                        break;
-                    }
-                    else
-                    {
-                        ToggleToolTip(window);
-                    }
-                    break;
-
-                case GLFW_KEY_C:
-                    if (!Extensions.head) break;
-                    TraverseLinkedList(Extensions.head, extension_node)
-                    {
-                        switch (node->type)
-                        {
-                        case extension_graph:
-                        {
-
-                            graph *gph = (graph *)node->extension;
-                            if (strcmp((char *)gph->name, "coverage") == 0)
-                            {
-                                gph->on = !gph->on;
-                                break;
-                            }
-                        }
-                        }
-                    }
-                    break;
-
-                case GLFW_KEY_G:
-                    if (!Extensions.head) break;
-                    TraverseLinkedList(Extensions.head, extension_node)
-                    {
-                        switch (node->type)
-                        {
-                        case extension_graph:
-                        {
-
-                            graph *gph = (graph *)node->extension;
-                            if (strcmp((char *)gph->name, "gap") == 0)
-                            {
-                                gph->on = !gph->on;
-                                break;
-                            }
-                        }
-                        }
-                    }
-                    break;
-
-                case GLFW_KEY_N:
-                    Contig_Name_Labels->on = !Contig_Name_Labels->on;
-                    break;
-
-                case GLFW_KEY_B:
-                    Scale_Bars->on = !Scale_Bars->on;
-                    break;
-
-                case GLFW_KEY_L:
-                    if (Waypoint_Edit_Mode)
-                    {
-                        Long_Waypoints_Mode = (Long_Waypoints_Mode +1) % 3; 
-                    }
-                    else
-                    {
-                        Grid->on = !Grid->on;
-                    }
-                    break;
-
-                case GLFW_KEY_S:
-                    if (Edit_Mode)
-                    {
-                        Edit_Pixels.snap = !Edit_Pixels.snap;
-                    }
-                    else if (mods & GLFW_MOD_SHIFT)
-                    {
-                        Scaffs_Always_Visible = Scaffs_Always_Visible ? 0 : 1;
-                    }
-                    else
-                    {
-                        keyPressed = ToggleScaffMode(window);
-                    }
-                    break;
-
-                case GLFW_KEY_A:
-                    if (Scaff_Edit_Mode)
-                    {
-                        if (action != GLFW_RELEASE) Scaff_FF_Flag |= 1;
-                        else Scaff_FF_Flag &= ~1;
-                    }
-                    else keyPressed = 0;
                     break;
                 
                 case GLFW_KEY_LEFT_SHIFT:
@@ -6954,60 +7269,6 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                     }
                     else if (Edit_Mode) Edit_Pixels.scaffSelecting = action != GLFW_RELEASE;
                     else keyPressed = 0;
-                    break;
-
-                case GLFW_KEY_D:
-                    if (Scaff_Edit_Mode && (mods & GLFW_MOD_SHIFT))
-                    {
-                        ForLoop(Contigs->numberOfContigs) (Contigs->contigs + index)->scaffId = 0;
-                        UpdateScaffolds();
-                    }
-                    else if (MetaData_Edit_Mode && (mods & GLFW_MOD_SHIFT)) memset(Map_State->metaDataFlags, 0, Number_of_Pixels_1D * sizeof(u64));
-                    else keyPressed = 0;
-                    break;
-
-                case GLFW_KEY_M:
-                    keyPressed = ToggleMetaDataMode(window);
-                    break;
-
-                case GLFW_KEY_I:
-                    Contig_Ids->on = !Contig_Ids->on;
-                    break;
-
-                case GLFW_KEY_U:
-                    UI_On = !UI_On;
-                    ++NK_Device->lastContextMemory[0];
-                    Mouse_Move.x = Mouse_Move.y = -1;
-                    break;
-
-                case GLFW_KEY_R:
-                    if (mods == GLFW_MOD_CONTROL)
-                    {
-                        Loading = 1;
-                    }
-                    else if (Extension_Mode && Extensions.head)
-                    {
-                        TraverseLinkedList(Extensions.head, extension_node)
-                        {
-                            switch (node->type)
-                            {
-                            case extension_graph:
-                            {
-                                graph *gph = (graph *)node->extension;
-                                if (strcmp((char *)gph->name, "repeat_density") == 0)
-                                {
-                                    gph->on = !gph->on;
-                                    break;
-                                }
-                            }
-                            }
-                        }
-                        break;
-                    }
-                    else
-                    {
-                        keyPressed = 0;
-                    }
                     break;
 
                 case GLFW_KEY_LEFT:
@@ -10309,7 +10570,7 @@ MainArgs {
                     struct nk_color sort_button_active = nk_rgb(128, 0, 128);  
                     push_nk_style(NK_Context, sort_button_normal, sort_button_hover, sort_button_active);
                     nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 3);
-                    ai_sort_button = nk_button_label(NK_Context, "AI Sort");
+                    // ai_sort_button = nk_button_label(NK_Context, "AI Sort");
                     bounds = nk_widget_bounds(NK_Context);
                     yahs_sort_button = nk_button_label(NK_Context, "YaHS Sort");
                     // AI sort button
@@ -10344,7 +10605,7 @@ MainArgs {
                                 LikelihoodTable likelihood_table(
                                     texture_array_4_ai.get_frags(), 
                                     texture_array_4_ai.get_compressed_hic(), 
-                                    (f32)show_auto_curation_button.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), 
+                                    (f32)auto_curation_state.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), 
                                     exclude_frag_idx);
                                 // use the compressed_hic to calculate the frags_order directly
                                 ai_model->sort_according_likelihood_dfs( likelihood_table, frags_order, 0.4, texture_array_4_ai.get_frags());
@@ -10363,32 +10624,32 @@ MainArgs {
                             nk_edit_string_zero_terminated(
                                 NK_Context, 
                                 NK_EDIT_FIELD, 
-                                (char*)show_auto_curation_button.frag_size_buf, 
-                                sizeof(show_auto_curation_button.frag_size_buf), 
+                                (char*)auto_curation_state.frag_size_buf, 
+                                sizeof(auto_curation_state.frag_size_buf), 
                                 nk_filter_decimal);
 
                             nk_label(NK_Context, "Link Score Threshold:", NK_TEXT_LEFT);
                             nk_edit_string_zero_terminated(
                                 NK_Context, 
                                 NK_EDIT_FIELD, 
-                                (char*)show_auto_curation_button.score_threshold_buf, 
-                                sizeof(show_auto_curation_button.score_threshold_buf), 
+                                (char*)auto_curation_state.score_threshold_buf, 
+                                sizeof(auto_curation_state.score_threshold_buf), 
                                 nk_filter_float);
                             
                             nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 3);
-                            if (nk_option_label(NK_Context, "UnionFind", show_auto_curation_button.sort_mode == 0))
+                            if (nk_option_label(NK_Context, "UnionFind", auto_curation_state.sort_mode == 0))
                             {
-                                show_auto_curation_button.sort_mode = 0;
+                                auto_curation_state.sort_mode = 0;
                             }
 
-                            if (nk_option_label(NK_Context, "Fuse", show_auto_curation_button.sort_mode == 1)) 
+                            if (nk_option_label(NK_Context, "Fuse", auto_curation_state.sort_mode == 1)) 
                             {
-                                show_auto_curation_button.sort_mode = 1;
+                                auto_curation_state.sort_mode = 1;
                             }
 
-                            if (nk_option_label(NK_Context, "Deep Fuse", show_auto_curation_button.sort_mode == 2)) 
+                            if (nk_option_label(NK_Context, "Deep Fuse", auto_curation_state.sort_mode == 2)) 
                             {
-                                show_auto_curation_button.sort_mode = 2;
+                                auto_curation_state.sort_mode = 2;
                             }
 
                             nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
@@ -10401,26 +10662,26 @@ MainArgs {
                             {
                                 // Apply changes
                                 // Convert text to integer and float
-                                show_auto_curation_button.smallest_frag_size_in_pixel = (u32)atoi((char*)show_auto_curation_button.frag_size_buf);
-                                show_auto_curation_button.link_score_threshold = (float)atof((char*)show_auto_curation_button.score_threshold_buf);
+                                auto_curation_state.smallest_frag_size_in_pixel = (u32)atoi((char*)auto_curation_state.frag_size_buf);
+                                auto_curation_state.link_score_threshold = (float)atof((char*)auto_curation_state.score_threshold_buf);
                                 nk_contextual_close(NK_Context);
-                                if (show_auto_curation_button.link_score_threshold > 1.0f || show_auto_curation_button.link_score_threshold < 0.0f) 
+                                if (auto_curation_state.link_score_threshold > 1.0f || auto_curation_state.link_score_threshold < 0.0f) 
                                 {   
                                     printf("[YaHS Sort] Warning: link Score Threshold should be in the range of [0, 1]\n");
-                                    show_auto_curation_button.link_score_threshold = std::max(0.0f, std::min(1.0f, show_auto_curation_button.link_score_threshold));
+                                    auto_curation_state.link_score_threshold = std::max(0.0f, std::min(1.0f, auto_curation_state.link_score_threshold));
                                 }
-                                show_auto_curation_button.set_buf();
-                                printf("[YaHS Sort] smallest_frag_size_in_pixel: %d\n", show_auto_curation_button.smallest_frag_size_in_pixel);
-                                printf("[YaHS Sort] link_score_threshold:        %.3f\n", show_auto_curation_button.link_score_threshold);
-                                printf("[YaHS Sort] Sort mode:                   %s\n", show_auto_curation_button.get_sort_mode_name().c_str());
+                                auto_curation_state.set_buf();
+                                printf("[YaHS Sort] smallest_frag_size_in_pixel: %d\n", auto_curation_state.smallest_frag_size_in_pixel);
+                                printf("[YaHS Sort] link_score_threshold:        %.3f\n", auto_curation_state.link_score_threshold);
+                                printf("[YaHS Sort] Sort mode:                   %s\n", auto_curation_state.get_sort_mode_name().c_str());
                             }
                             // redo all the changes
-                            if (!show_auto_curation_button.show_yahs_redo_confirm_popup)
+                            if (!auto_curation_state.show_yahs_redo_confirm_popup)
                             {
                                 nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
                                 if (nk_button_label(NK_Context, "Redo All (Careful!)")) 
                                 {   
-                                    show_auto_curation_button.show_yahs_redo_confirm_popup=true;
+                                    auto_curation_state.show_yahs_redo_confirm_popup=true;
                                 }
                             } else
                             {
@@ -10429,22 +10690,22 @@ MainArgs {
                                 nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
                                 if (nk_button_label(NK_Context, "Yes")) 
                                 {
-                                    show_auto_curation_button.show_yahs_redo_confirm_popup=false;
+                                    auto_curation_state.show_yahs_redo_confirm_popup=false;
                                     printf("[YaHS Sort] Redo all edits.\n");
                                     RedoAllEdits(Map_Editor);
                                 }
                                 if (nk_button_label(NK_Context, "No")) 
                                 {
-                                    show_auto_curation_button.show_yahs_redo_confirm_popup=false;
+                                    auto_curation_state.show_yahs_redo_confirm_popup=false;
                                 }
                             }
                             // reject all the edits
-                            if (!show_auto_curation_button.show_yahs_erase_confirm_popup)
+                            if (!auto_curation_state.show_yahs_erase_confirm_popup)
                             {   
                                 nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
                                 if (nk_button_label(NK_Context, "Erase All (Careful!)")) 
                                 {   
-                                    show_auto_curation_button.show_yahs_erase_confirm_popup=true;
+                                    auto_curation_state.show_yahs_erase_confirm_popup=true;
                                 }
                             } else
                             {
@@ -10453,13 +10714,13 @@ MainArgs {
                                 nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
                                 if (nk_button_label(NK_Context, "Yes")) 
                                 {
-                                    show_auto_curation_button.show_yahs_erase_confirm_popup=false;
+                                    auto_curation_state.show_yahs_erase_confirm_popup=false;
                                     printf("[YaHS Sort] Erase all edits.\n");
                                     EraseAllEdits(Map_Editor);
                                 }
                                 if (nk_button_label(NK_Context, "No")) 
                                 {
-                                    show_auto_curation_button.show_yahs_erase_confirm_popup=false;
+                                    auto_curation_state.show_yahs_erase_confirm_popup=false;
                                 }
                             }
                             nk_contextual_end(NK_Context);
@@ -10591,6 +10852,8 @@ MainArgs {
 
                         nk_contextual_end(NK_Context);
                     }
+                    if ((nk_option_label(NK_Context, "Select sort area", Global_Mode == mode_selectExclude_sort_area) ? 1 : 0) != (Global_Mode == mode_selectExclude_sort_area ? 1 : 0))
+                        Global_Mode = (Global_Mode == mode_selectExclude_sort_area ? mode_normal : mode_selectExclude_sort_area);
 
                     nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
                     Waypoints_Always_Visible = nk_check_label(NK_Context, "Waypoints Always Visible", (s32)Waypoints_Always_Visible) ? 1 : 0;

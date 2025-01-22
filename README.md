@@ -47,6 +47,16 @@ PretextView is a desktop application for viewing pretext contact maps.<br/>
 Enter scaffolding mode with the 's' key.
 - Use the GUI to see a list of scaffolds.
 
+## Select sort area model (`K`)
+
+In YaHS sort, it will defaultly run sort globally without sort area selected. Or it will only sort the selected area. 
+
+Enter the select sort area mode by pressing `K`.
+- `Left mouse click`: select / un-select area for sorting.
+- `S`: clear all the select area.
+- `Space`: YaHS sort the select area (NOTE: only work if select at least 3 fragments)
+- `Q/W`: quit/redo edit (currently will change the edit made globally not only the edit made within the selected area, so use this with caution as it can change also other parts)
+
 ## Sort fragments according to link score
 
 Usage, first endter the main GUI: 

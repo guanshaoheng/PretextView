@@ -29,9 +29,11 @@ SOFTWARE.
 
 #include "utilsPretextView.h"
 #include "genomeData.h"
+#include "auto_curation_state.h"
 
 struct Frag4compress {
     u32 num;
+    u32* frag_id;
     u32* startCoord; // global start coordinate
     u32* length;
     bool* inversed;
@@ -49,10 +51,23 @@ struct Frag4compress {
         cleanup();
     }
 
-    void re_allocate_mem(const contigs* Contigs)
+    void re_allocate_mem(
+        const contigs* Contigs, 
+        const SelectArea* select_area=nullptr)
     {
         cleanup();
+        u08 using_select_area = (select_area != nullptr && select_area->select_flag)?1:0;
         num = Contigs->numberOfContigs;
+        if (using_select_area)
+        {
+            num = select_area->selected_frag_ids.size();
+            if (num <= 2)
+            {
+                fprintf(stderr, "The number_of_select_fragments_for_sorting(%d) should not be less than 3, file:%s (line:%d)\n", num, __FILE__, __LINE__);
+                std::abort();
+            }
+        }
+        frag_id = new u32[num];
         startCoord = new u32[num]; // TODO (shaoheng): it is wired that if I use std::vector<u32> here, the debugger will be stuck where I call the constructor. Sometimes it can work with std::vector, but sometimes it cannot.
         length = new u32[num];
         inversed = new bool[num];
@@ -61,22 +76,40 @@ struct Frag4compress {
 
         // Initialize the startCoord, length, and inversed
         inversed[0] = false;
-        startCoord[0] = 0;
-        length[0] = Contigs->contigs[0].length;
-        total_length = length[0];
-        for (u32 i = 1; i < Contigs->numberOfContigs; i++)
+        if (using_select_area)
+        {   
+            frag_id[0] = select_area->selected_frag_ids[0];
+            startCoord[0] =select_area->start_pixel;
+            length[0] = Contigs->contigs[select_area->selected_frag_ids[0]].length;
+        }
+        else
         {
+            frag_id[0] = 0;
+            startCoord[0] = 0;
+            length[0] = Contigs->contigs[0].length;
+        }
+        total_length = length[0];
+        for (u32 i = 1; i < num; i++)
+        {   
+            u32 contig_id = using_select_area?select_area->selected_frag_ids[i]:i;
+            frag_id[i] = contig_id;
             inversed[i] = false; // todo (shaoheng) add the inversed information
             startCoord[i] = startCoord[i-1] + length[i-1];
-            length[i] = Contigs->contigs[i].length;
-            metaDataFlags[i] = (Contigs->contigs[i].metaDataFlags == nullptr)?0:*(Contigs->contigs[i].metaDataFlags);
+            length[i] = Contigs->contigs[contig_id].length;
+            metaDataFlags[i] = (Contigs->contigs[contig_id].metaDataFlags == nullptr)?0:*(Contigs->contigs[contig_id].metaDataFlags);
             total_length += length[i];
         }
     }
 
 private:
     void cleanup()
-    {
+    {   
+        if (frag_id)
+        {
+            delete[] frag_id;
+            frag_id = nullptr;
+        }
+
         if (startCoord)
         {
             delete[] startCoord;
@@ -610,13 +643,14 @@ public:
     void copy_buffer_to_textures(const contact_matrix *contact_matrix_, bool show_flag=false);
     void copy_buffer_to_textures_dynamic(const contact_matrix *contact_matrix_, bool show_flag=false);
 
-    f32 cal_diagonal_mean_within_fragments(int shift);
+    f32 cal_diagonal_mean_within_fragments(int shift, const contigs* Contigs);
 
     void cal_compressed_hic(
         const contigs* Contigs, 
         const extension_sentinel& Extensions,
         bool is_extension_required=true, 
         bool is_massCenter_required=true,
+        const SelectArea* select_area=nullptr,
         f32 D_hic_ratio=0.05f, 
         u32 maximum_D=5000, 
         f32 min_hic_density = 30.f);

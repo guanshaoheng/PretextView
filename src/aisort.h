@@ -30,6 +30,7 @@ SOFTWARE.
 #include <memory>
 #include <vector>
 #include "copy_texture.h"
+#include "auto_curation_state.h" 
 
 
 struct Link {
@@ -63,12 +64,13 @@ public:
         Frag4compress* frags, 
         const Matrix3D<f32>* compressed_hic, 
         const f32 threshold=10.f/32769.f, 
-        const std::vector<s32>& exclude_tag_idx=std::vector<s32>() ) 
+        const std::vector<s32>& exclude_tag_idx=std::vector<s32>(),
+        const u32 num_pixels_1d=32768) 
         :num_frags(frags->num), frags(frags), data(nullptr)
     {   
         auto is_exclude_tag = [&](u32 idx) -> bool
         {   
-            if ((f32)frags->length[idx]/(f32)frags->total_length <= threshold) 
+            if ((f32)frags->length[idx]/(f32)num_pixels_1d <= threshold) 
             {
                 this->excluded_fragment_idx.insert(idx);
                 return true;

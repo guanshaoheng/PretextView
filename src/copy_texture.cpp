@@ -776,19 +776,24 @@ void TexturesArray4AI::cal_compressed_hic(
     const extension_sentinel& Extensions,
     bool is_extension_required,
     bool is_massCenter_required,
+    const SelectArea* select_area,
     f32 D_hic_ratio, 
     u32 maximum_D, 
     f32 min_hic_density) 
 {   
     check_copied_from_buffer();
 
+    u08 using_select_area = (select_area != nullptr && select_area->select_flag)?1:0;
     // clean the memory of compressed_hic_mx
-    frags->re_allocate_mem(Contigs);
-    if (frags->total_length != num_pixels_1d)
+    frags->re_allocate_mem(Contigs, select_area);
+    if (frags->total_length != (using_select_area? (select_area->end_pixel - select_area->start_pixel + 1): num_pixels_1d))
     {
-        fprintf(stderr, "\n[Compress Hic] warning: frags->total_length(%d) != num_pixels_1d (%d).\n\n", frags->total_length, num_pixels_1d);
+        fprintf(stderr, "\n[Compress Hic] warning: frags->total_length(%d) != num_pixels_1d (%d) (%s).\n\n", frags->total_length, (using_select_area? (select_area->end_pixel - select_area->start_pixel + 1): num_pixels_1d), (using_select_area?"selected area":"full area"));
     }
-    compressed_hic->re_allocate_mem(frags->num, frags->num, 5);
+    compressed_hic->re_allocate_mem(
+        frags->num, 
+        frags->num, 
+        5);
     if (mass_centres) 
     {
         delete mass_centres;
@@ -801,7 +806,7 @@ void TexturesArray4AI::cal_compressed_hic(
     {
         // compress the extensions
         compressed_extensions->re_allocate_mem(frags->num);
-        cal_compressed_extension(Extensions);
+        cal_compressed_extension(Extensions); 
     }
 
     if (is_massCenter_required)
@@ -833,30 +838,30 @@ void TexturesArray4AI::cal_compressed_hic(
     }
     
     // cal the average hic interation 
-    for (u32 frag_i = 0 ; frag_i < frags->num; frag_i++)
+    for (u32 i = 0 ; i < frags->num; i++)
     {
-        for (u32 frag_j = frag_i; frag_j < frags->num; frag_j++)
-        {
-            (*compressed_hic)(frag_i, frag_j, 4) = (*compressed_hic)(frag_j, frag_i, 4) = cal_block_mean(
-                frags->startCoord[frag_i], 
-                frags->startCoord[frag_j], 
-                frags->length[frag_i], 
-                frags->length[frag_j])/255.f;
+        for (u32 j = i; j < frags->num; j++)
+        {   
+            (*compressed_hic)(i, j, 4) = (*compressed_hic)(j, i, 4) = cal_block_mean(
+                frags->startCoord[i], 
+                frags->startCoord[j], 
+                frags->length[i], 
+                frags->length[j])/255.f;
         }
     }
 
     // cal the maximum number of shift
     u32 D = 0;
-    f32 global_shift0_diag_mean = cal_diagonal_mean_within_fragments(D);
+    f32 global_shift0_diag_mean = cal_diagonal_mean_within_fragments(D, Contigs);
     std::vector<f32> norm_diag_mean = {global_shift0_diag_mean};
-    f32 tmp_diag_mean = cal_diagonal_mean_within_fragments(++D);
+    f32 tmp_diag_mean = cal_diagonal_mean_within_fragments(++D, Contigs);
     while (
         tmp_diag_mean > min_hic_density && 
         tmp_diag_mean > D_hic_ratio * global_shift0_diag_mean && 
         D < maximum_D
     ) {
         norm_diag_mean.push_back(tmp_diag_mean);
-        tmp_diag_mean = cal_diagonal_mean_within_fragments(++D); 
+        tmp_diag_mean = cal_diagonal_mean_within_fragments(++D, Contigs); 
     }
 
     Values_on_Channel buffer_values_on_channel;
@@ -893,16 +898,16 @@ void TexturesArray4AI::cal_compressed_hic(
 }
 
 
-f32 TexturesArray4AI::cal_diagonal_mean_within_fragments(int shift)
+f32 TexturesArray4AI::cal_diagonal_mean_within_fragments(int shift, const contigs* Contigs)
 {   
     u64 sum = 0;
-    u32 cnt = 0, maxlen=0;
-    for (int i = 0 ; i < frags->num; i ++ )
+    u32 cnt = 0, maxlen=0, start_coord = 0;
+    for (int i = 0 ; i < Contigs->numberOfContigs; i ++ )
     {   
-        maxlen = std::max(maxlen, frags->length[i]);
+        maxlen = std::max(maxlen, Contigs->contigs[i].length);
         Sum_and_Number tmp = get_fragement_diag_mean_square( 
-            frags->startCoord[i], 
-            frags->length[i], 
+            start_coord, 
+            Contigs->contigs[i].length, 
             shift );
         sum += tmp.sum;
         cnt += tmp.number; // number of pixels
