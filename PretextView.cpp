@@ -755,6 +755,7 @@ Default_Tags[] =
     "HAP2",
     "Target",
     "Contaminant",
+    "Singleton",
     "X1",
     "X2",
     "Y1",
@@ -768,10 +769,10 @@ Default_Tags[] =
     "III",
     "IV",
     "V",
+    "U",
     "B1",
     "B2",
-    "B3",
-    "U"
+    "B3"
 };
 
 
@@ -6168,7 +6169,7 @@ RearrangeMap(       // NOTE: VERY IMPORTANT
 
 global_function
 std::vector<s32>
-get_exclude_metaData_idx(std::vector<std::string>& exclude_tags)
+get_exclude_metaData_idx(const std::vector<std::string>& exclude_tags)
 {   
     if (exclude_tags.empty()) return std::vector<s32>();
 
@@ -6379,12 +6380,12 @@ Sort_yahs(char* currFileName)
     FragsOrder frags_order(texture_array_4_ai.get_num_frags()); // intilize the frags_order with the number of fragments including the filtered out ones
     // exclude the fragments with first two tags during the auto curationme
     std::vector<std::string> exclude_tags = {"haplotig", "unloc"};
-    std::vector<s32> exclude_frag_idx = get_exclude_metaData_idx(exclude_tags);
+    std::vector<s32> exclude_meta_tag_idx = get_exclude_metaData_idx(exclude_tags);
     LikelihoodTable likelihood_table(
         texture_array_4_ai.get_frags(), 
         texture_array_4_ai.get_compressed_hic(), 
         (f32)auto_curation_state.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), 
-        exclude_frag_idx, 
+        exclude_meta_tag_idx, 
         Number_of_Pixels_1D);
     // use the compressed_hic to calculate the frags_order directly
     if (auto_curation_state.sort_mode == 0)
@@ -6616,7 +6617,7 @@ ToggleEditMode(GLFWwindow* window)
             MouseMove(window, mousex, mousey);
         }
     }
-    else if (Normal_Mode)
+    else if (Normal_Mode || Select_Sort_Area_Mode || MetaData_Edit_Mode)
     {
         Global_Mode = mode_edit;
     }
@@ -6733,7 +6734,7 @@ ToggleMetaDataMode(GLFWwindow* window)
             MouseMove(window, mousex, mousey);
         }
     }
-    else if (Normal_Mode)
+    else if (Normal_Mode || (Edit_Mode && !Edit_Pixels.editing) || Select_Sort_Area_Mode)
     {
         Global_Mode = mode_meta_edit;
         f64 mousex, mousey;
@@ -6765,7 +6766,7 @@ ToggleSelectSortAreaMode(GLFWwindow* window)
             MouseMove(window, mousex, mousey);
         }
     }
-    else if (Normal_Mode)
+    else if (Normal_Mode || (Edit_Mode && !Edit_Pixels.editing) || MetaData_Edit_Mode)
     {
         Global_Mode = mode_selectExclude_sort_area;
         f64 mousex, mousey;
@@ -7246,7 +7247,7 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                     {   
                         std::vector<u32> frags_id;
                         auto_curation_state.get_selected_fragments(frags_id, Map_State, Number_of_Pixels_1D);
-                        if (frags_id.size() >= 3)
+                        if (frags_id.size() >= 2)
                         {
                             Yahs_sorting = 1;
                         }
