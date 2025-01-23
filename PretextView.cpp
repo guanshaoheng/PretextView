@@ -3496,7 +3496,7 @@ Render() {
             std::stringstream ss;
             if (selected_frag_ids.size() > 0) ss << selected_frag_ids[0];
             for (u32 i = 1; i < selected_frag_ids.size(); i++) ss <<", " << selected_frag_ids[i] ;
-            std::string selectedFragmentsStr = "Selected fragments: " + ss.str();
+            std::string selectedFragmentsStr = "Selected fragments number: " + std::to_string(selected_frag_ids.size());
             std::string start_and_end_pixel_str = "Select range: " + std::to_string(auto_curation_state.get_start()) + " - " + std::to_string(auto_curation_state.get_end());
 
             { // draw the help text in the bottom right corner
@@ -3602,7 +3602,7 @@ Render() {
 
                         char buff[256];
                         f32 lh = 0.0f;
-                        stbsp_snprintf(buff, sizeof(buff), "%s (%d) Pixs: %s", auto_curation_state.selected_or_exclude==0?"Select" :"Exclude", std::abs(auto_curation_state.get_end() - auto_curation_state.get_start()), ss.str().c_str());
+                        stbsp_snprintf(buff, sizeof(buff), "%s (%d) Pixs: %s", auto_curation_state.selected_or_exclude==0?"Select" :"Exclude", std::abs(auto_curation_state.get_end() - auto_curation_state.get_start()), std::to_string(selected_frag_ids.size()).c_str());
                         f32 textWidth = fonsTextBounds(FontStash_Context, 0, 0, buff, 0, NULL);
                         fonsDrawText(
                             FontStash_Context, 
