@@ -61,9 +61,9 @@ struct Frag4compress {
         if (using_select_area)
         {
             num = select_area->selected_frag_ids.size();
-            if (num <= 2)
+            if (num < 2)
             {
-                fprintf(stderr, "The number_of_select_fragments_for_sorting(%d) should not be less than 3, file:%s (line:%d)\n", num, __FILE__, __LINE__);
+                fprintf(stderr, "The number_of_select_fragments_for_sorting(%d) should not be less than 2, file:%s (line:%d)\n", num, __FILE__, __LINE__);
                 std::abort();
             }
         }
