@@ -1,6 +1,16 @@
-[submodule "libdeflate"]
-	path = libdeflate
+
+[submodule "subprojects/libdeflate"]
+	path = subprojects/libdeflate
 	url = https://github.com/ebiggers/libdeflate
 [submodule "subprojects/glfw"]
 	path = subprojects/glfw
 	url = https://github.com/glfw/glfw
+[submodule "subprojects/glm"]
+	path = subprojects/glm
+	url = https://github.com/g-truc/glm.git
+[submodule "subprojects/imgui"]
+	path = subprojects/imgui
+	url = https://github.com/ocornut/imgui.git
+[submodule "subprojects/pytorch_scatter"]
+	path = subprojects/pytorch_scatter
+	url = https://github.com/guanshaoheng/pytorch_scatter.git 

@@ -1,7 +1,7 @@
 #ifndef _WIN32
-#define Align __attribute__((aligned(16)))
+#define Align_Ed __attribute__((aligned(16))) // conflic with Align use in Eigen, thus rename this as Ed's macro
 #else
-#define Align __declspec(align(16))
+#define Align_Ed __declspec(align(16))
 #endif
 
 global_variable
@@ -516,7 +516,7 @@ ThirdParty_Licence_Sizes[Number_of_ThirdParties][2] = { {560, 800},
 
 /* "DroidSerif-Regular.ttf" */
 global_variable
-Align
+Align_Ed
 u08
 FontNormal[] = 
 {
@@ -14100,7 +14100,7 @@ FontNormal_Size = sizeof(FontNormal);
 
 /* "DroidSerif-Bold.ttf" */
 global_variable
-Align
+Align_Ed
 u08
 FontBold[] = 
 {    
@@ -28447,7 +28447,7 @@ FontBold_Size = sizeof(FontBold);
 
 /* "icon/home-8x.png" */
 global_variable
-Align
+Align_Ed
 u08
 IconHome[] = 
 {
@@ -28498,7 +28498,7 @@ IconHome_Size = sizeof(IconHome);
 
 /* "icon/folder-8x.png" */
 global_variable
-Align
+Align_Ed
 u08
 IconFolder[] = 
 {
@@ -28535,7 +28535,7 @@ IconFolder_Size = sizeof(IconFolder);
 
 /* "icon/hard-drive-8x.png" */
 global_variable
-Align
+Align_Ed
 u08
 IconDrive[] = 
 {    
@@ -28588,7 +28588,7 @@ IconDrive_Size = sizeof(IconDrive);
 
 /* "icon/file-8x.png" */
 global_variable
-Align
+Align_Ed
 u08
 IconFile[] = 
 {
@@ -28629,7 +28629,7 @@ IconFile_Size = sizeof(IconFile);
 
 /* "icon/image-8x.png" */
 global_variable
-Align
+Align_Ed
 u08
 IconImage[] = 
 {

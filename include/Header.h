@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2021 Ed Harry, Wellcome Sanger Institute, Genome Research Limited
+Copyright (c) 2024 Shaoheng Guan, Wellcome Sanger Institute
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -23,10 +24,13 @@ SOFTWARE.
 #ifndef HEADER_H
 #define HEADER_H
 
+#include "utilsPretextView.h"
+
 #pragma clang diagnostic push
 #pragma GCC diagnostic ignored "-Wreserved-id-macro"
 #define __STDC_FORMAT_MACROS
 #pragma clang diagnostic pop
+
 
 #ifdef _WIN32
 #define WINVER 0x0601 // Target Windows 7 as a Minimum Platform
@@ -34,7 +38,7 @@ SOFTWARE.
 #include <windows.h>
 #include <Knownfolders.h>
 #include <Shlobj.h>
-#endif
+#endif // _WIN32
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -47,81 +51,38 @@ SOFTWARE.
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#ifdef _WIN32
-#include <intrin.h>
+
+// use the cpp std library
+#include <iostream>
+#include <memory>
+
+/*
+    original version not commented here
+*/
+// #ifdef _WIN32
+// #include <intrin.h>
+// #else  // problem is here
+// #include <x86intrin.h>  // please use ```arch -x86_64 zsh```, before run the compiling
+// #endif
+#if defined(_WIN32) || defined(_WIN64)
+    // Windows-specific includes
+    #include <intrin.h>
+    #define ARCH_X86 1
+#elif defined(__x86_64__) || defined(__i386__)
+    // Non-Windows x86 architectures
+    #include <x86intrin.h>
+    #define ARCH_X86 1
+#elif defined(__arm__) || defined(__aarch64__)
+    // ARM architectures
+    #include <arm_neon.h> // Example: ARM NEON intrinsics
+    #define ARCH_ARM 1
 #else
-#include <x86intrin.h>
-#endif
+    #error "Unsupported architecture or operating system"
+#endif // defined(_WIN32) || defined(_WIN64)
+
 
 #include "libdeflate.h"
 
-typedef int8_t s08;
-typedef int16_t s16;
-typedef int32_t s32;
-typedef int64_t s64;
-
-typedef uint8_t u08;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-
-typedef float f32;
-typedef double f64;
-
-typedef size_t memptr;
-
-#define global_function static
-#define global_variable static
-
-#define s08_max INT8_MAX
-#define s16_max INT16_MAX
-#define s32_max INT32_MAX
-#define s64_max INT64_MAX
-
-#define s08_min INT8_MIN
-#define s16_min INT16_MIN
-#define s32_min INT32_MIN
-#define s64_min INT64_MIN
-
-#define u08_max UINT8_MAX
-#define u16_max UINT16_MAX
-#define u32_max UINT32_MAX
-#define u64_max UINT64_MAX
-
-#define f32_max MAXFLOAT
-
-#define Min(x, y) (x < y ? x : y)
-#define Max(x, y) (x > y ? x : y)
-
-#define Abs(x) (x > 0 ? x : -x)
-
-#define u08_n (u08_max + 1)
-
-#define Square(x) (x * x)
-
-#define Pow10(x) (IntPow(10, x))
-#define Pow2(N) (1 << N)
-
-#define PI 3.141592653589793238462643383279502884195
-#define TwoPI 6.283185307179586476925286766559005768391
-#define Sqrt2 1.414213562373095048801688724209698078569
-#define SqrtHalf 0.7071067811865475244008443621048490392845
-
-#define ArrayCount(array) (sizeof(array) / sizeof(array[0]))
-#define ForLoop(n) for (u32 index = 0; index < (n); ++index)
-#define ForLoop64(n) for (u64 index = 0; index < (n); ++index)
-#define ForLoop2(n) for (u32 index2 = 0; index2 < (n); ++index2)
-#define ForLoop3(n) for (u32 index3 = 0; index3 < (n); ++index3)
-#define ForLoopN(i, n) for (u32 i = 0; i < (n); ++i)
-#define TraverseLinkedList(startNode, type) for (type *(node) = (startNode); node; node = node->next)
-#define TraverseLinkedList2(startNode, type) for (type *(node2) = (startNode); node2; node2 = node2->next)
-#define TraverseLinkedList3(startNode, type) for (type *(node3) = (startNode); node3; node3 = node3->next)
-
-#define ArgCount argc
-#define ArgBuffer argv
-#define Main s32 main()
-#define MainArgs s32 main(s32 ArgCount, const char *ArgBuffer[])
-#define EndMain return(0)
 
 #ifndef _WIN32
 #include <pthread.h>
@@ -133,26 +94,39 @@ typedef size_t memptr;
 #define __sync_fetch_and_add(x, y) _InterlockedExchangeAdd(x, y)
 #define __sync_fetch_and_sub(x, y) _InterlockedExchangeAdd(x, -y)
 #define __atomic_store(x, y, z) _InterlockedCompareExchange(x, *y, *x)
-#endif
+#endif // _WIN32
 
 #ifndef _WIN32
 #define ThreadFence __asm__ volatile("" ::: "memory")
 #else
 #define ThreadFence _mm_mfence()
-#endif
+#endif // _WIN32
+
+/*
+定义了一个名为 FenceIn 的宏，它的作用是在一个代码块中插入线程屏障（Thread Fence），
+会先执行第一个线程屏障 ThreadFence，然后执行你的代码，最后再执行第二个线程屏障 ThreadFence，
+确保插入的代码执行顺序正确。
+*/
 #define FenceIn(x) ThreadFence; \
 	x; \
-	ThreadFence
+	ThreadFence 
 
 typedef volatile u32 threadSig;
+
+/* 定义用于 color map 的变量 */
+extern f32 Color_Map_Data[][768];
+extern const char * Color_Map_Names[];
 
 #ifndef _WIN32
 typedef pthread_t thread;
 typedef pthread_mutex_t mutex;
 typedef pthread_cond_t cond;
 
-#define InitialiseMutex(x) x = PTHREAD_MUTEX_INITIALIZER
-#define InitialiseCond(x) x = PTHREAD_COND_INITIALIZER
+// 错误消息表明编译器认为 PTHREAD_MUTEX_INITIALIZER 不是一个有效的表达式。通常情况下，PTHREAD_MUTEX_INITIALIZER 是一个宏，它会被展开为一个结构体初始化器，而不是一个单独的表达式。
+// #define InitialiseMutex(x) x = PTHREAD_MUTEX_INITIALIZER
+// #define InitialiseCond(x) x = PTHREAD_COND_INITIALIZER
+#define InitialiseMutex(x) pthread_mutex_init(&(x), NULL)
+#define InitialiseCond(x)  pthread_cond_init(&(x), NULL)
 
 #define LaunchThread(thread, func, dataIn) pthread_create(&thread, NULL, func, dataIn)
 #define WaitForThread(x) pthread_join(*x, NULL)
@@ -178,11 +152,11 @@ typedef CONDITION_VARIABLE cond;
 #define WaitOnCond(cond, mutex) SleepConditionVariableCS(&cond, &mutex, INFINITE) 
 #define SignalCondition(x) WakeConditionVariable(&x)
 #define BroadcastCondition(x) WakeAllConditionVariable(&x)
-#endif
+#endif // _WIN32
 
 #if defined(__AVX2__) && !defined(NoAVX)
 #define UsingAVX
-#endif
+#endif // __AVX2__
 
 // https://www.flipcode.com/archives/Fast_log_Function.shtml
 global_function
@@ -257,23 +231,23 @@ thread_context
 #define Assert(x) assert(x)
 #else
 #define Assert(x)
-#endif
+#endif // DEBUG
 
 #define KiloByte(x) 1024*x
 #define MegaByte(x) 1024*KiloByte(x)
 #define GigaByte(x) 1024*MegaByte(x)
 
-#define Default_Memory_Alignment_Pow2 4
+#define Default_Memory_Alignment_Pow2 4  // 对齐的字节数为4
 
-struct
-memory_arena
+struct memory_arena
 {
-   memory_arena *next;
-   u08 *base;
-   u64 currentSize;
-   u64 maxSize;
-   u64 active;
+   memory_arena *next;     // 指向下一个内存池的指针，用于支持内存池链表结构
+   u08 *base;              // 内存池的基地址，指向分配给该内存池的内存块的起始位置
+   u64 currentSize;        // 当前内存池已使用的字节数，用于跟踪内存使用情况
+   u64 maxSize;            // 内存池的最大容量，指示内存池可以容纳的最大字节数
+   u64 active;             // 标记内存池是否处于活动状态，通常用于判断内存池是否可用
 };
+
 
 struct
 memory_arena_snapshot
@@ -298,8 +272,9 @@ RestoreMemoryArenaFromSnapshot(memory_arena *arena, memory_arena_snapshot *snaps
 global_function
 u64
 GetAlignmentPadding(u64 base, u32 alignment_pow2)
-{
-	u64 alignment = (u64)Pow2(alignment_pow2);
+{ // 通常内存是由一个个字节组成的，cpu在存取数据时，并不是以字节为单位存储，而是以块为单位存取。块的大小为内存存取力度，频繁存取未对齐的数据会极大降低cpu的性能
+  // 如果一个int型（假设为32位系统）如果存放在偶地址开始的地方，那么一个读周期就可以读出这32bit，而如果存放在奇地址开始的地方，就需要2个读周期，并对两次读出的结果的高低字节进行拼凑才能得到该32bit数据
+	u64 alignment = (u64)Pow2(alignment_pow2); 
 	u64 result = ((base + alignment - 1) & ~(alignment - 1)) - base;
 
 	return(result);
@@ -308,7 +283,7 @@ GetAlignmentPadding(u64 base, u32 alignment_pow2)
 global_function
 u32
 AlignUp(u32 x, u32 alignment_pow2)
-{
+{ // 向上对齐
 	u32 alignment_m1 = Pow2(alignment_pow2) - 1;
 	u32 result = (x + alignment_m1) & ~alignment_m1;
 
@@ -318,28 +293,27 @@ AlignUp(u32 x, u32 alignment_pow2)
 global_function
 void
 CreateMemoryArena_(memory_arena *arena, u64 size, u32 alignment_pow2 = Default_Memory_Alignment_Pow2)
-{
+{ // 初始化当前的arena （调用时候输入是arena->next）
    u64 linkSize = sizeof(memory_arena);
-   linkSize += GetAlignmentPadding(linkSize, alignment_pow2);
+   linkSize += GetAlignmentPadding(linkSize, alignment_pow2); // 对齐
    u64 realSize = size + linkSize;
+   arena->currentSize = 0; // 定义当前arena的特征
+   arena->active = 1;      // 激活当前arena
+   arena->maxSize = size;  // 设置当前arena能存储的最大值，note：这三个的空间在初始化上一个arena的时候已经分配了
 
-#ifndef _WIN32
-   posix_memalign((void **)&arena->base, Pow2(alignment_pow2), realSize);
+#ifndef _WIN32 
+   posix_memalign((void **)&arena->base, Pow2(alignment_pow2), realSize); //如果不是在win32则使用该方法初始化，将内存块的地址给到arena->base， arena->next, arena->currentSize, arena->maxSize, arena->active的地址已经初始化上一个arena的时候分配了
 #else
 #include <memoryapi.h>
    (void)alignment_pow2;
    arena->base = (u08 *)VirtualAlloc(NULL, realSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-#endif
-   arena->currentSize = 0;
-   arena->maxSize = size;
+#endif  // _WIN32
 #pragma clang diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-align"	
-   arena->next = (memory_arena *)arena->base;
+   arena->next = (memory_arena *)arena->base; // 初始化出来的空间的前48个字节存储下一个arena的信息
 #pragma clang diagnostic pop
-   arena->base += linkSize;
-
-   arena->next->base = 0;
-   arena->active = 1;
+   arena->base += linkSize;  // 当前开始的地址, 实际开始存储信息的地址要排除arena自己所需的5个存储指针的内存（40 + 补齐值 8）
+   arena->next->base = 0; // 应该指向下一个arena的base，但是下一个还没有被分配，因此为0. 
 }
 
 #define CreateMemoryArena(arena, size, ...) CreateMemoryArena_(&arena, size, ##__VA_ARGS__)
@@ -385,58 +359,58 @@ PushSize_(memory_arena *arena, u64 size, u32 alignment_pow2 = Default_Memory_Ali
 {
    if (!arena->active && arena->next && arena->next->base && !arena->next->currentSize)
    {
-      arena->active = 1;
+      arena->active = 1; // 如果当前区域没有被激活，存在下一个分配区域，已经初始化但是并未使用，则将当前区域设置为激活
    }
    
-   u64 padding = GetAlignmentPadding((u64)(arena->base + arena->currentSize), alignment_pow2);
+   u64 padding = GetAlignmentPadding((u64)(arena->base + arena->currentSize), alignment_pow2); // 向上取4字节对齐，得到需要补充的字节数padding
 
    void *result;
-   if (!arena->active || ((size + arena->currentSize + padding + sizeof(u64)) > arena->maxSize))
+   if (!arena->active || ((size + arena->currentSize + padding + sizeof(u64)) > arena->maxSize)) // 如果当前没有被激活或者是当前申请的空间大于最大的容许值, 则激活下一个
    {
-      arena->active = 0;
-      if (arena->next)
+      arena->active = 0; // 设置当前为未激活 
+      if (arena->next)  // 如果存在下一个arena空间
       {
-	 if (arena->next->base)
-	 {
-	    result = PushSize_(arena->next, size, alignment_pow2);
-	 }
-	 else
-	 {
-	    u64 linkSize = sizeof(memory_arena);
-	    linkSize += GetAlignmentPadding(linkSize, alignment_pow2);
-	    u64 realSize = size + padding + sizeof(u64) + linkSize;
-	    realSize = Max(realSize, arena->maxSize);
-	    
-	    CreateMemoryArenaP(arena->next, realSize, alignment_pow2);
-	    result = PushSize_(arena->next, size, alignment_pow2);
-	 }
+        if (arena->next->base)  // 下一个arena已经被初始化
+        {
+            result = PushSize_(arena->next, size, alignment_pow2);  // 从下一个arena 申请size 
+        }
+        else
+        {
+            u64 linkSize = sizeof(memory_arena);  // 获取该struct的大小, 40
+            linkSize += GetAlignmentPadding(linkSize, alignment_pow2);  // padding  = 8 
+            u64 realSize = size + padding + sizeof(u64) + linkSize;
+            realSize = my_Max(realSize, arena->maxSize);
+            
+            CreateMemoryArenaP(arena->next, realSize, alignment_pow2);  // 初始化下一个arena，主要是初始化下一个arena的base的值，arena->next指向下一个arena，arena->next->base = arena->next + 48 即开始存储数据的位置，因为前40个存储了3个u64和两个指针，以及8个补全
+            result = PushSize_(arena->next, size, alignment_pow2);  // 初始化空间之后返回当前result的地址
+        }
       }
-      else
+      else // 如果不存在arena->next，这是不可能的，因为在初始化的时候arena->next指向了arena->base，因此不可能为空，如果确实发生则会报错
       {
-	 result = 0;
+	    result = 0;
 #if defined(__APPLE__) || defined(_WIN32)
 #ifdef PrintError
 	 PrintError("Push of %llu bytes failed, out of memory", size);
 #else
 	 fprintf(stderr, "Push of %llu bytes failed, out of memory.\n", size);
-#endif
+#endif // PrintError
 #else
 #ifdef PrintError
 	 PrintError("Push of %lu bytes failed, out of memory", size);
 #else
 	 fprintf(stderr, "Push of %lu bytes failed, out of memory.\n", size);
-#endif
-#endif	
+#endif // PrintError
+#endif	// __APPLE__ || _WIN32
 	 *((volatile u32 *)0) = 0;
       }
    }
    else
-   {
-      result = arena->base + arena->currentSize + padding;
-      arena->currentSize += (size + padding + sizeof(u64));
+   {  // 此处为递归函数的出口
+      result = arena->base + arena->currentSize + padding;  // 存储在同一个arena中
+      arena->currentSize += (size + padding + sizeof(u64)); // 更新大小
 #pragma clang diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-align"		
-      *((u64 *)(arena->base + arena->currentSize - sizeof(u64))) = (size + padding);
+      *((u64 *)(arena->base + arena->currentSize - sizeof(u64))) = (size + padding); // 多申请的8个字节表示
 #pragma clang diagnostic pop
    }
 
@@ -502,7 +476,7 @@ global_function
 void
 BinarySemaphoreInit(binary_semaphore *bsem, u32 value)
 {
-    InitialiseMutex(bsem->mut);
+    InitialiseMutex(bsem->mut); // 错误消息表明编译器认为 PTHREAD_MUTEX_INITIALIZER 不是一个有效的表达式。通常情况下，PTHREAD_MUTEX_INITIALIZER 是一个宏，它会被展开为一个结构体初始化器，而不是一个单独的表达式。
     InitialiseCond(bsem->con);
     bsem->v = value;
 }
@@ -629,7 +603,7 @@ global_function
 void *
 #else
 DWORD WINAPI
-#endif
+#endif // _WIN32
 ThreadFunc(void *in)
 {
     thread_context *context = (thread_context *)in;
@@ -693,7 +667,7 @@ ThreadInit(memory_arena *arena, thread_pool *pool, thread_context **context, u32
     LaunchThread((*context)->th, ThreadFunc, *context);
 #ifndef _WIN32
     DetachThread((*context)->th);
-#endif
+#endif // _WIN32
 }
 
 #define Number_Thread_Jobs 1024
@@ -704,7 +678,8 @@ JobQueueInit(memory_arena *arena, job_queue *jobQueue)
     jobQueue->hasJobs = PushStructP(arena, binary_semaphore);
     jobQueue->hasFree = PushStructP(arena, binary_semaphore);
 
-    InitialiseMutex(jobQueue->rwMutex);
+    InitialiseMutex(jobQueue->rwMutex); // 错误消息表明编译器认为 PTHREAD_MUTEX_INITIALIZER 不是一个有效的表达式。通常情况下，PTHREAD_MUTEX_INITIALIZER 是一个宏，它会被展开为一个结构体初始化器，而不是一个单独的表达式。
+
     BinarySemaphoreInit(jobQueue->hasJobs, 0);
     BinarySemaphoreInit(jobQueue->hasFree, 0);
 
@@ -776,7 +751,7 @@ ThreadPoolInit(memory_arena *arena, u32 nThreads)
 
     threadPool->threads = PushArrayP(arena, thread_context*, nThreads);
 	
-    InitialiseMutex(threadPool->threadCountLock);
+    InitialiseMutex(threadPool->threadCountLock); //错误消息表明编译器认为 PTHREAD_MUTEX_INITIALIZER 不是一个有效的表达式。通常情况下，PTHREAD_MUTEX_INITIALIZER 是一个宏，它会被展开为一个结构体初始化器，而不是一个单独的表达式。
     InitialiseCond(threadPool->threadsAllIdle);
 	
     for (   u32 index = 0;
@@ -796,7 +771,7 @@ ThreadPoolInit(memory_arena *arena, u32 nThreads)
 #ifdef _WIN32
 #include <ctime>
 #define sleep(x) Sleep(1000 * x)
-#endif
+#endif // _WIN32
 
 global_function
 void
@@ -805,17 +780,17 @@ ThreadPoolAddWork(thread_pool *threadPool, void (*function)(void*), void *arg)
     thread_job *job;
     
     BinarySemaphoreWait(threadPool->jobQueue.hasFree);
-    while (!(job = GetFreeThreadJob(&threadPool->jobQueue)))
+    while (!(job = GetFreeThreadJob(&threadPool->jobQueue))) // while no free thread in the thread pool
     {
-	printf("Waiting for a free job...\n");
-	sleep(1);
-	BinarySemaphoreWait(threadPool->jobQueue.hasFree);
+        printf("Waiting for a free job...\n");
+        sleep(1);
+        BinarySemaphoreWait(threadPool->jobQueue.hasFree);
     }
     
     job->function = function;
     job->arg = arg;
 
-    JobQueuePush(&threadPool->jobQueue, job);
+    JobQueuePush(&threadPool->jobQueue, job); // give the job queue to 
 }
 
 global_function
@@ -1081,17 +1056,18 @@ RGBADisplayFormat(u32 rgba)
 global_function
 u08 *
 PushStringIntoIntArray(u32 *intArray, u32 arrayLength, u08 *string, u08 stringTerminator = '\0')
-{
+{ 
     u08 *stringToInt = (u08 *)intArray;
     u32 stringLength = 0;
 
+    // 将 string 转移到 stringToInt
     while (*string != stringTerminator && stringLength < (arrayLength << 2))
     {
         *(stringToInt++) = *(string++);
         ++stringLength;
     }
 
-    while (stringLength & 3)
+    while (stringLength & 3)  // 按位与操作, 确保stringLength的二进制的后两位都是0
     {
         *(stringToInt++) = 0;
         ++stringLength;
@@ -1145,12 +1121,16 @@ FastHash64(void *buf, u64 len, u64 seed)
 
     switch (len & 7)
     {
-	case 7: v ^= (u64)pos2[6] << 48; [[clang::fallthrough]];
-	case 6: v ^= (u64)pos2[5] << 40; [[clang::fallthrough]];
-	case 5: v ^= (u64)pos2[4] << 32; [[clang::fallthrough]];
-	case 4: v ^= (u64)pos2[3] << 24; [[clang::fallthrough]];
-	case 3: v ^= (u64)pos2[2] << 16; [[clang::fallthrough]];
-	case 2: v ^= (u64)pos2[1] << 8;  [[clang::fallthrough]];
+        /*
+        错误发生在 [[clang::fallthrough]] 上，它似乎被识别为一个表达式，但实际上它是一个注释，用于指示编译器有意执行 switch 语句中的“fall through”。然而，该注释只有在编译器支持 C++11 或以上版本，并且启用了相应的警告时才有效。对于C语言，通常不会使用这种语法。
+        要解决此错误，您可以将 [[clang::fallthrough]] 注释替换为标准的  fallthrough  注释，或者删除这个注释，因为在 switch 语句中，如果您没有明确指定 break，则默认会执行“fall through”行为。
+        */
+	case 7: v ^= (u64)pos2[6] << 48; /*[[clang::fallthrough]];*/
+	case 6: v ^= (u64)pos2[5] << 40; /*[[clang::fallthrough]];*/
+	case 5: v ^= (u64)pos2[4] << 32; /*[[clang::fallthrough]];*/
+	case 4: v ^= (u64)pos2[3] << 24; /*[[clang::fallthrough]];*/
+	case 3: v ^= (u64)pos2[2] << 16; /*[[clang::fallthrough]];*/
+	case 2: v ^= (u64)pos2[1] << 8;  /*[[clang::fallthrough]];*/
 	case 1: v ^= (u64)pos2[0];
 		h ^= HashMix(v);
 		h *= m;
@@ -1203,7 +1183,7 @@ FastHash64(void *buf, u64 len, u64 seed)
     HashMix(h);
     return(h);
 } 
-#endif
+#endif // _WIN32
 
 global_function
 u32
@@ -1216,11 +1196,8 @@ FastHash32(void *buf, u64 len, u64 seed)
     return((u32)(h - (h >> 32)));
 }
 
-#endif
 
-global_function
-u32
-IsPrime(u32 n)
+global_function u32 IsPrime(u32 n)
 {  
    if (n <= 1)	return(0);
    if (n <= 3)	return(1);
@@ -1237,9 +1214,7 @@ IsPrime(u32 n)
    return(1);
 }  
 
-global_function
-u32
-NextPrime(u32 N) 
+global_function u32 NextPrime(u32 N) 
 { 
    if (N <= 1) return(2); 
 
@@ -1247,3 +1222,7 @@ NextPrime(u32 N)
 
    return(N); 
 } 
+
+#endif // HEADER_H
+
+

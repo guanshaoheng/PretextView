@@ -1,0 +1,52 @@
+name: Build and Test
+
+# run the workflow on push to master branch or pull request to master branch
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ windows-latest, ubuntu-latest, macos-latest ]
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check runner OS
+        run: echo "Runner OS is ${{ runner.os }}"
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: install GL and x11 for Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+
+      - name: Run install script on Windows
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          install.cmake.bat
+
+      - name: Run install script on Unix (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          chmod +x ./install.cmake.sh
+          ./install.cmake.sh 
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "${{ matrix.os }}-packages"
+          path: |
+            build_cmake/*.deb
+            build_cmake/*.dmg
+            build_cmake/*.exe
+            build_cmake/*.zip
+            build_cmake/*.msi
+  

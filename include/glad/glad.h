@@ -700,7 +700,7 @@ typedef khronos_uint8_t GLubyte;
 typedef khronos_int16_t GLshort;
 typedef khronos_uint16_t GLushort;
 typedef int GLint;
-typedef unsigned int GLuint;
+typedef unsigned int GLuint; // typedef uint32_t GLuint;  uint32_t is defined in <cstdint>, uint32_t can make sure the data has the same size (32 bits) on all the platform
 typedef khronos_int32_t GLclampx;
 typedef int GLsizei;
 typedef khronos_float_t GLfloat;
