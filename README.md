@@ -12,6 +12,7 @@ PretextView is a desktop application for viewing pretext contact maps.<br/>
 - `right mouse button`: holding down and move to drag the Hi-C figure move within the window. 
 - `Mouse scroll` to zoom. A three button mouse is recomended.
 - `E`: enter the Edit mode.
+- `K`: enter the Select sort area mode.
 - `M`: enter the Meta Tag edit mode.
 - `S`: enter the Scaffold painting mode.
 - `X`: enter the extension edit mode.
@@ -89,7 +90,7 @@ Map state can be output in [AGP](https://www.ncbi.nlm.nih.gov/assembly/agp/AGP_S
 Note that object/part sizes will only be accurate up to the size of an individual map texel, and that any input sequences smaller than an individual texel will not be output.<br/>
 AGP files can be corrected by the included python script [AGPCorrect](https://github.com/wtsi-hpag/PretextView/blob/master/AGPCorrect), which requires access to the input sequences in (gzipped) FASTA format.
 ```bash
-AGPCorrect /path/to/ref.fa(.gz) /path/to/current/map.agp /path/to/corrected_scaffs.agp
+AGPCorrect /path/to/ref.fa(.gz) /path/to/current/map.agp >/path/to/corrected_scaffs.agp
 ```
 The script requires
 * Python >= 3.8
@@ -121,31 +122,22 @@ PretextView uses the following third-party libraries:
 * [Icons from open-iconic](https://github.com/iconic/open-iconic)
 
 # Installation 
-install this software on Mac with m-chip, [please shift the terminal's architecture into `x86_64` first](https://github.com/guanshaoheng/PretextView/blob/d2fd36fd215013c39325abc66580a262202ff6d6/install.sh#L3):   
-
-```bash
-arch -x86_64 zsh
-conda activate /environment/with/all/dependencies 
-```
-
-Also check if you need the [debug or release](https://github.com/guanshaoheng/PretextView/blob/d2fd36fd215013c39325abc66580a262202ff6d6/install.sh#L7) version while compiling.
 
 Requires:
 * clang >= 11.0.0 [Unix]
 * clang-cl >= 11.0.0 [Windows]
-* meson >= 0.57.1
-* cmake >= 3.0.0
+* cmake >= 3.1.7
 
 ```bash
-git submodule update --init --recursive  # Adding dependencies from third-party libraries
-./install  # [Unix]
-install.bat # [Windows]
+# git submodule update --init --recursive  # Adding dependencies from third-party libraries which is contained in the install script
+./install.cmake.sh  # [Unix]
+install.cmake.bat # [Windows]
 ```
 Application will be installed to the 'app' folder in the source directory.
 
 
 
-# Details of sorting
+# Details of sorting algorithm
 
 ## Link score calculation 
 
