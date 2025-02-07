@@ -119,6 +119,40 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
 }
 
 
+
+std::string 
+VertexSource_copyTexture = R"(
+#version 330 core
+layout(location = 0) in vec2 aPos;
+layout(location = 1) in vec2 aTexCoord;
+
+uniform mat4 model;
+out vec2 TexCoord;
+
+
+void main() {
+    gl_Position = model * vec4(aPos, 0.0, 1.0);
+    TexCoord = aTexCoord;
+}
+)";
+
+
+std::string 
+FragmentSource_copyTexture = R"(
+#version 330 core
+in vec2 TexCoord;
+out vec4 FragColor; 
+
+uniform sampler2DArray texArray; // 0
+uniform int layer;  
+
+void main() {
+
+    FragColor = vec4(texture(texArray, vec3(TexCoord, layer)).r, 0., 0., 1.);
+}
+)";
+
+
 TexturesArray4AI::TexturesArray4AI(
     u32 num_textures_1d_, u32 texture_resolution_, char* fileName, const contigs* Contigs)
     :num_textures_1d(num_textures_1d_), texture_resolution(texture_resolution_),
@@ -178,11 +212,7 @@ TexturesArray4AI::TexturesArray4AI(
     }
     MY_CHECK(0);
     // Shader setup and texture binding
-    std::string shader_source_dir = getResourcesPath() + "/src/shaderSource/";
-    MY_CHECK(shader_source_dir.c_str());
-    auto VertexSource_Texture = readShaderSource( shader_source_dir + "contactMatrixVertexHIC.shader");
-    auto FragmentSource_Texture = readShaderSource( shader_source_dir + "contactMatrixFragmentHIC.shader");
-    this->shaderProgram = CreateShader(FragmentSource_Texture.c_str(), VertexSource_Texture.c_str());
+    this->shaderProgram = CreateShader(FragmentSource_copyTexture.c_str(), VertexSource_copyTexture.c_str());
 
     // Setup vao, vbo, ebo
     f32 vertexpositions[] = {

@@ -186,15 +186,12 @@ endforeach()
 
 
 # ============ CMAKE INSTALLATION ==============
-# Define shader files
-file(GLOB SHADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/shaderSource/*.shader")
 file(GLOB aimodel_files "${CMAKE_CURRENT_SOURCE_DIR}/ai_model/*")
 file(GLOB torch_copy_libs "${TORCH_INSTALL_PREFIX}/lib/*")
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     if (APPLE)
         file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist" DESTINATION "${target_name}.app/Contents")
         file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/icon.icns" DESTINATION "${target_name}.app/Contents/Resources" )
-        file(COPY ${SHADER_FILES} DESTINATION "${target_name}.app/Contents/Resources/src/shaderSource")
         file(COPY ${aimodel_files} DESTINATION "${target_name}.app/Contents/Resources/ai_model")
     else()
         message(FATAL_ERROR "Debug is current only implemented on Mac.")
@@ -221,33 +218,40 @@ if(APPLE)
             DESTINATION "${target_name}.app/Contents/Frameworks" )
     install(FILES ${aimodel_files}
             DESTINATION "${target_name}.app/Contents/Resources/ai_model" )
-    install(FILES ${SHADER_FILES}
-            DESTINATION "${target_name}.app/Contents/Resources/src/shaderSource" )
-elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux") # WIN32, UNIX and NOT APPLE
+elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux") 
     message(STATUS "[Cmake Install]: Linux")
     set_target_properties(
             ${target_name} 
             PROPERTIES 
             INSTALL_RPATH "@executable_path/lib")
-    install(TARGETS ${target_name}
-        RUNTIME DESTINATION .
+    install(
+        TARGETS ${target_name}
+        RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
         COMPONENT Runtime)
-    install(FILES ${torch_copy_libs} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib") # libtorch
-    install(FILES ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource")
-    install(FILES ${aimodel_files} DESTINATION "${CMAKE_INSTALL_PREFIX}/ai_model")
+    install(
+        FILES ${torch_copy_libs} 
+        DESTINATION "${CMAKE_INSTALL_PREFIX}/lib") 
+    install(
+        FILES ${aimodel_files} 
+        DESTINATION "${CMAKE_INSTALL_PREFIX}/ai_model")
 else () # windows
     message(STATUS "[Cmake Install]: Windows")
-    # set_target_properties(
-    #     ${target_name} 
-    #     PROPERTIES 
-    #     INSTALL_RPATH "@executable_path/lib")
     install(
         TARGETS ${target_name}
         RUNTIME DESTINATION .
         COMPONENT Runtime)
-    install(FILES ${torch_copy_libs} DESTINATION .) # libtorch
-    install(FILES ${SHADER_FILES}    DESTINATION "src/shaderSource")
-    install(FILES ${aimodel_files}   DESTINATION "ai_model")
+    install(
+        FILES ${torch_copy_libs} 
+        DESTINATION .) # libtorch
+    install(
+        FILES ${SHADER_FILES}    
+        DESTINATION "src/shaderSource")
+    install(
+        FILES ${aimodel_files}   
+        DESTINATION "ai_model")
+    target_compile_definitions(
+        ${target_name} 
+        PUBLIC SHADER_DIR="${CMAKE_INSTALL_PREFIX}/src/shaderSource")
 endif()
 
 

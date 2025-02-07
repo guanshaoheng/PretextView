@@ -42,3 +42,5 @@ include/libdeflate.h
 src/aisort_cz.cpp
 src/aisort_cz.h
 PretextViewAI.zip
+
+test_data/

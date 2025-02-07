@@ -105,7 +105,10 @@ SOFTWARE.
 #include "showWindowData.h"
 
 
-std::string shader_source_dir = getResourcesPath() + "/src/shaderSource/";
+#include "shaderSource.h"
+/*
+// std::string shader_source_dir = getResourcesPath() + "/src/shaderSource/";
+std::string shader_source_dir = SHADER_DIR;
 // Contact_Matrix->shaderProgram
 global_variable
 std::string
@@ -144,6 +147,8 @@ VertexSource_UI = readShaderSource( shader_source_dir + "uiVertex.shader");
 global_variable
 std::string
 FragmentSource_UI = readShaderSource( shader_source_dir + "uiFragment.shader");
+*/
+
 
 
 #define UI_SHADER_LOC_POSITION 0
