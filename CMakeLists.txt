@@ -209,7 +209,7 @@ if(APPLE)
         INSTALL_RPATH "@executable_path/../Frameworks")
     install(TARGETS ${target_name}
             BUNDLE DESTINATION .
-            COMPONENT Runtime)
+            COMPONENT Runtime)   # generate the ${target_name}.app package under ${cmake_install_prefix}
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
             DESTINATION "${target_name}.app/Contents")
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/icon.icns"
@@ -221,19 +221,19 @@ if(APPLE)
 elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux") 
     message(STATUS "[Cmake Install]: Linux")
     set_target_properties(
-            ${target_name} 
-            PROPERTIES 
-            INSTALL_RPATH "@executable_path/lib")
+        ${target_name}
+        PROPERTIES 
+        INSTALL_RPATH "$ORIGIN/../lib")
     install(
         TARGETS ${target_name}
-        RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
+        RUNTIME DESTINATION "bin"
         COMPONENT Runtime)
     install(
         FILES ${torch_copy_libs} 
-        DESTINATION "${CMAKE_INSTALL_PREFIX}/lib") 
+        DESTINATION "lib") 
     install(
         FILES ${aimodel_files} 
-        DESTINATION "${CMAKE_INSTALL_PREFIX}/ai_model")
+        DESTINATION "ai_model")
 else () # windows
     message(STATUS "[Cmake Install]: Windows")
     install(
@@ -244,14 +244,8 @@ else () # windows
         FILES ${torch_copy_libs} 
         DESTINATION .) # libtorch
     install(
-        FILES ${SHADER_FILES}    
-        DESTINATION "src/shaderSource")
-    install(
         FILES ${aimodel_files}   
         DESTINATION "ai_model")
-    target_compile_definitions(
-        ${target_name} 
-        PUBLIC SHADER_DIR="${CMAKE_INSTALL_PREFIX}/src/shaderSource")
 endif()
 
 
