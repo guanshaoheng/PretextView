@@ -4,6 +4,7 @@
 
 #include <string>
 
+inline
 std::string
 VertexSource_Texture = R"(
 #version 330
@@ -20,6 +21,7 @@ void main()
 )";
 
 // Contact_Matrix->shaderProgram
+inline
 std::string
 FragmentSource_Texture = R"(
 #version 330
@@ -149,6 +151,7 @@ void main()
 }
 )";
 
+inline
 std::string
 VertexSource_Flat = R"(
 #version 330
@@ -160,6 +163,7 @@ void main()
 }
 )";
 
+inline
 std::string
 FragmentSource_Flat = R"(
 #version 330
@@ -171,6 +175,7 @@ void main()
 }
 )";
 
+inline
 std::string
 VertexSource_EditablePlot = R"(
 #version 330
@@ -193,6 +198,7 @@ void main()
 }
 )";
 
+inline
 std::string
 FragmentSource_EditablePlot = R"(
 #version 330
@@ -205,6 +211,7 @@ void main()
 )";
 
 // https://blog.tammearu.eu/posts/gllines/
+inline
 std::string
 GeometrySource_EditablePlot = R"(
 #version 330
@@ -234,6 +241,7 @@ void main()
 }
 )";
 
+inline
 std::string
 VertexSource_UI = R"(
 #version 330
@@ -251,6 +259,7 @@ void main()
 }
 )";
 
+inline
 std::string
 FragmentSource_UI = R"(
 #version 330
@@ -261,6 +270,39 @@ uniform sampler2D tex;
 void main()
 {
     outColor = texture(tex, Texcoord) * Color;
+}
+)";
+
+inline
+std::string 
+VertexSource_copyTexture = R"(
+#version 330 core
+layout(location = 0) in vec2 aPos;
+layout(location = 1) in vec2 aTexCoord;
+
+uniform mat4 model;
+out vec2 TexCoord;
+
+
+void main() {
+    gl_Position = model * vec4(aPos, 0.0, 1.0);
+    TexCoord = aTexCoord;
+}
+)";
+
+inline
+std::string 
+FragmentSource_copyTexture = R"(
+#version 330 core
+in vec2 TexCoord;
+out vec4 FragColor; 
+
+uniform sampler2DArray texArray; // 0
+uniform int layer;  
+
+void main() {
+
+    FragColor = vec4(texture(texArray, vec3(TexCoord, layer)).r, 0., 0., 1.);
 }
 )";
 

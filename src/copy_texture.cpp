@@ -22,6 +22,7 @@ SOFTWARE.
 */
 
 #include "copy_texture.h"
+#include "shaderSource.h"
 
 
 
@@ -117,40 +118,6 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
         show_state->lastMouseY = ypos;
     }
 }
-
-
-
-std::string 
-VertexSource_copyTexture = R"(
-#version 330 core
-layout(location = 0) in vec2 aPos;
-layout(location = 1) in vec2 aTexCoord;
-
-uniform mat4 model;
-out vec2 TexCoord;
-
-
-void main() {
-    gl_Position = model * vec4(aPos, 0.0, 1.0);
-    TexCoord = aTexCoord;
-}
-)";
-
-
-std::string 
-FragmentSource_copyTexture = R"(
-#version 330 core
-in vec2 TexCoord;
-out vec4 FragColor; 
-
-uniform sampler2DArray texArray; // 0
-uniform int layer;  
-
-void main() {
-
-    FragColor = vec4(texture(texArray, vec3(TexCoord, layer)).r, 0., 0., 1.);
-}
-)";
 
 
 TexturesArray4AI::TexturesArray4AI(
