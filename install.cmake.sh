@@ -1,13 +1,30 @@
 #!/bin/bash
 
-# ========= TORCH_PATH =========
-cmake_prefix_path_tmp=$1
-if [[ -z "$cmake_prefix_path_tmp" ]]; then
-    cmake_prefix_path_tmp="subprojects/libtorch/share/cmake"
-    echo "No cmake prefix path provided. Using default: $cmake_prefix_path_tmp"
-else
-    echo "cmake_prefix_path_tmp: $cmake_prefix_path_tmp"
-fi
+
+# ========= paramter cofig =========
+FORCE_MAC_X86=false
+BUILD_UNIVERSAL=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --force-x86)
+            FORCE_MAC_X86=true
+            shift
+            ;;
+        --universal)
+            BUILD_UNIVERSAL=true
+            shift
+            ;;
+        *)
+            echo "Not known parameter: $1"
+            exit 1
+            ;;
+    esac
+done
+
+# ========= libtorch path =========
+cmake_prefix_path_tmp="subprojects/libtorch/share/cmake"
+echo "Default Torch path: $cmake_prefix_path_tmp"
 
 # ========= Architecture =========
 # Detect OS and Architecture
@@ -27,6 +44,8 @@ if [[ "$OS" == "Linux" ]]; then
 elif [[ "$OS" == "Darwin" ]]; then
     if [[ "$ARCH" == "arm64" ]]; then
         LIBTORCH_URL="https://download.pytorch.org/libtorch/cpu/libtorch-macos-arm64-2.5.0.zip"
+    elif [[ "$ARCH" == "x86_64" ]]; then
+        LIBTORCH_URL="https://download.pytorch.org/libtorch/cpu/libtorch-macos-x86_64-2.2.2.zip"
     else
         echo "Unsupported architecture: $OS - $ARCH"
         exit 1
@@ -76,7 +95,10 @@ fi
 
 # ========= libdeflate =========
 cd subprojects/libdeflate
-cmake -DCMAKE_BUILD_TYPE=Release -S . -B build && cmake --build build --target libdeflate_static --config Release
+cmake -DCMAKE_BUILD_TYPE=Release -S . -B build && cmake --build build --target libdeflate_static --config Release || {
+    echo "libdeflate: compile failed!"
+    exit 1
+}
 cd ../../
 
 
@@ -91,9 +113,35 @@ else
     exit 1
 fi
 
-cmake -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_WAYLAND=OFF -DGLFW_BUILD_X11=OFF -DWITH_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=${install_path} -DCMAKE_PREFIX_PATH=${cmake_prefix_path_tmp} -S . -B ${build_dir}  # && cmake --build ${build_dir} --config Release && cmake --install ${build_dir}
+CMAKE_OPTIONS=(
+    -DCMAKE_BUILD_TYPE=Release
+    -DGLFW_BUILD_WAYLAND=OFF
+    -DGLFW_BUILD_X11=OFF
+    -DWITH_PYTHON=OFF
+    -DCMAKE_INSTALL_PREFIX="$install_path"
+    -DCMAKE_PREFIX_PATH="$cmake_prefix_path_tmp"
+)
+if [[ "$OS" == "Darwin" ]]; then
+    if [[ "$FORCE_MAC_X86" == true ]]; then
+        CMAKE_OPTIONS+=(
+            -DFORCE_MAC_X86=ON
+        )
+    elif [[ "$BUILD_UNIVERSAL" == true ]]; then
+        CMAKE_OPTIONS+=(
+            -DBUILD_UNIVERSAL=ON
+        )
+    fi
+fi
 
-cmake --build build_cmake --target package
+cmake "${CMAKE_OPTIONS[@]}" -S . -B ${build_dir}  || {
+    echo "PretextView: configure failed!"
+    exit 1
+}
+
+cmake --build ${build_dir} --target package || {
+    echo "PretextView: compile failed!"
+    exit 1
+}
 
 
 # PretextViewAI.app/Contents/MacOS/PretextViewAI /Users/sg35/auto-curation/log/learning_notes/hic_curation/13 idLinTess1_1\ auto-curation/aPelFus1_1.pretext

@@ -12,6 +12,9 @@ jobs:
     strategy:
       matrix:
         os: [ windows-latest, ubuntu-latest, macos-latest ]
+        include:
+          - os: macos-latest
+            target_arch: [ x86_64, arm64 ] 
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -33,8 +36,21 @@ jobs:
         run: |
           install.cmake.bat
 
-      - name: Run install script on Unix (Linux/macOS)
-        if: runner.os != 'Windows'
+      - name: Run install script on Linux
+        if: runner.os == 'Linux'
+        run: |
+          chmod +x ./install.cmake.sh
+          ./install.cmake.sh
+
+      - name: Run install script on MacOS x86_64
+        if: runner.os == 'MacOS' && matrix.target_arch == 'x86_64'
+        run: |
+          chmod +x ./install.cmake.sh -x86
+          ./install.cmake.sh 
+
+      
+      - name: Run install script on MacOS arm64
+        if: runner.os == 'MacOS' && matrix.target_arch == 'arm64'
         run: |
           chmod +x ./install.cmake.sh
           ./install.cmake.sh 
@@ -42,7 +58,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "${{ matrix.os }}-packages"
+          name: "${{ matrix.os }}-${{ matrix.target_arch }}-packages"
           path: |
             build_cmake/*.deb
             build_cmake/*.dmg

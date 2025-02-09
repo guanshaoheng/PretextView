@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.17)
 project(PretextView VERSION "1.0.0")
 
+
+# 新增编译选项 --------------------------------------------------
+option(FORCE_MAC_X86 "Force macOS x86_64 build" OFF)  # 新增强制x86选项
+option(BUILD_UNIVERSAL "Build macOS universal binary" OFF)  # 新增通用二进制选项
+
 set(CMAKE_C_STANDARD 17)   
 set(CMAKE_CXX_STANDARD 17)   
 set(CMAKE_C_STANDARD_REQUIRED ON)  
@@ -9,21 +14,33 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(target_name PretextViewAI)
 
 if (APPLE)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum OS X deployment version" FORCE) # required by libtorch
-    # define architecture-specific flags
-    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
-        set(CMAKE_OSX_ARCHITECTURES "arm64")
-        message(STATUS "Arch: ${CMAKE_SYSTEM_PROCESSOR}.")
-    else()
-        set(CMAKE_OSX_ARCHITECTURES "x86_64")
-        message(STATUS "Arch: ${CMAKE_SYSTEM_PROCESSOR}.")
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum OS X deployment version" FORCE)
+
+    if(FORCE_MAC_X86) 
+        message(STATUS "Forcing x86_64 architecture build")
+        set(CMAKE_OSX_ARCHITECTURES "x86_64" CACHE STRING "Build architectures" FORCE)
+    elseif(BUILD_UNIVERSAL) 
+        message(STATUS "Building macOS universal binary (x86_64 + arm64)")
+        set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures" FORCE)
+    else()  
+        if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
+            set(CMAKE_OSX_ARCHITECTURES "arm64")
+            message(STATUS "Auto-detected architecture: arm64")
+        else()
+            set(CMAKE_OSX_ARCHITECTURES "x86_64")
+            message(STATUS "Auto-detected architecture: x86_64")
+        endif()
     endif()
-    message(STATUS "macOS version: ${CMAKE_OSX_DEPLOYMENT_TARGET}")
+
+    message(STATUS "MacOS deployment target: ${CMAKE_OSX_DEPLOYMENT_TARGET}")
+    message(STATUS "MacOS target architectures: ${CMAKE_OSX_ARCHITECTURES}")
+
 elseif(WIN32)
-    message(STATUS "Windows")
+    message(STATUS "Windows build")
 elseif(UNIX AND NOT APPLE)
-    message(STATUS "Linux")
+    message(STATUS "Linux build")
 endif()
+
 
 message(STATUS "Install path: ${CMAKE_INSTALL_PREFIX}")
 
@@ -159,6 +176,16 @@ target_link_libraries(
 
 if (APPLE)
     set(library_need Cocoa OpenGL IOKit CoreVideo) 
+    find_library(METAL_LIB Metal)
+    find_library(ACCELERATE_LIB Accelerate)
+    if (METAL_LIB) 
+        message(STATUS "Metal found1: ${METAL_LIB}")
+        list(APPEND library_need Metal)
+    endif()
+    if (ACCELERATE_LIB)
+        message(STATUS "ACCELERATE_LIB found1: ${ACCELERATE_LIB}")
+        list(APPEND library_need Accelerate)
+    endif()
 elseif(WIN32)
     set(library_need gdi32 opengl32 kernel32 user32 shell32 Ole32) 
 elseif(UNIX AND NOT APPLE)
