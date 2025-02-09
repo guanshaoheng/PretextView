@@ -48,8 +48,8 @@ jobs:
       - name: Run install script on MacOS x86_64
         if: runner.os == 'MacOS' && matrix.target_arch == 'x86_64'
         run: |
-          chmod +x ./install.cmake.sh -x86
-          ./install.cmake.sh 
+          chmod +x ./install.cmake.sh
+          ./install.cmake.sh --force-x86
 
       
       - name: Run install script on MacOS arm64
