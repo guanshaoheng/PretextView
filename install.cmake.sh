@@ -49,9 +49,9 @@ git submodule update --init --recursive
 
 # ========= libdeflate =========
 cd subprojects/libdeflate
-cmake -DCMAKE_BUILD_TYPE=Release \ 
-      -DCMAKE_OSX_ARCHITECTURES=${OS} \
-      -S . -B build && cmake --build build --target libdeflate_static --config Release || {
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=${ARCH} -S . -B build
+
+cmake --build build --target libdeflate_static --config Release || {
     echo "libdeflate: compile failed!"
     exit 1
 }
@@ -77,6 +77,7 @@ CMAKE_OPTIONS=(
     -DWITH_TORCH=OFF
     -DCMAKE_INSTALL_PREFIX="$install_path"
     -DCMAKE_PREFIX_PATH="$cmake_prefix_path_tmp"
+    -DCMAKE_OSX_ARCHITECTURES=${ARCH}
 )
 if [[ "$OS" == "Darwin" ]]; then
     if [[ "$FORCE_MAC_X86" == true ]]; then

@@ -11,6 +11,19 @@ SET CC=clang-cl
 SET CXX=clang-cl
 SET WINDRES=rc
 
+rem --- check architecture ---
+set "ARCH=%PROCESSOR_ARCHITECTURE%"
+if /I "%ARCH%"=="x86" (
+    if defined PROCESSOR_ARCHITEW6432 (
+        set "ARCH=x86_64"
+    ) else (
+        set "ARCH=i386"
+    )
+) else if /I "%ARCH%"=="AMD64" (
+    set "ARCH=x86_64"
+)
+echo Detected architecture: %ARCH%
+
 
 REM ========= pull git repo =========
 git submodule update --init --recursive
@@ -18,7 +31,7 @@ git submodule update --init --recursive
 
 REM ========= deflate =========
 cd subprojects\libdeflate
-cmake -DCMAKE_BUILD_TYPE=Release -S . -B build && cmake --build build --config Release --target libdeflate_static 
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=%ARCH% -S . -B build && cmake --build build --config Release --target libdeflate_static 
 if errorlevel 1 (
     echo "CMake delfate failed."
     goto :error
