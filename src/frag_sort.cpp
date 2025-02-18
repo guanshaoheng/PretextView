@@ -450,7 +450,8 @@ std::deque<s32> fuse_chromosomes(
 
     // do backtracking
     std::deque<s32> fused(0);
-    std::array<std::reference_wrapper<std::deque<s32>>, 2> lists = {cha, chb};
+    std::array<std::reference_wrapper<std::deque<s32>>, 2> 
+        lists = {std::ref(cha), std::ref(chb)};
     std::array<int, 2> sizes = {n-1, m-1};
     uint8_t k = link1<link2? 1 : 0;
     while(sizes[0] >= 0 && sizes[1] >= 0) // push cha and chb to fused according to backtracking matrix
@@ -539,7 +540,8 @@ std::deque<s32> fuse_chromosomes_shguan(
 
     // do backtracking
     std::deque<s32> fused(0);
-    std::array<std::reference_wrapper<std::deque<s32>>, 2> lists = {cha, chb};
+    std::array<std::reference_wrapper<std::deque<s32>>, 2> 
+        lists = {std::ref(cha), std::ref(chb)};
     std::array<s32, 2> sizes = {(s32)n - 1, (s32)m - 1};
     uint8_t k = link1>link2? 0 : 1;
     while(sizes[0] >= 0 && sizes[1] >= 0) // push cha and chb to fused according to backtracking matrix
