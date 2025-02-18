@@ -29,7 +29,7 @@ SOFTWARE.
 #define PretextView_Title "PretextViewAI " my_String(PV) " - Wellcome Sanger Institute"    
 
 
-#include <aisort.h>  // place this before add Header.h to avoid macro conflict
+#include <frag_sort.h>  // place this before add Header.h to avoid macro conflict
 #include <Header.h>
 
 #ifdef DEBUG
@@ -788,8 +788,8 @@ Map_State;
 
 #include "copy_texture.h"
 // define the struct to store the ai model mask
-std::unique_ptr<AiModel> ai_model = nullptr;
-global_variable auto auto_curation_state=AutoCurationState();
+std::unique_ptr<FragSortTool> frag_sort_method = nullptr;
+global_variable auto auto_curation_state = AutoCurationState();
 
 
 global_function
@@ -6395,7 +6395,7 @@ Sort_yahs(char* currFileName)
     // use the compressed_hic to calculate the frags_order directly
     if (auto_curation_state.sort_mode == 0)
     {
-        ai_model->sort_according_likelihood_unionFind( 
+        frag_sort_method->sort_according_likelihood_unionFind( 
             likelihood_table, 
             frags_order, 
             auto_curation_state.link_score_threshold, 
@@ -6403,7 +6403,7 @@ Sort_yahs(char* currFileName)
     }
     else if (auto_curation_state.sort_mode == 1)
     {
-        ai_model->sort_according_likelihood_unionFind_doFuse( 
+        frag_sort_method->sort_according_likelihood_unionFind_doFuse( 
             likelihood_table, 
             frags_order, 
             auto_curation_state.link_score_threshold, 
@@ -6411,7 +6411,7 @@ Sort_yahs(char* currFileName)
     }
     else if (auto_curation_state.sort_mode == 2)
     {
-        ai_model->sort_according_likelihood_unionFind_doFuse( 
+        frag_sort_method->sort_according_likelihood_unionFind_doFuse( 
             likelihood_table, 
             frags_order, 
             auto_curation_state.link_score_threshold, 
@@ -10451,7 +10451,7 @@ MainArgs {
                 glfwSetWindowTitle(window, (const char *)currFileName);
                 FenceIn(SetSaveStateNameBuffer((char *)currFileName));
             }
-            glfwPollEvents();
+            glfwPollEvents(); 
             Loading = 0;
             Redisplay = 1;
         }
@@ -10576,15 +10576,16 @@ MainArgs {
                     bounds = nk_widget_bounds(NK_Context);
                     yahs_sort_button = nk_button_label(NK_Context, "YaHS Sort");
                     // AI sort button
+                    /*
                     {
                         if (ai_sort_button && currFileName)
                         {   
                             printf("AISort button clicked\n");
                             // check if the ai model is loaded
-                            if (!ai_model) 
+                            if (!frag_sort_method) 
                             {
                                 printf("Loading AI Model...\n");
-                                ai_model = std::make_unique<AiModel>();
+                                frag_sort_method = std::make_unique<FragSortTool>();
                             }
 
                             // prepare the graph data 
@@ -10597,7 +10598,7 @@ MainArgs {
                             {
                                 GraphData* graph_data;
                                 texture_array_4_ai.cal_graphData(graph_data);
-                                ai_model->cal_curated_fragments_order( graph_data, frags_order);
+                                frag_sort_method->cal_curated_fragments_order( graph_data, frags_order);
                                 delete graph_data;
                             }
                             else 
@@ -10610,11 +10611,12 @@ MainArgs {
                                     (f32)auto_curation_state.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), 
                                     exclude_frag_idx);
                                 // use the compressed_hic to calculate the frags_order directly
-                                ai_model->sort_according_likelihood_dfs( likelihood_table, frags_order, 0.4, texture_array_4_ai.get_frags());
+                                frag_sort_method->sort_according_likelihood_dfs( likelihood_table, frags_order, 0.4, texture_array_4_ai.get_frags());
                             }
                             std::cout << std::endl;
                         }
                     }
+                    */
                     // YaHS sort button
                     {   
                         if (yahs_sort_button) 

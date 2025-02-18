@@ -44,3 +44,4 @@ src/aisort_cz.h
 PretextViewAI.zip
 
 test_data/
+subprojects/libtorch(not needed in this version)/

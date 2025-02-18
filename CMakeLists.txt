@@ -3,8 +3,9 @@ project(PretextView VERSION "1.0.0")
 
 
 # 新增编译选项 --------------------------------------------------
-option(FORCE_MAC_X86 "Force macOS x86_64 build" OFF)  # 新增强制x86选项
-option(BUILD_UNIVERSAL "Build macOS universal binary" OFF)  # 新增通用二进制选项
+option(FORCE_MAC_X86 "Force macOS x86_64 build" OFF)  
+option(BUILD_UNIVERSAL "Build macOS universal binary" OFF) 
+option(WITH_TORCH "Find and link torch lib" OFF)
 
 set(CMAKE_C_STANDARD 17)   
 set(CMAKE_CXX_STANDARD 17)   
@@ -76,7 +77,7 @@ find_library(
     PATHS 
         subprojects/libdeflate/build 
         subprojects/libdeflate/build/debug 
-        subprojects/libdeflate/build/Release 
+        subprojects/libdeflate/build/Release
         subprojects/libdeflate/build/release)
 if(NOT lib_deflate_static)
     message(FATAL_ERROR "lib_deflate_static not found")
@@ -85,52 +86,25 @@ else()
 endif()
 
 
-# if (WITH_PYTHON)
-#   add_definitions(-DWITH_PYTHON)
-#   find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
-#   message(STATUS "Python found: ${Python3_EXECUTABLE}")
-#   execute_process(
-#     COMMAND "${Python3_EXECUTABLE}" -c "import torch; print(torch.__path__[0])"
-#     OUTPUT_VARIABLE TORCH_PYTHON_PATH
-#     OUTPUT_STRIP_TRAILING_WHITESPACE
-#   )
-#   if (TORCH_PYTHON_PATH)
-#     message(STATUS "Torch installed in Python at: ${TORCH_PYTHON_PATH}")
-#   else()
-#     message(FATAL_ERROR "Torch not found in Python")
-#   endif()
-#   list(APPEND CMAKE_PREFIX_PATH "${TORCH_PYTHON_PATH}/share/cmake/Torch")
-# endif()
-
 # set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
-message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
-find_package(Torch REQUIRED)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-message(STATUS "Torch libs: ${TORCH_LIBRARIES}")
-message(STATUS "Torch install prefix: ${TORCH_INSTALL_PREFIX}")
-# set(CMAKE_PREFIX_PATH "../libtorch/share/cmake/Torch")
-set(WITH_PYTHON OFF CACHE BOOL "Disable Python integration for pytorch_scatter" FORCE)
-add_subdirectory(subprojects/pytorch_scatter)
-
-
-# OpenBLAS, which was required before, now is not used
-# include_directories(
-#     subprojects/OpenBLAS
-#     subprojects/OpenBLAS/build
-# )
-# find_library(OPENBLAS_LIB openblas PATHS subprojects/OpenBLAS/build/lib)
-# if(NOT OPENBLAS_LIB)
-#     message(FATAL_ERROR "OpenBLAS not found")
-# else()
-#     message(STATUS "OpenBLAS found: ${OPENBLAS_LIB}")
-# endif()
-
-
-add_library(aisort STATIC src/aisort.cpp )
-target_link_libraries(
-    aisort PRIVATE 
-    ${TORCH_LIBRARIES} 
-    ${torchscatter})
+if (WITH_TORCH)
+    message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
+    find_package(Torch REQUIRED)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
+    message(STATUS "Torch libs: ${TORCH_LIBRARIES}")
+    message(STATUS "Torch install prefix: ${TORCH_INSTALL_PREFIX}")
+    # set(CMAKE_PREFIX_PATH "../libtorch/share/cmake/Torch")
+    set(WITH_PYTHON OFF CACHE BOOL "Disable Python integration for pytorch_scatter" FORCE)
+    add_subdirectory(subprojects/pytorch_scatter)
+    add_library(sortlib STATIC src/aisort.cpp )
+    target_link_libraries(
+        sortlib PUBLIC 
+        ${TORCH_LIBRARIES} 
+        ${torchscatter})
+else()
+    message(STATUS "Libtorch: Build without libtorch")
+    add_library(sortlib STATIC src/frag_sort.cpp )
+endif()
 
 
 add_library(glad STATIC glad.c)
@@ -163,8 +137,7 @@ endif()
 target_link_libraries(
     ${target_name} PRIVATE 
     ${lib_deflate_static} 
-    ${TORCH_LIBRARIES} 
-    aisort 
+    sortlib 
     glm 
     glad 
     utilsPretextView 
@@ -219,14 +192,14 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     if (APPLE)
         file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist" DESTINATION "${target_name}.app/Contents")
         file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/icon.icns" DESTINATION "${target_name}.app/Contents/Resources" )
-        file(COPY ${aimodel_files} DESTINATION "${target_name}.app/Contents/Resources/ai_model")
+        if (WITH_TORCH)
+            file(COPY ${aimodel_files} DESTINATION "${target_name}.app/Contents/Resources/ai_model")
+        endif()
     else()
         message(FATAL_ERROR "Debug is current only implemented on Mac.")
     endif()
 endif()
 
-# Define installation paths for macOS
-# CMAKE_INSTALL_PREFIX = PretextView.app
 if(APPLE)
     # set the shared/dynamic library path for the installed binary
     message(STATUS "[Cmake Install]: Mac")
@@ -241,10 +214,12 @@ if(APPLE)
             DESTINATION "${target_name}.app/Contents")
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/icon.icns"
             DESTINATION "${target_name}.app/Contents/Resources" )
-    install(FILES ${torch_copy_libs}
-            DESTINATION "${target_name}.app/Contents/Frameworks" )
-    install(FILES ${aimodel_files}
-            DESTINATION "${target_name}.app/Contents/Resources/ai_model" )
+    if (WITH_TORCH)
+        install(FILES ${torch_copy_libs}
+                DESTINATION "${target_name}.app/Contents/Frameworks" )
+        install(FILES ${aimodel_files}
+                DESTINATION "${target_name}.app/Contents/Resources/ai_model" )
+    endif()
 elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux") 
     message(STATUS "[Cmake Install]: Linux")
     set_target_properties(
@@ -255,24 +230,28 @@ elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
         TARGETS ${target_name}
         RUNTIME DESTINATION "bin"
         COMPONENT Runtime)
-    install(
-        FILES ${torch_copy_libs} 
-        DESTINATION "lib") 
-    install(
-        FILES ${aimodel_files} 
-        DESTINATION "ai_model")
+    if (WITH_TORCH)
+        install(
+            FILES ${torch_copy_libs} 
+            DESTINATION "lib") 
+        install(
+            FILES ${aimodel_files} 
+            DESTINATION "ai_model")
+    endif()
 else () # windows
     message(STATUS "[Cmake Install]: Windows")
     install(
         TARGETS ${target_name}
         RUNTIME DESTINATION .
         COMPONENT Runtime)
-    install(
-        FILES ${torch_copy_libs} 
-        DESTINATION .) # libtorch
-    install(
-        FILES ${aimodel_files}   
-        DESTINATION "ai_model")
+    if (WITH_TORCH)
+        install(
+            FILES ${torch_copy_libs} 
+            DESTINATION .) # libtorch
+        install(
+            FILES ${aimodel_files}   
+            DESTINATION "ai_model")
+    endif()
 endif()
 
 
