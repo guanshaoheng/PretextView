@@ -1,6 +1,12 @@
 #!/bin/bash
 
 
+# ========= Architecture =========
+# Detect OS and Architecture
+OS=$(uname -s)
+ARCH=$(uname -m)
+
+echo "$OS - $ARCH"
 # ========= paramter cofig =========
 FORCE_MAC_X86=false
 BUILD_UNIVERSAL=false
@@ -9,6 +15,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --force-x86)
             FORCE_MAC_X86=true
+            ARCH="x86_64"
             shift
             ;;
         --universal)
@@ -21,17 +28,12 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+echo "After mofidifying: $OS - $ARCH"
 
 # ========= libtorch path =========
 cmake_prefix_path_tmp="subprojects/libtorch/share/cmake"
 echo "Default Torch path: $cmake_prefix_path_tmp"
 
-# ========= Architecture =========
-# Detect OS and Architecture
-OS=$(uname -s)
-ARCH=$(uname -m)
-
-echo "$OS - $ARCH"
 
 # ========= clone submodules =========
 git submodule update --init --recursive
