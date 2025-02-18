@@ -49,7 +49,9 @@ git submodule update --init --recursive
 
 # ========= libdeflate =========
 cd subprojects/libdeflate
-cmake -DCMAKE_BUILD_TYPE=Release -S . -B build && cmake --build build --target libdeflate_static --config Release || {
+cmake -DCMAKE_BUILD_TYPE=Release \ 
+      -DCMAKE_OSX_ARCHITECTURES=${OS} \
+      -S . -B build && cmake --build build --target libdeflate_static --config Release || {
     echo "libdeflate: compile failed!"
     exit 1
 }
