@@ -28,6 +28,9 @@ SOFTWARE.
 #include <memory>
 #include <vector>
 #include <map>
+#include <array>
+#include <deque>
+#include <functional>
 #include "copy_texture.h"
 #include "auto_curation_state.h" 
 
