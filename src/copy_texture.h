@@ -33,12 +33,12 @@ SOFTWARE.
 
 struct Frag4compress {
     u32 num;
-    u32* frag_id;
-    u32* startCoord; // global start coordinate
-    u32* length;
-    bool* inversed;
+    u32* frag_id       = nullptr;
+    u32* startCoord    = nullptr; // global start coordinate
+    u32* length        = nullptr;
+    bool* inversed     = nullptr;
     u32 total_length;
-    u64* metaDataFlags;
+    u64* metaDataFlags = nullptr;
 
     Frag4compress(const contigs* Contigs)
         : total_length(0)
@@ -177,7 +177,7 @@ template<typename T>
 class Matrix2D
 {
 private:
-    T* data;
+    T* data = nullptr;
 public:
     u32 row_num, col_num, length;
     u32 shape[2];
@@ -241,7 +241,7 @@ template<typename T>
 class Matrix3D
 {
 private:
-    T* data;
+    T* data = nullptr;
 public:
     u32 row_num, col_num, layer_num, length;
     u32 shape[3];
@@ -324,9 +324,9 @@ struct CompressedExtensions
 {   
     u32 num;           // number of extensions: 2 : coverage, repeat_density
     u32 num_frags;
-    char** names;
-    bool* exist_flags;
-    f32** data;        //  coverage, repeat_density
+    char** names = nullptr;
+    bool* exist_flags = nullptr;
+    f32** data = nullptr;        //  coverage, repeat_density
     CompressedExtensions(u32 num_frags_)
     {     
         re_allocate_mem(num_frags_); 
@@ -458,13 +458,13 @@ class GraphData
 {
 private:
     u32 num_nodes;             // num of selected nodes
-    u32* selected_node_idx;    // the selected node global(original) index
+    u32* selected_node_idx = nullptr;    // the selected node global(original) index
     u32 num_edges;             // selected num of edges
     u32 num_node_properties;   // 1 + 1 + 1 ...
     u32 num_edge_properties;   // 4 + 1 + 2 ...
     u32 num_full_edges;        // num_nodes * (num_nodes - 1) / 2
 public:
-    Frag4compress* frags;
+    Frag4compress* frags = nullptr;
     Matrix2D<f32> nodes;              // [num_nodes, num_node_properties]
     Matrix2D<u32> edges_index;        // [2, num_edges]
     Matrix2D<f32> edges;              // [num_edges, num_edge_properties]
@@ -589,7 +589,7 @@ private:
     Matrix3D<f32>* compressed_hic = nullptr; // [0 - 3] channel represent the 4 directions, channel 4 represents the average of the interaction block
     CompressedExtensions* compressed_extensions = nullptr;
     MassCentre* mass_centres = nullptr;
-    unsigned char** textures=nullptr;
+    unsigned char** textures = nullptr;
     bool is_copied_from_buffer;
     bool is_compressed;
 public:

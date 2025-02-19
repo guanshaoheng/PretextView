@@ -32,7 +32,7 @@ SOFTWARE.
 #include <deque>
 #include <functional>
 #include "copy_texture.h"
-#include "auto_curation_state.h" 
+#include "auto_curation_state.h"
 
 
 struct Link {
@@ -50,10 +50,10 @@ struct LikelihoodTable
 {
 private:
     u32 num_frags;   // all the frags including the filtered out ones
-    f32* data;       // with shape [num_frags, num_frags, 4]
+    f32* data = nullptr;       // with shape [num_frags, num_frags, 4]
 public:
     std::unordered_set<u32> excluded_fragment_idx;
-    Frag4compress* frags;
+    Frag4compress* frags = nullptr;
 
     LikelihoodTable(
         Frag4compress* frags, 
@@ -138,8 +138,8 @@ struct FragsOrder
 private:
     u32 num_frags;                  // number of all the fragments
     u32 num_chromosomes;
-    u32* num_frags_in_chromosomes;  // [num_chromosomes]
-    s32** order;                    // [num_chromosomes, num_frags_in_chromosomes], + - represents the direction of the fragment, start from 1
+    u32* num_frags_in_chromosomes = nullptr;  // [num_chromosomes]
+    s32** order = nullptr;                    // [num_chromosomes, num_frags_in_chromosomes], + - represents the direction of the fragment, start from 1
     void cleanup()
     {   
         if (order)
