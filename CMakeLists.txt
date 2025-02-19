@@ -237,7 +237,7 @@ elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     endif()
 else () # windows
     message(STATUS "[Cmake Install]: Windows")
-    target_sources(${target_name} PRIVATE "PretextView.rc") # add logo to win version
+    target_sources(${target_name} PRIVATE "${CMAKE_SOURCE_DIR}/PretextView.rc") # add logo to win version
     install(
         TARGETS ${target_name}
         RUNTIME DESTINATION .
