@@ -185,6 +185,16 @@ endforeach()
 # ============ CMAKE INSTALLATION ==============
 file(GLOB aimodel_files "${CMAKE_CURRENT_SOURCE_DIR}/ai_model/*")
 file(GLOB torch_copy_libs "${TORCH_INSTALL_PREFIX}/lib/*")
+if (APPLE)
+    execute_process(
+        COMMAND bash ${CMAKE_SOURCE_DIR}/make_macos_app_plist.sh ${PROJECT_VERSION}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE output
+        ERROR_VARIABLE error_output
+        TIMEOUT 30
+        )
+endif()
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Debug on ${CMAKE_SYSTEM_NAME} - ${CMAKE_OSX_ARCHITECTURES}.")
     if (APPLE)
