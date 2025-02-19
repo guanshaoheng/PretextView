@@ -190,7 +190,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Debug on ${CMAKE_SYSTEM_NAME} - ${CMAKE_OSX_ARCHITECTURES}.")
     if (APPLE)
         file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist" DESTINATION "${target_name}.app/Contents")
-        file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/icon_mac.icns" DESTINATION "${target_name}.app/Contents/Resources" )
+        file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/icon.icns" DESTINATION "${target_name}.app/Contents/Resources" )
         if (WITH_TORCH)
             file(COPY ${aimodel_files} DESTINATION "${target_name}.app/Contents/Resources/ai_model")
         endif()
@@ -209,7 +209,7 @@ if(APPLE)
             COMPONENT Runtime)   # generate the ${target_name}.app package under ${cmake_install_prefix}
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
             DESTINATION "${target_name}.app/Contents")
-    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/icon_mac.icns"
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/icon.icns"
             DESTINATION "${target_name}.app/Contents/Resources" )
     if (WITH_TORCH)
         install(FILES ${torch_copy_libs}
