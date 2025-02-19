@@ -13,11 +13,11 @@ jobs:
       matrix:
         os: [ windows-latest, ubuntu-latest, macos-latest ]
         target_arch: [ x86_64, arm64 ]
-        # exclude:
-          # - os: windows-latest
-          #   target_arch: arm64
-          # - os: ubuntu-latest
-          #   target_arch: arm64
+        exclude:
+          - os: windows-latest
+            target_arch: arm64
+          - os: ubuntu-latest
+            target_arch: arm64
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -51,7 +51,6 @@ jobs:
           chmod +x ./install.cmake.sh
           ./install.cmake.sh --force-x86
 
-      
       - name: Run install script on MacOS arm64
         if: runner.os == 'MacOS' && matrix.target_arch == 'arm64'
         run: |
