@@ -14,6 +14,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(target_name PretextViewAI)
 
 if (APPLE)
+    set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "" CACHE STRING "No code signing")
+    set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO")
+    set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO")
     set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum OS X deployment version" FORCE)
 
     if(FORCE_MAC_X86) 
@@ -55,8 +58,6 @@ else()
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
 endif()
 
-
-set(source_file PretextView.cpp glad.c)
 include_directories(
     include
     src
