@@ -136,7 +136,7 @@ install.cmake.bat # [Windows]
 Application will be installed to the 'app' folder in the source directory.
 
 
-**NOTE for Mac users who downloads this from Releases page**. If the user is told that the software is damaged, please unzip the file and run 
+**NOTE for Mac user who downloads this from Release page**. If the user is told that the software is damaged, please unzip the file and run 
 ```bash
 xattr -d com.apple.quarantine PretextViewAI-1.0.0-Darwin.dmg
 ```
