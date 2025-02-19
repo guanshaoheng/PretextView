@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.17)
 project(PretextView VERSION "1.0.0")
 
 
-# 新增编译选项 --------------------------------------------------
 option(FORCE_MAC_X86 "Force macOS x86_64 build" OFF)  
 option(BUILD_UNIVERSAL "Build macOS universal binary" OFF) 
 option(WITH_TORCH "Find and link torch lib" OFF)
@@ -200,11 +199,6 @@ endif()
 if(APPLE)
     # set the shared/dynamic library path for the installed binary
     message(STATUS "[Cmake Install]: Mac")
-    add_custom_command(
-        TARGET ${target_name}  POST_BUILD
-        COMMAND xattr -dr com.apple.quarantine $<TARGET_FILE:${target_name}>
-        COMMENT "Removing quarantine attribute"
-    )
     set_target_properties(
         ${target_name} 
         PROPERTIES 
