@@ -125,6 +125,10 @@ if(NOT APPLE)
     add_executable( ${target_name} PretextView.cpp )
 else()
     add_executable( ${target_name} MACOSX_BUNDLE PretextView.cpp )
+    set_target_properties(
+        ${target_name} PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/Info.plist"
+    )
 endif()
 target_compile_definitions(${target_name} PRIVATE PV=${PROJECT_VERSION})
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -180,7 +184,6 @@ foreach (library ${library_need})
         endforeach()
     endif()
 endforeach()
-
 
 
 # ============ CMAKE INSTALLATION ==============
