@@ -207,8 +207,8 @@ if(APPLE)
     install(TARGETS ${target_name}
             BUNDLE DESTINATION .
             COMPONENT Runtime)   # generate the ${target_name}.app package under ${cmake_install_prefix}
-    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
-            DESTINATION "${target_name}.app/Contents")
+    # install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
+    #         DESTINATION "${target_name}.app/Contents")
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/icon.icns"
             DESTINATION "${target_name}.app/Contents/Resources" )
     if (WITH_TORCH)
