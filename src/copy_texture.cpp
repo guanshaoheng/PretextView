@@ -878,7 +878,7 @@ void TexturesArray4AI::cal_compressed_hic(
             {
                 (*compressed_hic)(i, j, channel) = (*compressed_hic)(j, i, Switch_Channel_Symetric[channel]) = buffer_values_on_channel.c[channel];
             }
-            if (++cnt % (num_interaction_to_cal / 100)==0) 
+            if (num_interaction_to_cal > 100 && ++cnt % (num_interaction_to_cal / 100)==0)
             {
                 printf("\rCalculating compressed_hic %.2f%%", (f32)(cnt) / (f32)num_interaction_to_cal * 100.0f);
                 fflush(stdout);
