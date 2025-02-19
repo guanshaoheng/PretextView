@@ -824,7 +824,7 @@ UpdateContigsFromMapState()  // todo reading 从map的状态更新contigs
             Original_Contigs[lastId].contigMapPixels[Original_Contigs[lastId].nContigs] = pixelIdx - 1 - (length >> 1);   // update Original_Contigs: contigMapPixels
             Original_Contigs[lastId].nContigs++; // update Original_Contigs: nContigs, contigMapPixels
 
-            contig *last_cont = Contigs->contigs + contigPtr; // 获取上一个contig的指针， 并且给contigPtr + 1
+            contig *last_cont = Contigs->contigs_arr + contigPtr; // 获取上一个contig的指针， 并且给contigPtr + 1
             contigPtr++;
             last_cont->originalContigId = lastId; // 更新这个片段的id
             last_cont->length = length;           // 更新长度
@@ -863,7 +863,7 @@ UpdateContigsFromMapState()  // todo reading 从map的状态更新contigs
         (Original_Contigs + lastId)->contigMapPixels[(Original_Contigs + lastId)->nContigs++] = pixelIdx - 1 - (length >> 1); 
 
         ++length;
-        contig *cont = Contigs->contigs + contigPtr++;
+        contig *cont = Contigs->contigs_arr + contigPtr++;
         cont->originalContigId = lastId;
         cont->length = length;
         cont->startCoord = startCoord;
@@ -1152,7 +1152,7 @@ global_function
 void
 UpdateScaffolds()
 {
-    ForLoop(Number_of_Pixels_1D) Map_State->scaffIds[index] = (Contigs->contigs + Map_State->contigIds[index])->scaffId;
+    ForLoop(Number_of_Pixels_1D) Map_State->scaffIds[index] = (Contigs->contigs_arr + Map_State->contigIds[index])->scaffId;
 }
 
 global_function
@@ -2611,7 +2611,7 @@ Render() {
         f32 x = -0.5f;
         ForLoop(Contigs->numberOfContigs - 1)
         {
-            contig *cont = Contigs->contigs + index;
+            contig *cont = Contigs->contigs_arr + index;
 
             position += ((f32)cont->length / (f32)Number_of_Pixels_1D);
             f32 px = x + lineWidth;
@@ -2657,7 +2657,7 @@ Render() {
         f32 y = 0.5f;
         ForLoop(Contigs->numberOfContigs - 1)
         {
-            contig *cont = Contigs->contigs + index;
+            contig *cont = Contigs->contigs_arr + index;
 
             position += ((f32)cont->length / (f32)Number_of_Pixels_1D);
             f32 py = y - lineWidth;
@@ -2706,7 +2706,7 @@ Render() {
         f32 y = 0.5f;
         ForLoop(Contigs->numberOfContigs)
         {
-            contig *cont = Contigs->contigs + index;
+            contig *cont = Contigs->contigs_arr + index;
 
             position += ((f32)cont->length / (f32)Number_of_Pixels_1D);
             f32 py = y - lineWidth;
@@ -2831,7 +2831,7 @@ Render() {
 
             ForLoop(Contigs->numberOfContigs)
             {
-                contig *cont = Contigs->contigs + index;
+                contig *cont = Contigs->contigs_arr + index;
                 
                 totalLength += (f32)((f64)cont->length / (f64)Number_of_Pixels_1D);
 
@@ -2880,7 +2880,7 @@ Render() {
 
             ForLoop(Contigs->numberOfContigs)
             {
-                contig *cont = Contigs->contigs + index;
+                contig *cont = Contigs->contigs_arr + index;
                 
                 totalLength += (f32)((f64)cont->length / (f64)Number_of_Pixels_1D);
 
@@ -2964,7 +2964,7 @@ Render() {
 
             ForLoop(Contigs->numberOfContigs)
             {
-                contig *cont = Contigs->contigs + index;
+                contig *cont = Contigs->contigs_arr + index;
                 
                 totalLength += (f32)((f64)cont->length / (f64)Number_of_Pixels_1D);
                 rightPixel = ModelXToScreen(totalLength - 0.5f);
@@ -3371,10 +3371,10 @@ Render() {
             char buff[128];
             f32 position = 0.0f;
             f32 start = 0.0f;
-            u32 scaffId = Contigs->contigs->scaffId;
+            u32 scaffId = Contigs->contigs_arr->scaffId;
             ForLoop(Contigs->numberOfContigs)
             {
-                contig *cont = Contigs->contigs + index;
+                contig *cont = Contigs->contigs_arr + index;
 
                 if (cont->scaffId != scaffId)
                 {
@@ -3642,10 +3642,10 @@ Render() {
             fonsVertMetrics(FontStash_Context, 0, 0, &lh);
 
             f32 end_contig = 0.0f, start_contig = 0.0f;
-            u32 scaffId = Contigs->contigs->scaffId;
+            u32 scaffId = Contigs->contigs_arr->scaffId;
             ForLoop(Contigs->numberOfContigs)
             {
-                contig *cont = Contigs->contigs + index;
+                contig *cont = Contigs->contigs_arr + index;
                 end_contig += ((f32)cont->length / (f32)Number_of_Pixels_1D); // end of the contig
                 if (*cont->metaDataFlags)
                 {
@@ -4834,7 +4834,7 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
         }
 
         Contigs = PushStructP(arena, contigs);              // 声明一个存储contigs的内存块， 其返回Contigs作为这个块的指针，实际上此处为整个genome的信息
-        Contigs->contigs = PushArrayP(arena, contig, Max_Number_of_Contigs); // 每一个Contigs中会有contigs (片段)，一共有Max_Number_of_Contigs多个片段，最多存放4096个contigs
+        Contigs->contigs_arr = PushArrayP(arena, contig, Max_Number_of_Contigs); // 每一个Contigs中会有contigs (片段)，一共有Max_Number_of_Contigs多个片段，最多存放4096个contigs
         Contigs->contigInvertFlags = PushArrayP(arena, u08, (Max_Number_of_Contigs + 7) >> 3);  // (4096 + 7 ) >> 3 = 512, 声明512个u08的存储空间
 
         UpdateContigsFromMapState();  //  根据mapstate 跟新当前的contigs, 并且更新original_contigs里面的每个contig所包含的片段的个数和片段的中点
@@ -6034,7 +6034,7 @@ RearrangeMap(       // NOTE: VERY IMPORTANT
             u32 targetContigId = Map_State->contigIds[target] + (target == Number_of_Pixels_1D - 1 ? 1 : 0); // why is the last pixel +1?
             if (targetContigId) // only if the target is not the selected contig
             {
-                contig *targetContig = Contigs->contigs + targetContigId - 1;
+                contig *targetContig = Contigs->contigs_arr + targetContigId - 1;
                 
                 u32 targetCoord = IsContigInverted(targetContigId - 1) ? (targetContig->startCoord - targetContig->length + 1) : (targetContig->startCoord + targetContig->length - 1);
                 while (delta > 0 && 
@@ -6056,7 +6056,7 @@ RearrangeMap(       // NOTE: VERY IMPORTANT
             u32 targetContigId = Map_State->contigIds[target];
             if (targetContigId < (Contigs->numberOfContigs - 1)) // only if the target is not the selected contig
             {
-                contig *targetContig = Contigs->contigs + (target ? targetContigId + 1 : 0);
+                contig *targetContig = Contigs->contigs_arr + (target ? targetContigId + 1 : 0);
                 u32 targetCoord = targetContig->startCoord;
                 while (delta < 0 && (Map_State->contigIds[target] != (target ? targetContigId + 1 : 0) || Map_State->contigRelCoords[target] != targetCoord))
                 {
@@ -6242,7 +6242,7 @@ void AutoCurationFromFragsOrder(
             full_predicted_order[select_area->selected_frag_ids[i]] = (predicted_order[i]>0?1:-1) * (select_area->selected_frag_ids[0] + std::abs(predicted_order[i]));
         predicted_order = full_predicted_order;
     }
-    for (s32 i = 0; i < num_frags; ++i) current_order[i] = {i+1, contigs_->contigs[i].length}; // start from 1
+    for (s32 i = 0; i < num_frags; ++i) current_order[i] = {i+1, contigs_->contigs_arr[i].length}; // start from 1
     auto move_current_order_element = [&current_order, &num_frags](u32 from, u32 to)
     {
         if (from >= num_frags || to >= num_frags)
@@ -7013,7 +7013,7 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                 case GLFW_KEY_D:
                     if (Scaff_Edit_Mode && (mods & GLFW_MOD_SHIFT))
                     {
-                        ForLoop(Contigs->numberOfContigs) (Contigs->contigs + index)->scaffId = 0;
+                        ForLoop(Contigs->numberOfContigs) (Contigs->contigs_arr + index)->scaffId = 0;
                         UpdateScaffolds();
                     }
                     else if (MetaData_Edit_Mode && (mods & GLFW_MOD_SHIFT)) memset(Map_State->metaDataFlags, 0, Number_of_Pixels_1D * sizeof(u64));
@@ -8613,8 +8613,8 @@ SaveState(u64 headerHash, char *path = 0, u08 overwrite = 0)
         u32 nMetaFlags = 0;
         ForLoop(Contigs->numberOfContigs)
         {
-            if ((Contigs->contigs + index)->scaffId) ++nScaffs;
-            if (*(Contigs->contigs + index)->metaDataFlags) ++nMetaFlags;
+            if ((Contigs->contigs_arr + index)->scaffId) ++nScaffs;
+            if (*(Contigs->contigs_arr + index)->metaDataFlags) ++nMetaFlags;
         }
         
         u08 nMetaTags = 0;
@@ -8846,9 +8846,9 @@ SaveState(u64 headerHash, char *path = 0, u08 overwrite = 0)
             *fileWriter++ = ((u08 *)&nScaffs)[3];
             ForLoop(Contigs->numberOfContigs)
             {
-                if ((Contigs->contigs + index)->scaffId)
+                if ((Contigs->contigs_arr + index)->scaffId)
                 {
-                    u32 sId = (Contigs->contigs + index)->scaffId;
+                    u32 sId = (Contigs->contigs_arr + index)->scaffId;
                     *fileWriter++ = ((u08 *)&index)[0];
                     *fileWriter++ = ((u08 *)&index)[1];
                     *fileWriter++ = ((u08 *)&index)[2];
@@ -8875,9 +8875,9 @@ SaveState(u64 headerHash, char *path = 0, u08 overwrite = 0)
             *fileWriter++ = ((u08 *)&nMetaFlags)[3];
             ForLoop(Contigs->numberOfContigs)
             {
-                if (*(Contigs->contigs + index)->metaDataFlags)
+                if (*(Contigs->contigs_arr + index)->metaDataFlags)
                 {
-                    u64 flags = *(Contigs->contigs + index)->metaDataFlags;
+                    u64 flags = *(Contigs->contigs_arr + index)->metaDataFlags;
                     *fileWriter++ = ((u08 *)&index)[0];
                     *fileWriter++ = ((u08 *)&index)[1];
                     *fileWriter++ = ((u08 *)&index)[2];
@@ -9416,7 +9416,7 @@ LoadState(u64 headerHash, char *path)
 
                     nBytesRead += 4;
 
-                    ForLoop(Contigs->numberOfContigs) (Contigs->contigs + index)->scaffId = 0;
+                    ForLoop(Contigs->numberOfContigs) (Contigs->contigs_arr + index)->scaffId = 0;
 
                     ForLoop(nScaffs)
                     {
@@ -9431,7 +9431,7 @@ LoadState(u64 headerHash, char *path)
                         ((u08 *)&sId)[2] = *fileContents++;
                         ((u08 *)&sId)[3] = *fileContents++;
 
-                        (Contigs->contigs + cId)->scaffId = sId;
+                        (Contigs->contigs_arr + cId)->scaffId = sId;
                     }
 
                     UpdateScaffolds();
@@ -9651,7 +9651,7 @@ restore_initial_state()
 
     // scaffs
     {
-        ForLoop(Contigs->numberOfContigs) (Contigs->contigs + index)->scaffId = 0;
+        ForLoop(Contigs->numberOfContigs) (Contigs->contigs_arr + index)->scaffId = 0;
         UpdateScaffolds();
     }
 
@@ -10106,7 +10106,7 @@ GenerateAGP(char *path, u08 overwrite, u08 formatSingletons, u08 preserveOrder)
         u32 scaffPart = 0;
 
         u32 scaffId_unPainted = 0;
-        if (preserveOrder) ForLoop(Contigs->numberOfContigs) scaffId_unPainted = my_Max(scaffId_unPainted, (Contigs->contigs + index)->scaffId);
+        if (preserveOrder) ForLoop(Contigs->numberOfContigs) scaffId_unPainted = my_Max(scaffId_unPainted, (Contigs->contigs_arr + index)->scaffId);
 
         for (   u08 type = 0;
                 type < (preserveOrder ? 1 : 2);
@@ -10114,7 +10114,7 @@ GenerateAGP(char *path, u08 overwrite, u08 formatSingletons, u08 preserveOrder)
         {
             ForLoop(Contigs->numberOfContigs)
             {
-                contig *cont = Contigs->contigs + index;
+                contig *cont = Contigs->contigs_arr + index;
                 u08 invert = IsContigInverted(index);
                 u32 startCoord = cont->startCoord - (invert ? (cont->length - 1) : 0);
 
@@ -11291,7 +11291,7 @@ MainArgs {
                                 u32 nSeq = 0;
                                 ForLoop(Contigs->numberOfContigs)
                                 {
-                                    contig *cont = Contigs->contigs + index;
+                                    contig *cont = Contigs->contigs_arr + index;
                                     
                                     if (cont->scaffId != scaffId)
                                     {
@@ -11422,7 +11422,7 @@ MainArgs {
                                             f32 pos = -0.5f;
                                             ForLoop2(Contigs->numberOfContigs)
                                             {
-                                                contig *cont = Contigs->contigs + index2;
+                                                contig *cont = Contigs->contigs_arr + index2;
                                                 f32 contLen = (f32)((f64)cont->length / (f64)Number_of_Pixels_1D);
 
                                                 if (*cont->metaDataFlags & (1 << index))

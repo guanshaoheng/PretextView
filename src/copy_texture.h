@@ -80,13 +80,13 @@ struct Frag4compress {
         {   
             frag_id[0] = select_area->selected_frag_ids[0];
             startCoord[0] =select_area->start_pixel;
-            length[0] = Contigs->contigs[select_area->selected_frag_ids[0]].length;
+            length[0] = Contigs->contigs_arr[select_area->selected_frag_ids[0]].length;
         }
         else
         {
             frag_id[0] = 0;
             startCoord[0] = 0;
-            length[0] = Contigs->contigs[0].length;
+            length[0] = Contigs->contigs_arr[0].length;
         }
         total_length = length[0];
         for (u32 i = 1; i < num; i++)
@@ -95,8 +95,8 @@ struct Frag4compress {
             frag_id[i] = contig_id;
             inversed[i] = false; // todo (shaoheng) add the inversed information
             startCoord[i] = startCoord[i-1] + length[i-1];
-            length[i] = Contigs->contigs[contig_id].length;
-            metaDataFlags[i] = (Contigs->contigs[contig_id].metaDataFlags == nullptr)?0:*(Contigs->contigs[contig_id].metaDataFlags);
+            length[i] = Contigs->contigs_arr[contig_id].length;
+            metaDataFlags[i] = (Contigs->contigs_arr[contig_id].metaDataFlags == nullptr)?0:*(Contigs->contigs_arr[contig_id].metaDataFlags);
             total_length += length[i];
         }
     }

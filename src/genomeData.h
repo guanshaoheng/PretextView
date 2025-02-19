@@ -78,7 +78,7 @@ struct contig
 struct contigs
 {
     u08 *contigInvertFlags = nullptr; // invert flag [num_pixels_1d / 8], 1 bit for one pixel
-    contig *contigs = nullptr;
+    contig *contigs_arr = nullptr;
     u32 numberOfContigs;
     u32 pad;
 };
