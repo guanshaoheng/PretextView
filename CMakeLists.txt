@@ -146,7 +146,6 @@ target_link_libraries(
     glfw 
 )   
 
-
 if (APPLE)
     set(library_need Cocoa OpenGL IOKit CoreVideo) 
     find_library(METAL_LIB Metal)
@@ -185,18 +184,18 @@ foreach (library ${library_need})
 endforeach()
 
 
+
 # ============ CMAKE INSTALLATION ==============
 file(GLOB aimodel_files "${CMAKE_CURRENT_SOURCE_DIR}/ai_model/*")
 file(GLOB torch_copy_libs "${TORCH_INSTALL_PREFIX}/lib/*")
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS "Debug on ${CMAKE_SYSTEM_NAME} - ${CMAKE_OSX_ARCHITECTURES}.")
     if (APPLE)
         file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist" DESTINATION "${target_name}.app/Contents")
-        file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/icon.icns" DESTINATION "${target_name}.app/Contents/Resources" )
+        file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/icon_mac.icns" DESTINATION "${target_name}.app/Contents/Resources" )
         if (WITH_TORCH)
             file(COPY ${aimodel_files} DESTINATION "${target_name}.app/Contents/Resources/ai_model")
         endif()
-    else()
-        message(FATAL_ERROR "Debug is current only implemented on Mac.")
     endif()
 endif()
 
@@ -212,7 +211,7 @@ if(APPLE)
             COMPONENT Runtime)   # generate the ${target_name}.app package under ${cmake_install_prefix}
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
             DESTINATION "${target_name}.app/Contents")
-    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/icon.icns"
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/icon_mac.icns"
             DESTINATION "${target_name}.app/Contents/Resources" )
     if (WITH_TORCH)
         install(FILES ${torch_copy_libs}
@@ -240,6 +239,7 @@ elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     endif()
 else () # windows
     message(STATUS "[Cmake Install]: Windows")
+    target_sources(${target_name} PRIVATE "PretextView.rc") # add logo to win version
     install(
         TARGETS ${target_name}
         RUNTIME DESTINATION .
@@ -266,7 +266,6 @@ set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENCE.txt")
 
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Darwin") # macOS
     message(STATUS "[CPack]: Generate on Mac")
-    # set(CPACK_PACKAGE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/icon.icns)
     set(CPACK_GENERATOR "DragNDrop")
     set(CPACK_DMG_VOLUME_NAME "${target_name} Installer")
     set(CPACK_DMG_FORMAT "UDZO") 
@@ -283,8 +282,11 @@ elseif(WIN32) # Windows
     set(CPACK_GENERATOR "NSIS")
     set(CPACK_NSIS_DISPLAY_NAME "${target_name}")
     set(CPACK_NSIS_PACKAGE_NAME "${target_name} Installer")
-    # set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/icon.icns") 
+    set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/icon_win.ico")
+    set(CPACK_NSIS_MUI_UNIICON "${CMAKE_SOURCE_DIR}/icon_win.ico") 
+    set(CPACK_NSIS_INSTALLED_ICON_NAME "${target_name}.exe")
     set(CPACK_NSIS_HELP_LINK "https://github.com/guanshaoheng/PretextView") 
     set(CPACK_NSIS_URL_INFO_ABOUT "https://github.com/guanshaoheng/PretextView") 
 endif()
+
 include(CPack)
