@@ -138,7 +138,7 @@ Application will be installed to the 'app' folder in the source directory.
 
 **NOTE for Mac user who downloads this from Release page**. If the user is told that the software is damaged, please unzip the file and run 
 ```bash
-xattr -d com.apple.quarantine PretextViewAI-1.0.0-Darwin.dmg
+xattr -d com.apple.quarantine /path/to/the/downloaded/dmg/file
 ```
 to remove the **quarantine** and then unmount and re-mount the dmg file. And then try to open the `PretextViewAI.app`.
 
