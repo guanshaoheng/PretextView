@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.17)
-project(PretextView VERSION "1.0.0")
+project(PretextView VERSION "1.0.1")
 
 
 option(FORCE_MAC_X86 "Force macOS x86_64 build" OFF)  
