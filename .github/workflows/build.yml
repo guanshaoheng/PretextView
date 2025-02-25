@@ -62,6 +62,9 @@ jobs:
         with:
           name: "${{ matrix.os }}-${{ matrix.target_arch }}-packages"
           path: |
+            build_cmake/*.app
+            build_cmake/*.exe
+            build_cmake/PretextViewAI
             build_cmake/*.deb
             build_cmake/*.dmg
             build_cmake/*.exe
