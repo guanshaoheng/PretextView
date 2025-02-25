@@ -1,0 +1,74 @@
+name: Build and upload
+
+# run the workflow on new tag creation
+on:
+  push:
+    tags:
+      - '*.*.*'
+      
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ windows-latest, ubuntu-latest, macos-latest ]
+        target_arch: [ x86_64, arm64 ]
+        exclude:
+          - os: windows-latest
+            target_arch: arm64
+          - os: ubuntu-latest
+            target_arch: arm64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check runner OS
+        run: echo "Runner OS is ${{ runner.os }}"
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: install GL and x11 for Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+
+      - name: Run install script on Windows
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          install.cmake.bat
+
+      - name: Run install script on Linux
+        if: runner.os == 'Linux'
+        run: |
+          chmod +x ./install.cmake.sh
+          ./install.cmake.sh
+
+      - name: Run install script on MacOS x86_64
+        if: runner.os == 'MacOS' && matrix.target_arch == 'x86_64'
+        run: |
+          chmod +x ./install.cmake.sh
+          ./install.cmake.sh --force-x86
+
+      - name: Run install script on MacOS arm64
+        if: runner.os == 'MacOS' && matrix.target_arch == 'arm64'
+        run: |
+          chmod +x ./install.cmake.sh
+          ./install.cmake.sh 
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: ${{ env.name }}
+          files: |
+              build_cmake/*.deb
+              build_cmake/*.dmg
+              build_cmake/*.exe
+              build_cmake/*.zip
+              build_cmake/*.msi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  
