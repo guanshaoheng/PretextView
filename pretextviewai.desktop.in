@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=@target_name@
+Exec=@target_name@ %F
+Icon=pretextview
+Type=Application
+Categories=Utility;
+Comment=HiC map viewer with AI-powered curation
+
+[Desktop Action new-window]
+Name=New Window
+Exec=@target_name@ %F

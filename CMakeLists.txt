@@ -293,6 +293,40 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Darwin") # macOS
     set(CPACK_DMG_FORMAT "UDZO") 
 elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux") # Linux (Ubuntu)
     message(STATUS "[CPack]: Generate on Linux")
+    install(
+        FILES "${CMAKE_SOURCE_DIR}/ico_design/icon_48x48x32.png"
+        DESTINATION "/usr/share/icons/hicolor/48x48/apps"
+        RENAME "pretextview.png"
+    )
+    install(
+        FILES "${CMAKE_SOURCE_DIR}/ico_design/icon_64x64x32.png"
+        DESTINATION "share/icons/hicolor/64x64/apps"
+        RENAME "pretextview.png"
+    )
+    install(
+        FILES "${CMAKE_SOURCE_DIR}/ico_design/icon_128x128x32.png"
+        DESTINATION "/usr/share/icons/hicolor/128x128/apps"
+        RENAME "pretextview.png"
+    )
+    install(
+        FILES "${CMAKE_SOURCE_DIR}/ico_design/icon_256x256x32.png"
+        DESTINATION "/usr/share/icons/hicolor/256x256/apps"
+        RENAME "pretextview.png"
+    )
+    install(
+        FILES "${CMAKE_SOURCE_DIR}/ico_design/icon_512x512x32.png"
+        DESTINATION "/usr/share/icons/hicolor/512x512/apps"
+        RENAME "pretextview.png"
+    )
+    configure_file(
+        "${CMAKE_SOURCE_DIR}/pretextviewai.desktop.in"
+        "${CMAKE_BINARY_DIR}/pretextviewai.desktop"
+        @ONLY
+    )
+    install(
+        FILES "${CMAKE_BINARY_DIR}/pretextviewai.desktop"
+        DESTINATION "share/applications"
+    )
     set(CPACK_GENERATOR "DEB")
     set(CPACK_DEBIAN_HARDLINKS OFF)
     set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Shaoheng Guan") 
