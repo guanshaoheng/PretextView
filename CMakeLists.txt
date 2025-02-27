@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.17)
-project(PretextView VERSION "1.0.0")
+project(PretextView VERSION "1.0.1")
+
+
+option(FORCE_MAC_X86 "Force macOS x86_64 build" OFF)  
+option(BUILD_UNIVERSAL "Build macOS universal binary" OFF) 
+option(WITH_TORCH "Find and link torch lib" OFF)
 
 set(CMAKE_C_STANDARD 17)   
 set(CMAKE_CXX_STANDARD 17)   
@@ -9,21 +14,47 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(target_name PretextViewAI)
 
 if (APPLE)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum OS X deployment version" FORCE) # required by libtorch
-    # define architecture-specific flags
-    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
-        set(CMAKE_OSX_ARCHITECTURES "arm64")
-        message(STATUS "Arch: ${CMAKE_SYSTEM_PROCESSOR}.")
-    else()
-        set(CMAKE_OSX_ARCHITECTURES "x86_64")
-        message(STATUS "Arch: ${CMAKE_SYSTEM_PROCESSOR}.")
+
+    if(FORCE_MAC_X86) 
+        message(STATUS "Forcing x86_64 architecture build")
+        set(CMAKE_OSX_ARCHITECTURES "x86_64" CACHE STRING "Build architectures" FORCE)
+    elseif(BUILD_UNIVERSAL) 
+        message(STATUS "Building macOS universal binary (x86_64 + arm64)")
+        set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures" FORCE)
+    else()  
+        if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
+            set(CMAKE_OSX_ARCHITECTURES "arm64")
+            message(STATUS "Auto-detected architecture: arm64")
+        else()
+            set(CMAKE_OSX_ARCHITECTURES "x86_64")
+            message(STATUS "Auto-detected architecture: x86_64")
+        endif()
     endif()
-    message(STATUS "macOS version: ${CMAKE_OSX_DEPLOYMENT_TARGET}")
-elseif(WIN32)
-    message(STATUS "Windows")
-elseif(UNIX AND NOT APPLE)
-    message(STATUS "Linux")
+
+    message(STATUS "MacOS deployment target: ${CMAKE_OSX_DEPLOYMENT_TARGET}")
+    message(STATUS "MacOS target architectures: ${CMAKE_OSX_ARCHITECTURES}")
+
+    set(ARCH_TYPE ${CMAKE_OSX_ARCHITECTURES})
+
+else()
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64")
+        set(ARCH_TYPE "x86_64")
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+        set(ARCH_TYPE "ARM64")
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "i[3-6]86")
+        set(ARCH_TYPE "x86")
+    else()
+        message(FATAL_ERROR "Unsupported architecture")
+    endif()
+    if(WIN32)
+        message(STATUS "Windows build")
+    elseif(UNIX AND NOT APPLE)
+        message(STATUS "Linux build")
+    else()  
+        message(FATAL_ERROR "Unsupported platform")
+    endif()
 endif()
+
 
 message(STATUS "Install path: ${CMAKE_INSTALL_PREFIX}")
 
@@ -38,8 +69,6 @@ else()
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
 endif()
 
-
-set(source_file PretextView.cpp glad.c)
 include_directories(
     include
     src
@@ -59,7 +88,7 @@ find_library(
     PATHS 
         subprojects/libdeflate/build 
         subprojects/libdeflate/build/debug 
-        subprojects/libdeflate/build/Release 
+        subprojects/libdeflate/build/Release
         subprojects/libdeflate/build/release)
 if(NOT lib_deflate_static)
     message(FATAL_ERROR "lib_deflate_static not found")
@@ -68,52 +97,25 @@ else()
 endif()
 
 
-# if (WITH_PYTHON)
-#   add_definitions(-DWITH_PYTHON)
-#   find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
-#   message(STATUS "Python found: ${Python3_EXECUTABLE}")
-#   execute_process(
-#     COMMAND "${Python3_EXECUTABLE}" -c "import torch; print(torch.__path__[0])"
-#     OUTPUT_VARIABLE TORCH_PYTHON_PATH
-#     OUTPUT_STRIP_TRAILING_WHITESPACE
-#   )
-#   if (TORCH_PYTHON_PATH)
-#     message(STATUS "Torch installed in Python at: ${TORCH_PYTHON_PATH}")
-#   else()
-#     message(FATAL_ERROR "Torch not found in Python")
-#   endif()
-#   list(APPEND CMAKE_PREFIX_PATH "${TORCH_PYTHON_PATH}/share/cmake/Torch")
-# endif()
-
 # set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
-message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
-find_package(Torch REQUIRED)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-message(STATUS "Torch libs: ${TORCH_LIBRARIES}")
-message(STATUS "Torch install prefix: ${TORCH_INSTALL_PREFIX}")
-# set(CMAKE_PREFIX_PATH "../libtorch/share/cmake/Torch")
-set(WITH_PYTHON OFF CACHE BOOL "Disable Python integration for pytorch_scatter" FORCE)
-add_subdirectory(subprojects/pytorch_scatter)
-
-
-# OpenBLAS, which was required before, now is not used
-# include_directories(
-#     subprojects/OpenBLAS
-#     subprojects/OpenBLAS/build
-# )
-# find_library(OPENBLAS_LIB openblas PATHS subprojects/OpenBLAS/build/lib)
-# if(NOT OPENBLAS_LIB)
-#     message(FATAL_ERROR "OpenBLAS not found")
-# else()
-#     message(STATUS "OpenBLAS found: ${OPENBLAS_LIB}")
-# endif()
-
-
-add_library(aisort STATIC src/aisort.cpp )
-target_link_libraries(
-    aisort PRIVATE 
-    ${TORCH_LIBRARIES} 
-    ${torchscatter})
+if (WITH_TORCH)
+    message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
+    find_package(Torch REQUIRED)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
+    message(STATUS "Torch libs: ${TORCH_LIBRARIES}")
+    message(STATUS "Torch install prefix: ${TORCH_INSTALL_PREFIX}")
+    # set(CMAKE_PREFIX_PATH "../libtorch/share/cmake/Torch")
+    set(WITH_PYTHON OFF CACHE BOOL "Disable Python integration for pytorch_scatter" FORCE)
+    add_subdirectory(subprojects/pytorch_scatter)
+    add_library(sortlib STATIC src/aisort.cpp )
+    target_link_libraries(
+        sortlib PUBLIC 
+        ${TORCH_LIBRARIES} 
+        ${torchscatter})
+else()
+    message(STATUS "Libtorch: Build without libtorch")
+    add_library(sortlib STATIC src/frag_sort.cpp )
+endif()
 
 
 add_library(glad STATIC glad.c)
@@ -134,6 +136,10 @@ if(NOT APPLE)
     add_executable( ${target_name} PretextView.cpp )
 else()
     add_executable( ${target_name} MACOSX_BUNDLE PretextView.cpp )
+    set_target_properties(
+        ${target_name} PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/Info.plist"
+    )
 endif()
 target_compile_definitions(${target_name} PRIVATE PV=${PROJECT_VERSION})
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -146,8 +152,7 @@ endif()
 target_link_libraries(
     ${target_name} PRIVATE 
     ${lib_deflate_static} 
-    ${TORCH_LIBRARIES} 
-    aisort 
+    sortlib 
     glm 
     glad 
     utilsPretextView 
@@ -156,9 +161,16 @@ target_link_libraries(
     glfw 
 )   
 
-
 if (APPLE)
     set(library_need Cocoa OpenGL IOKit CoreVideo) 
+    find_library(METAL_LIB Metal)
+    find_library(ACCELERATE_LIB Accelerate)
+    if (METAL_LIB) 
+        list(APPEND library_need Metal)
+    endif()
+    if (ACCELERATE_LIB)
+        list(APPEND library_need Accelerate)
+    endif()
 elseif(WIN32)
     set(library_need gdi32 opengl32 kernel32 user32 shell32 Ole32) 
 elseif(UNIX AND NOT APPLE)
@@ -186,23 +198,29 @@ endforeach()
 
 
 # ============ CMAKE INSTALLATION ==============
-# Define shader files
-file(GLOB SHADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/shaderSource/*.shader")
 file(GLOB aimodel_files "${CMAKE_CURRENT_SOURCE_DIR}/ai_model/*")
 file(GLOB torch_copy_libs "${TORCH_INSTALL_PREFIX}/lib/*")
+if (APPLE)
+    execute_process(
+        COMMAND bash ${CMAKE_SOURCE_DIR}/make_macos_app_plist.sh ${PROJECT_VERSION}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE output
+        ERROR_VARIABLE error_output
+        TIMEOUT 30
+        )
+endif()
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS "Debug on ${CMAKE_SYSTEM_NAME} - ${ARCH_TYPE}.")
     if (APPLE)
         file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist" DESTINATION "${target_name}.app/Contents")
         file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/icon.icns" DESTINATION "${target_name}.app/Contents/Resources" )
-        file(COPY ${SHADER_FILES} DESTINATION "${target_name}.app/Contents/Resources/src/shaderSource")
-        file(COPY ${aimodel_files} DESTINATION "${target_name}.app/Contents/Resources/ai_model")
-    else()
-        message(FATAL_ERROR "Debug is current only implemented on Mac.")
+        if (WITH_TORCH)
+            file(COPY ${aimodel_files} DESTINATION "${target_name}.app/Contents/Resources/ai_model")
+        endif()
     endif()
 endif()
 
-# Define installation paths for macOS
-# CMAKE_INSTALL_PREFIX = PretextView.app
 if(APPLE)
     # set the shared/dynamic library path for the installed binary
     message(STATUS "[Cmake Install]: Mac")
@@ -212,42 +230,50 @@ if(APPLE)
         INSTALL_RPATH "@executable_path/../Frameworks")
     install(TARGETS ${target_name}
             BUNDLE DESTINATION .
-            COMPONENT Runtime)
+            COMPONENT Runtime)   # generate the ${target_name}.app package under ${cmake_install_prefix}
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
             DESTINATION "${target_name}.app/Contents")
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/icon.icns"
             DESTINATION "${target_name}.app/Contents/Resources" )
-    install(FILES ${torch_copy_libs}
-            DESTINATION "${target_name}.app/Contents/Frameworks" )
-    install(FILES ${aimodel_files}
-            DESTINATION "${target_name}.app/Contents/Resources/ai_model" )
-    install(FILES ${SHADER_FILES}
-            DESTINATION "${target_name}.app/Contents/Resources/src/shaderSource" )
-elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux") # WIN32, UNIX and NOT APPLE
+    if (WITH_TORCH)
+        install(FILES ${torch_copy_libs}
+                DESTINATION "${target_name}.app/Contents/Frameworks" )
+        install(FILES ${aimodel_files}
+                DESTINATION "${target_name}.app/Contents/Resources/ai_model" )
+    endif()
+elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux") 
     message(STATUS "[Cmake Install]: Linux")
     set_target_properties(
-            ${target_name} 
-            PROPERTIES 
-            INSTALL_RPATH "@executable_path/lib")
-    install(TARGETS ${target_name}
-        RUNTIME DESTINATION .
+        ${target_name}
+        PROPERTIES 
+        INSTALL_RPATH "$ORIGIN/../lib")
+    install(
+        TARGETS ${target_name}
+        RUNTIME DESTINATION "bin"
         COMPONENT Runtime)
-    install(FILES ${torch_copy_libs} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib") # libtorch
-    install(FILES ${SHADER_FILES} DESTINATION "${CMAKE_INSTALL_PREFIX}/src/shaderSource")
-    install(FILES ${aimodel_files} DESTINATION "${CMAKE_INSTALL_PREFIX}/ai_model")
+    if (WITH_TORCH)
+        install(
+            FILES ${torch_copy_libs} 
+            DESTINATION "lib") 
+        install(
+            FILES ${aimodel_files} 
+            DESTINATION "ai_model")
+    endif()
 else () # windows
     message(STATUS "[Cmake Install]: Windows")
-    # set_target_properties(
-    #     ${target_name} 
-    #     PROPERTIES 
-    #     INSTALL_RPATH "@executable_path/lib")
+    target_sources(${target_name} PRIVATE "${CMAKE_SOURCE_DIR}/PretextView.rc") # add logo to win version
     install(
         TARGETS ${target_name}
         RUNTIME DESTINATION .
         COMPONENT Runtime)
-    install(FILES ${torch_copy_libs} DESTINATION .) # libtorch
-    install(FILES ${SHADER_FILES}    DESTINATION "src/shaderSource")
-    install(FILES ${aimodel_files}   DESTINATION "ai_model")
+    if (WITH_TORCH)
+        install(
+            FILES ${torch_copy_libs} 
+            DESTINATION .) # libtorch
+        install(
+            FILES ${aimodel_files}   
+            DESTINATION "ai_model")
+    endif()
 endif()
 
 
@@ -257,17 +283,50 @@ set(CPACK_PACKAGE_NAME ${target_name})
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/guanshaoheng/PretextView")
-set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}")
+set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${ARCH_TYPE}")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENCE.txt")
 
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Darwin") # macOS
     message(STATUS "[CPack]: Generate on Mac")
-    # set(CPACK_PACKAGE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/icon.icns)
     set(CPACK_GENERATOR "DragNDrop")
     set(CPACK_DMG_VOLUME_NAME "${target_name} Installer")
     set(CPACK_DMG_FORMAT "UDZO") 
 elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux") # Linux (Ubuntu)
     message(STATUS "[CPack]: Generate on Linux")
+    install(
+        FILES "${CMAKE_SOURCE_DIR}/ico_design/icon_48x48x32.png"
+        DESTINATION "/usr/share/icons/hicolor/48x48/apps"
+        RENAME "pretextview.png"
+    )
+    install(
+        FILES "${CMAKE_SOURCE_DIR}/ico_design/icon_64x64x32.png"
+        DESTINATION "share/icons/hicolor/64x64/apps"
+        RENAME "pretextview.png"
+    )
+    install(
+        FILES "${CMAKE_SOURCE_DIR}/ico_design/icon_128x128x32.png"
+        DESTINATION "/usr/share/icons/hicolor/128x128/apps"
+        RENAME "pretextview.png"
+    )
+    install(
+        FILES "${CMAKE_SOURCE_DIR}/ico_design/icon_256x256x32.png"
+        DESTINATION "/usr/share/icons/hicolor/256x256/apps"
+        RENAME "pretextview.png"
+    )
+    install(
+        FILES "${CMAKE_SOURCE_DIR}/ico_design/icon_512x512x32.png"
+        DESTINATION "/usr/share/icons/hicolor/512x512/apps"
+        RENAME "pretextview.png"
+    )
+    configure_file(
+        "${CMAKE_SOURCE_DIR}/pretextviewai.desktop.in"
+        "${CMAKE_BINARY_DIR}/pretextviewai.desktop"
+        @ONLY
+    )
+    install(
+        FILES "${CMAKE_BINARY_DIR}/pretextviewai.desktop"
+        DESTINATION "share/applications"
+    )
     set(CPACK_GENERATOR "DEB")
     set(CPACK_DEBIAN_HARDLINKS OFF)
     set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Shaoheng Guan") 
@@ -279,8 +338,11 @@ elseif(WIN32) # Windows
     set(CPACK_GENERATOR "NSIS")
     set(CPACK_NSIS_DISPLAY_NAME "${target_name}")
     set(CPACK_NSIS_PACKAGE_NAME "${target_name} Installer")
-    # set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/icon.icns") 
+    set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/pretextview_icon.ico")
+    set(CPACK_NSIS_MUI_UNIICON "${CMAKE_SOURCE_DIR}/pretextview_icon.ico") 
+    set(CPACK_NSIS_INSTALLED_ICON_NAME "${target_name}.exe")
     set(CPACK_NSIS_HELP_LINK "https://github.com/guanshaoheng/PretextView") 
     set(CPACK_NSIS_URL_INFO_ABOUT "https://github.com/guanshaoheng/PretextView") 
 endif()
+
 include(CPack)

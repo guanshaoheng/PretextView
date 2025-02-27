@@ -22,6 +22,7 @@ SOFTWARE.
 */
 
 #include "copy_texture.h"
+#include "shaderSource.h"
 
 
 
@@ -178,11 +179,7 @@ TexturesArray4AI::TexturesArray4AI(
     }
     MY_CHECK(0);
     // Shader setup and texture binding
-    std::string shader_source_dir = getResourcesPath() + "/src/shaderSource/";
-    MY_CHECK(shader_source_dir.c_str());
-    auto VertexSource_Texture = readShaderSource( shader_source_dir + "contactMatrixVertexHIC.shader");
-    auto FragmentSource_Texture = readShaderSource( shader_source_dir + "contactMatrixFragmentHIC.shader");
-    this->shaderProgram = CreateShader(FragmentSource_Texture.c_str(), VertexSource_Texture.c_str());
+    this->shaderProgram = CreateShader(FragmentSource_copyTexture.c_str(), VertexSource_copyTexture.c_str());
 
     // Setup vao, vbo, ebo
     f32 vertexpositions[] = {
@@ -881,7 +878,7 @@ void TexturesArray4AI::cal_compressed_hic(
             {
                 (*compressed_hic)(i, j, channel) = (*compressed_hic)(j, i, Switch_Channel_Symetric[channel]) = buffer_values_on_channel.c[channel];
             }
-            if (++cnt % (num_interaction_to_cal / 100)==0) 
+            if (num_interaction_to_cal > 100 && ++cnt % (num_interaction_to_cal / 100)==0)
             {
                 printf("\rCalculating compressed_hic %.2f%%", (f32)(cnt) / (f32)num_interaction_to_cal * 100.0f);
                 fflush(stdout);
@@ -904,10 +901,10 @@ f32 TexturesArray4AI::cal_diagonal_mean_within_fragments(int shift, const contig
     u32 cnt = 0, maxlen=0, start_coord = 0;
     for (int i = 0 ; i < Contigs->numberOfContigs; i ++ )
     {   
-        maxlen = std::max(maxlen, Contigs->contigs[i].length);
+        maxlen = std::max(maxlen, Contigs->contigs_arr[i].length);
         Sum_and_Number tmp = get_fragement_diag_mean_square( 
             start_coord, 
-            Contigs->contigs[i].length, 
+            Contigs->contigs_arr[i].length, 
             shift );
         sum += tmp.sum;
         cnt += tmp.number; // number of pixels

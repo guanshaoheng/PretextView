@@ -29,7 +29,7 @@ SOFTWARE.
 #define PretextView_Title "PretextViewAI " my_String(PV) " - Wellcome Sanger Institute"    
 
 
-#include <aisort.h>  // place this before add Header.h to avoid macro conflict
+#include <frag_sort.h>  // place this before add Header.h to avoid macro conflict
 #include <Header.h>
 
 #ifdef DEBUG
@@ -105,7 +105,10 @@ SOFTWARE.
 #include "showWindowData.h"
 
 
-std::string shader_source_dir = getResourcesPath() + "/src/shaderSource/";
+#include "shaderSource.h"
+/*
+// std::string shader_source_dir = getResourcesPath() + "/src/shaderSource/";
+std::string shader_source_dir = SHADER_DIR;
 // Contact_Matrix->shaderProgram
 global_variable
 std::string
@@ -144,6 +147,8 @@ VertexSource_UI = readShaderSource( shader_source_dir + "uiVertex.shader");
 global_variable
 std::string
 FragmentSource_UI = readShaderSource( shader_source_dir + "uiFragment.shader");
+*/
+
 
 
 #define UI_SHADER_LOC_POSITION 0
@@ -783,8 +788,8 @@ Map_State;
 
 #include "copy_texture.h"
 // define the struct to store the ai model mask
-std::unique_ptr<AiModel> ai_model = nullptr;
-global_variable auto auto_curation_state=AutoCurationState();
+std::unique_ptr<FragSortTool> frag_sort_method = nullptr;
+global_variable auto auto_curation_state = AutoCurationState();
 
 
 global_function
@@ -819,7 +824,7 @@ UpdateContigsFromMapState()  // todo reading 从map的状态更新contigs
             Original_Contigs[lastId].contigMapPixels[Original_Contigs[lastId].nContigs] = pixelIdx - 1 - (length >> 1);   // update Original_Contigs: contigMapPixels
             Original_Contigs[lastId].nContigs++; // update Original_Contigs: nContigs, contigMapPixels
 
-            contig *last_cont = Contigs->contigs + contigPtr; // 获取上一个contig的指针， 并且给contigPtr + 1
+            contig *last_cont = Contigs->contigs_arr + contigPtr; // 获取上一个contig的指针， 并且给contigPtr + 1
             contigPtr++;
             last_cont->originalContigId = lastId; // 更新这个片段的id
             last_cont->length = length;           // 更新长度
@@ -858,7 +863,7 @@ UpdateContigsFromMapState()  // todo reading 从map的状态更新contigs
         (Original_Contigs + lastId)->contigMapPixels[(Original_Contigs + lastId)->nContigs++] = pixelIdx - 1 - (length >> 1); 
 
         ++length;
-        contig *cont = Contigs->contigs + contigPtr++;
+        contig *cont = Contigs->contigs_arr + contigPtr++;
         cont->originalContigId = lastId;
         cont->length = length;
         cont->startCoord = startCoord;
@@ -1147,7 +1152,7 @@ global_function
 void
 UpdateScaffolds()
 {
-    ForLoop(Number_of_Pixels_1D) Map_State->scaffIds[index] = (Contigs->contigs + Map_State->contigIds[index])->scaffId;
+    ForLoop(Number_of_Pixels_1D) Map_State->scaffIds[index] = (Contigs->contigs_arr + Map_State->contigIds[index])->scaffId;
 }
 
 global_function
@@ -2606,7 +2611,7 @@ Render() {
         f32 x = -0.5f;
         ForLoop(Contigs->numberOfContigs - 1)
         {
-            contig *cont = Contigs->contigs + index;
+            contig *cont = Contigs->contigs_arr + index;
 
             position += ((f32)cont->length / (f32)Number_of_Pixels_1D);
             f32 px = x + lineWidth;
@@ -2652,7 +2657,7 @@ Render() {
         f32 y = 0.5f;
         ForLoop(Contigs->numberOfContigs - 1)
         {
-            contig *cont = Contigs->contigs + index;
+            contig *cont = Contigs->contigs_arr + index;
 
             position += ((f32)cont->length / (f32)Number_of_Pixels_1D);
             f32 py = y - lineWidth;
@@ -2701,7 +2706,7 @@ Render() {
         f32 y = 0.5f;
         ForLoop(Contigs->numberOfContigs)
         {
-            contig *cont = Contigs->contigs + index;
+            contig *cont = Contigs->contigs_arr + index;
 
             position += ((f32)cont->length / (f32)Number_of_Pixels_1D);
             f32 py = y - lineWidth;
@@ -2826,7 +2831,7 @@ Render() {
 
             ForLoop(Contigs->numberOfContigs)
             {
-                contig *cont = Contigs->contigs + index;
+                contig *cont = Contigs->contigs_arr + index;
                 
                 totalLength += (f32)((f64)cont->length / (f64)Number_of_Pixels_1D);
 
@@ -2875,7 +2880,7 @@ Render() {
 
             ForLoop(Contigs->numberOfContigs)
             {
-                contig *cont = Contigs->contigs + index;
+                contig *cont = Contigs->contigs_arr + index;
                 
                 totalLength += (f32)((f64)cont->length / (f64)Number_of_Pixels_1D);
 
@@ -2959,7 +2964,7 @@ Render() {
 
             ForLoop(Contigs->numberOfContigs)
             {
-                contig *cont = Contigs->contigs + index;
+                contig *cont = Contigs->contigs_arr + index;
                 
                 totalLength += (f32)((f64)cont->length / (f64)Number_of_Pixels_1D);
                 rightPixel = ModelXToScreen(totalLength - 0.5f);
@@ -3366,10 +3371,10 @@ Render() {
             char buff[128];
             f32 position = 0.0f;
             f32 start = 0.0f;
-            u32 scaffId = Contigs->contigs->scaffId;
+            u32 scaffId = Contigs->contigs_arr->scaffId;
             ForLoop(Contigs->numberOfContigs)
             {
-                contig *cont = Contigs->contigs + index;
+                contig *cont = Contigs->contigs_arr + index;
 
                 if (cont->scaffId != scaffId)
                 {
@@ -3637,10 +3642,10 @@ Render() {
             fonsVertMetrics(FontStash_Context, 0, 0, &lh);
 
             f32 end_contig = 0.0f, start_contig = 0.0f;
-            u32 scaffId = Contigs->contigs->scaffId;
+            u32 scaffId = Contigs->contigs_arr->scaffId;
             ForLoop(Contigs->numberOfContigs)
             {
-                contig *cont = Contigs->contigs + index;
+                contig *cont = Contigs->contigs_arr + index;
                 end_contig += ((f32)cont->length / (f32)Number_of_Pixels_1D); // end of the contig
                 if (*cont->metaDataFlags)
                 {
@@ -4829,7 +4834,7 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
         }
 
         Contigs = PushStructP(arena, contigs);              // 声明一个存储contigs的内存块， 其返回Contigs作为这个块的指针，实际上此处为整个genome的信息
-        Contigs->contigs = PushArrayP(arena, contig, Max_Number_of_Contigs); // 每一个Contigs中会有contigs (片段)，一共有Max_Number_of_Contigs多个片段，最多存放4096个contigs
+        Contigs->contigs_arr = PushArrayP(arena, contig, Max_Number_of_Contigs); // 每一个Contigs中会有contigs (片段)，一共有Max_Number_of_Contigs多个片段，最多存放4096个contigs
         Contigs->contigInvertFlags = PushArrayP(arena, u08, (Max_Number_of_Contigs + 7) >> 3);  // (4096 + 7 ) >> 3 = 512, 声明512个u08的存储空间
 
         UpdateContigsFromMapState();  //  根据mapstate 跟新当前的contigs, 并且更新original_contigs里面的每个contig所包含的片段的个数和片段的中点
@@ -6029,7 +6034,7 @@ RearrangeMap(       // NOTE: VERY IMPORTANT
             u32 targetContigId = Map_State->contigIds[target] + (target == Number_of_Pixels_1D - 1 ? 1 : 0); // why is the last pixel +1?
             if (targetContigId) // only if the target is not the selected contig
             {
-                contig *targetContig = Contigs->contigs + targetContigId - 1;
+                contig *targetContig = Contigs->contigs_arr + targetContigId - 1;
                 
                 u32 targetCoord = IsContigInverted(targetContigId - 1) ? (targetContig->startCoord - targetContig->length + 1) : (targetContig->startCoord + targetContig->length - 1);
                 while (delta > 0 && 
@@ -6051,7 +6056,7 @@ RearrangeMap(       // NOTE: VERY IMPORTANT
             u32 targetContigId = Map_State->contigIds[target];
             if (targetContigId < (Contigs->numberOfContigs - 1)) // only if the target is not the selected contig
             {
-                contig *targetContig = Contigs->contigs + (target ? targetContigId + 1 : 0);
+                contig *targetContig = Contigs->contigs_arr + (target ? targetContigId + 1 : 0);
                 u32 targetCoord = targetContig->startCoord;
                 while (delta < 0 && (Map_State->contigIds[target] != (target ? targetContigId + 1 : 0) || Map_State->contigRelCoords[target] != targetCoord))
                 {
@@ -6237,7 +6242,7 @@ void AutoCurationFromFragsOrder(
             full_predicted_order[select_area->selected_frag_ids[i]] = (predicted_order[i]>0?1:-1) * (select_area->selected_frag_ids[0] + std::abs(predicted_order[i]));
         predicted_order = full_predicted_order;
     }
-    for (s32 i = 0; i < num_frags; ++i) current_order[i] = {i+1, contigs_->contigs[i].length}; // start from 1
+    for (s32 i = 0; i < num_frags; ++i) current_order[i] = {i+1, contigs_->contigs_arr[i].length}; // start from 1
     auto move_current_order_element = [&current_order, &num_frags](u32 from, u32 to)
     {
         if (from >= num_frags || to >= num_frags)
@@ -6390,7 +6395,7 @@ Sort_yahs(char* currFileName)
     // use the compressed_hic to calculate the frags_order directly
     if (auto_curation_state.sort_mode == 0)
     {
-        ai_model->sort_according_likelihood_unionFind( 
+        frag_sort_method->sort_according_likelihood_unionFind( 
             likelihood_table, 
             frags_order, 
             auto_curation_state.link_score_threshold, 
@@ -6398,7 +6403,7 @@ Sort_yahs(char* currFileName)
     }
     else if (auto_curation_state.sort_mode == 1)
     {
-        ai_model->sort_according_likelihood_unionFind_doFuse( 
+        frag_sort_method->sort_according_likelihood_unionFind_doFuse( 
             likelihood_table, 
             frags_order, 
             auto_curation_state.link_score_threshold, 
@@ -6406,7 +6411,7 @@ Sort_yahs(char* currFileName)
     }
     else if (auto_curation_state.sort_mode == 2)
     {
-        ai_model->sort_according_likelihood_unionFind_doFuse( 
+        frag_sort_method->sort_according_likelihood_unionFind_doFuse( 
             likelihood_table, 
             frags_order, 
             auto_curation_state.link_score_threshold, 
@@ -7008,7 +7013,7 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                 case GLFW_KEY_D:
                     if (Scaff_Edit_Mode && (mods & GLFW_MOD_SHIFT))
                     {
-                        ForLoop(Contigs->numberOfContigs) (Contigs->contigs + index)->scaffId = 0;
+                        ForLoop(Contigs->numberOfContigs) (Contigs->contigs_arr + index)->scaffId = 0;
                         UpdateScaffolds();
                     }
                     else if (MetaData_Edit_Mode && (mods & GLFW_MOD_SHIFT)) memset(Map_State->metaDataFlags, 0, Number_of_Pixels_1D * sizeof(u64));
@@ -8608,8 +8613,8 @@ SaveState(u64 headerHash, char *path = 0, u08 overwrite = 0)
         u32 nMetaFlags = 0;
         ForLoop(Contigs->numberOfContigs)
         {
-            if ((Contigs->contigs + index)->scaffId) ++nScaffs;
-            if (*(Contigs->contigs + index)->metaDataFlags) ++nMetaFlags;
+            if ((Contigs->contigs_arr + index)->scaffId) ++nScaffs;
+            if (*(Contigs->contigs_arr + index)->metaDataFlags) ++nMetaFlags;
         }
         
         u08 nMetaTags = 0;
@@ -8841,9 +8846,9 @@ SaveState(u64 headerHash, char *path = 0, u08 overwrite = 0)
             *fileWriter++ = ((u08 *)&nScaffs)[3];
             ForLoop(Contigs->numberOfContigs)
             {
-                if ((Contigs->contigs + index)->scaffId)
+                if ((Contigs->contigs_arr + index)->scaffId)
                 {
-                    u32 sId = (Contigs->contigs + index)->scaffId;
+                    u32 sId = (Contigs->contigs_arr + index)->scaffId;
                     *fileWriter++ = ((u08 *)&index)[0];
                     *fileWriter++ = ((u08 *)&index)[1];
                     *fileWriter++ = ((u08 *)&index)[2];
@@ -8870,9 +8875,9 @@ SaveState(u64 headerHash, char *path = 0, u08 overwrite = 0)
             *fileWriter++ = ((u08 *)&nMetaFlags)[3];
             ForLoop(Contigs->numberOfContigs)
             {
-                if (*(Contigs->contigs + index)->metaDataFlags)
+                if (*(Contigs->contigs_arr + index)->metaDataFlags)
                 {
-                    u64 flags = *(Contigs->contigs + index)->metaDataFlags;
+                    u64 flags = *(Contigs->contigs_arr + index)->metaDataFlags;
                     *fileWriter++ = ((u08 *)&index)[0];
                     *fileWriter++ = ((u08 *)&index)[1];
                     *fileWriter++ = ((u08 *)&index)[2];
@@ -9411,7 +9416,7 @@ LoadState(u64 headerHash, char *path)
 
                     nBytesRead += 4;
 
-                    ForLoop(Contigs->numberOfContigs) (Contigs->contigs + index)->scaffId = 0;
+                    ForLoop(Contigs->numberOfContigs) (Contigs->contigs_arr + index)->scaffId = 0;
 
                     ForLoop(nScaffs)
                     {
@@ -9426,7 +9431,7 @@ LoadState(u64 headerHash, char *path)
                         ((u08 *)&sId)[2] = *fileContents++;
                         ((u08 *)&sId)[3] = *fileContents++;
 
-                        (Contigs->contigs + cId)->scaffId = sId;
+                        (Contigs->contigs_arr + cId)->scaffId = sId;
                     }
 
                     UpdateScaffolds();
@@ -9646,7 +9651,7 @@ restore_initial_state()
 
     // scaffs
     {
-        ForLoop(Contigs->numberOfContigs) (Contigs->contigs + index)->scaffId = 0;
+        ForLoop(Contigs->numberOfContigs) (Contigs->contigs_arr + index)->scaffId = 0;
         UpdateScaffolds();
     }
 
@@ -10101,7 +10106,7 @@ GenerateAGP(char *path, u08 overwrite, u08 formatSingletons, u08 preserveOrder)
         u32 scaffPart = 0;
 
         u32 scaffId_unPainted = 0;
-        if (preserveOrder) ForLoop(Contigs->numberOfContigs) scaffId_unPainted = my_Max(scaffId_unPainted, (Contigs->contigs + index)->scaffId);
+        if (preserveOrder) ForLoop(Contigs->numberOfContigs) scaffId_unPainted = my_Max(scaffId_unPainted, (Contigs->contigs_arr + index)->scaffId);
 
         for (   u08 type = 0;
                 type < (preserveOrder ? 1 : 2);
@@ -10109,7 +10114,7 @@ GenerateAGP(char *path, u08 overwrite, u08 formatSingletons, u08 preserveOrder)
         {
             ForLoop(Contigs->numberOfContigs)
             {
-                contig *cont = Contigs->contigs + index;
+                contig *cont = Contigs->contigs_arr + index;
                 u08 invert = IsContigInverted(index);
                 u32 startCoord = cont->startCoord - (invert ? (cont->length - 1) : 0);
 
@@ -10446,7 +10451,7 @@ MainArgs {
                 glfwSetWindowTitle(window, (const char *)currFileName);
                 FenceIn(SetSaveStateNameBuffer((char *)currFileName));
             }
-            glfwPollEvents();
+            glfwPollEvents(); 
             Loading = 0;
             Redisplay = 1;
         }
@@ -10571,15 +10576,16 @@ MainArgs {
                     bounds = nk_widget_bounds(NK_Context);
                     yahs_sort_button = nk_button_label(NK_Context, "YaHS Sort");
                     // AI sort button
+                    /*
                     {
                         if (ai_sort_button && currFileName)
                         {   
                             printf("AISort button clicked\n");
                             // check if the ai model is loaded
-                            if (!ai_model) 
+                            if (!frag_sort_method) 
                             {
                                 printf("Loading AI Model...\n");
-                                ai_model = std::make_unique<AiModel>();
+                                frag_sort_method = std::make_unique<FragSortTool>();
                             }
 
                             // prepare the graph data 
@@ -10592,7 +10598,7 @@ MainArgs {
                             {
                                 GraphData* graph_data;
                                 texture_array_4_ai.cal_graphData(graph_data);
-                                ai_model->cal_curated_fragments_order( graph_data, frags_order);
+                                frag_sort_method->cal_curated_fragments_order( graph_data, frags_order);
                                 delete graph_data;
                             }
                             else 
@@ -10605,11 +10611,12 @@ MainArgs {
                                     (f32)auto_curation_state.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), 
                                     exclude_frag_idx);
                                 // use the compressed_hic to calculate the frags_order directly
-                                ai_model->sort_according_likelihood_dfs( likelihood_table, frags_order, 0.4, texture_array_4_ai.get_frags());
+                                frag_sort_method->sort_according_likelihood_dfs( likelihood_table, frags_order, 0.4, texture_array_4_ai.get_frags());
                             }
                             std::cout << std::endl;
                         }
                     }
+                    */
                     // YaHS sort button
                     {   
                         if (yahs_sort_button) 
@@ -11284,7 +11291,7 @@ MainArgs {
                                 u32 nSeq = 0;
                                 ForLoop(Contigs->numberOfContigs)
                                 {
-                                    contig *cont = Contigs->contigs + index;
+                                    contig *cont = Contigs->contigs_arr + index;
                                     
                                     if (cont->scaffId != scaffId)
                                     {
@@ -11415,7 +11422,7 @@ MainArgs {
                                             f32 pos = -0.5f;
                                             ForLoop2(Contigs->numberOfContigs)
                                             {
-                                                contig *cont = Contigs->contigs + index2;
+                                                contig *cont = Contigs->contigs_arr + index2;
                                                 f32 contLen = (f32)((f64)cont->length / (f64)Number_of_Pixels_1D);
 
                                                 if (*cont->metaDataFlags & (1 << index))
