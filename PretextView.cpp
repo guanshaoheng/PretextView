@@ -103,7 +103,8 @@ SOFTWARE.
 
 #include "genomeData.h"
 #include "showWindowData.h"
-
+#include "hic_figure.h"
+#include "ai_cut_json_parse.h"
 
 #include "shaderSource.h"
 /*
@@ -659,7 +660,11 @@ global_variable
 u32
 Yahs_sorting = 0;
 
-global_variable s32 ai_sort_button = 0; 
+global_variable
+u32 
+AI_cutting = 0;
+
+global_variable s32 ai_cutting_button = 0; 
 global_variable s32 yahs_sort_button = 0;
 
 
@@ -4335,6 +4340,24 @@ Render() {
 
             ChangeSize((s32)width, (s32)height);
         }
+
+        if (AI_cutting)
+        {
+            u32 colour = glfonsRGBA(Theme_Colour.r, Theme_Colour.g, Theme_Colour.b, Theme_Colour.a);
+
+            fonsClearState(FontStash_Context);
+            fonsSetSize(FontStash_Context, 64.0f * Screen_Scale.x);
+            fonsSetAlign(FontStash_Context, FONS_ALIGN_CENTER | FONS_ALIGN_MIDDLE);
+            fonsSetFont(FontStash_Context, Font_Bold);
+            fonsSetColor(FontStash_Context, colour);
+
+            glUseProgram(UI_Shader->shaderProgram);
+            glUniformMatrix4fv(Flat_Shader->matLocation, 1, GL_FALSE, textNormalMat);
+            glViewport(0, 0, (s32)width, (s32)height);
+            fonsDrawText(FontStash_Context, width * 0.5f, height * 0.5f, "AI cutting...", 0);
+
+            ChangeSize((s32)width, (s32)height);
+        }
     }
 }
 
@@ -6213,6 +6236,28 @@ void EraseAllEdits(map_editor* map_editor_, u32 max_edit_recorded=Edits_Stack_Si
 }
 
 
+void run_ai_detection()
+{
+    std::cout << "Running AI detection..." << std::endl;
+    int status = std::system("/Users/sg35/miniconda3/envs/auto_cut/bin/python python/autoCut/auto_cut.py");  
+
+    // 检查命令执行状态
+    if (status == 0) {
+        std::cout << "命令执行成功!" << std::endl;
+    } else {
+        std::cerr << "命令执行失败，错误码: " << status << std::endl;
+    }
+}
+
+void cut_frags(std::vector<std::vector<u32>> & problem_locs)
+{
+    for (auto & i : problem_locs)
+    {
+        InvertMap(i[0], i[1]);
+        AddMapEdit(0, {i[0], i[1]}, true);
+    }
+}
+
 
 void AutoCurationFromFragsOrder(
     const FragsOrder* frags_order_,
@@ -6232,7 +6277,7 @@ void AutoCurationFromFragsOrder(
 
     // check the difference between the contigs, order and the new frags order
     u32 start_loc = 0;
-    std::vector<std::pair<s32, s32>> current_order(num_frags);
+    std::vector<std::pair<s32, s32>> current_order(num_frags); // [contig_id, contig_length]
     std::vector<s32> predicted_order = frags_order_->get_order_without_chromosomeInfor(); // start from 1
     if (using_select_area)
     {
@@ -6295,15 +6340,19 @@ void AutoCurationFromFragsOrder(
             while (std::abs(predicted_order[i])!=std::abs(current_order[tmp_i].first))
             {
                 if (tmp_i >= num_frags)
-                {
-                    fprintf(stderr, "Error: contig %d not found in the current order.\n", current_order[i].first);
-                    MY_CHECK(0);
+                {   
+                    char buff[256];
+                    snprintf(buff, sizeof(buff), "Error: contig %d not found in the current order.\n", current_order[i].first);
+                    MY_CHECK(buff);
+                    assert(0);
                 }
                 pixelFrom += current_order[tmp_i].second; // length updated based on the current order
                 if (pixelFrom>=Number_of_Pixels_1D)
-                {
-                    fprintf(stderr, "Error: pixelFrom(%d) >= Number_of_Pixels_1D(%d).\n", pixelFrom, Number_of_Pixels_1D);
-                    MY_CHECK(0);
+                {   
+                    char buff[256];
+                    snprintf(buff, sizeof(buff), "Error: pixelFrom(%d) >= Number_of_Pixels_1D(%d).\n", pixelFrom, Number_of_Pixels_1D);
+                    MY_CHECK(buff);
+                    assert(0);
                 }
                 ++tmp_i;
             }
@@ -6334,6 +6383,50 @@ void AutoCurationFromFragsOrder(
         }
     }
     printf("[Auto curatioin] finished with %d edits\n", num_autoCurated_edits);
+
+    return ;
+}
+
+global_function
+void
+ai_cutting_func(
+    char * currFileName,
+    std::string file_save_path = std::string("./hic_figures")
+)
+{   
+    if (!currFileName || !AI_cutting) return;
+
+    fprintf(stdout, "========================\n");
+    // copy textures to cpu
+    fprintf(stdout, "[AI cutting] coping textures...\n");
+    auto texture_array_4_ai = TexturesArray4AI(Number_of_Textures_1D, Texture_Resolution, (char*)currFileName, Contigs);
+    // prepare before reading textures
+    f32 original_control_points[3];
+    prepare_before_copy(original_control_points);
+    texture_array_4_ai.copy_buffer_to_textures_dynamic(Contact_Matrix, false); 
+    restore_settings_after_copy(original_control_points);
+    
+    // generate figures
+    if (1)
+    {
+        fprintf(stdout, "[AI cutting] generating hic figures...\n");
+        Hic_Figure hic_figure(
+            Total_Genome_Length, 
+            file_save_path,
+            &texture_array_4_ai
+        );
+        hic_figure.generate_hic_figures();
+    }
+
+    // run ai model with python script
+    run_ai_detection();
+
+    // restore the error info via reading the error json
+    HIC_Problems hic_problems("auto_cut_output/infer_result/infer_result.json", (f32) Total_Genome_Length / (f32)Number_of_Pixels_1D ); 
+    std::vector<std::vector<u32>> problem_loc = hic_problems.get_problem_loci();
+
+    // cut the contigs 
+    cut_frags(problem_loc);
 
     return ;
 }
@@ -6858,7 +6951,7 @@ global_function
 void
 KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
 {
-    if (!Loading && !Yahs_sorting && (action != GLFW_RELEASE || key == GLFW_KEY_SPACE || key == GLFW_KEY_A || key == GLFW_KEY_LEFT_SHIFT))
+    if (!Loading && !Yahs_sorting && !AI_cutting && (action != GLFW_RELEASE || key == GLFW_KEY_SPACE || key == GLFW_KEY_A || key == GLFW_KEY_LEFT_SHIFT))
     {
         if (UI_On)
         {
@@ -10464,6 +10557,14 @@ MainArgs {
             Redisplay = 1;
         }
 
+        if (AI_cutting)
+        {   
+            if (currFileName) SaveState(headerHash);
+            ai_cutting_func((char*)currFileName);
+            AI_cutting = 0;
+            Redisplay = 1;
+        }
+
         if (UI_On) 
         {
             glfwSetCursor(window, arrowCursor);
@@ -10572,9 +10673,10 @@ MainArgs {
                     struct nk_color sort_button_active = nk_rgb(128, 0, 128);  
                     push_nk_style(NK_Context, sort_button_normal, sort_button_hover, sort_button_active);
                     nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 3);
-                    // ai_sort_button = nk_button_label(NK_Context, "AI Sort");
+                    ai_cutting_button = nk_button_label(NK_Context, "AI cut");
                     bounds = nk_widget_bounds(NK_Context);
                     yahs_sort_button = nk_button_label(NK_Context, "YaHS Sort");
+
                     // AI sort button
                     /*
                     {
@@ -10617,6 +10719,14 @@ MainArgs {
                         }
                     }
                     */
+                    // ai cut
+                    {
+                        if (ai_cutting_button && currFileName)
+                        {
+                            AI_cutting = 1;
+                        }
+                    }
+
                     // YaHS sort button
                     {   
                         if (yahs_sort_button) 

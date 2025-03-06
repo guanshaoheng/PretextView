@@ -81,7 +81,6 @@ include_directories(
 add_subdirectory(subprojects/glfw)
 add_subdirectory(subprojects/glm)
 
-
 find_library(
     lib_deflate_static 
     NAMES deflate deflatestatic

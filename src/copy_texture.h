@@ -409,7 +409,7 @@ private:
 };
 
 
-inline // c++17 needed
+inline
 std::unordered_map<u32, u32> 
 Switch_Channel_Symetric = 
 {   
@@ -453,7 +453,9 @@ struct Sum_and_Number
 };
     
 
-
+/*
+GraphData类用于存储图数据，将压缩后的hic数据转化为图数据，从而输入到图网络中预测两个片段之间的连接分数。
+*/
 class GraphData
 {
 private:
@@ -589,7 +591,7 @@ private:
     Matrix3D<f32>* compressed_hic = nullptr; // [0 - 3] channel represent the 4 directions, channel 4 represents the average of the interaction block
     CompressedExtensions* compressed_extensions = nullptr;
     MassCentre* mass_centres = nullptr;
-    unsigned char** textures = nullptr;
+    unsigned char** textures = nullptr; // used to save the copied textures
     bool is_copied_from_buffer;
     bool is_compressed;
 public:
@@ -638,6 +640,8 @@ public:
     u32 get_texture_resolution(){return texture_resolution;}
 
     u32 get_num_textures_1d(){return num_textures_1d;}
+
+    u32 get_num_pixels_1d() {return num_pixels_1d;}
 
     void check_copied_from_buffer() const;
     void copy_buffer_to_textures(const contact_matrix *contact_matrix_, bool show_flag=false);

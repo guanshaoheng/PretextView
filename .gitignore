@@ -46,3 +46,6 @@ PretextViewAI.zip
 
 test_data/
 subprojects/libtorch(not needed in this version)/
+
+hic_figures/
+auto_cut_output/

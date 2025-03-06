@@ -255,10 +255,21 @@ std::string getResourcesPath() {
 
 
 void my_code_position_handler(const char* file, int line, const char* message) {
-    if (0)
+    if (message)
     {
         std::cerr << "File: " << file << " Line: " << line ;
         if (message) std::cerr << " Message: " << message;
+        std::cerr << std::endl;
+    }
+    return ;
+}
+
+
+void my_code_position_handler(const char* file, int line, std::string message) {
+    if (message.size()>0)
+    {
+        std::cerr << "File: " << file << " Line: " << line ;
+        if (message.size()>0) std::cerr << " Message: " << message;
         std::cerr << std::endl;
     }
     return ;

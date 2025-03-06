@@ -227,7 +227,8 @@ void FragSortTool::sort_according_likelihood_unionFind(
     const LikelihoodTable& likelihood_table, 
     FragsOrder& frags_order, 
     const f32 threshold, 
-    const Frag4compress* frags) const 
+    const Frag4compress* frags, 
+    bool sort_according_len_flag) const
 {
     u32 n = likelihood_table.get_num_frags();
     std::vector<Link> all_links;
@@ -323,7 +324,7 @@ void FragSortTool::sort_according_likelihood_unionFind(
     }
 
     // sort the chromosomes according to the length
-    if (frags)
+    if (frags && sort_according_len_flag)
     {
         std::sort(chromosomes.begin(), chromosomes.end(), 
             [&frags](const std::deque<s32>& a, const std::deque<s32>& b) {
@@ -566,7 +567,8 @@ void FragSortTool::sort_according_likelihood_unionFind_doFuse(
     const f32 threshold, 
     const Frag4compress* frags,
     const bool doStageOne,
-    const bool doStageTwo) const 
+    const bool doStageTwo, 
+    bool sort_according_len_flag) const 
 {   
     u32 n = likelihood_table.get_num_frags();
     std::vector<Link> all_links;
@@ -705,8 +707,8 @@ void FragSortTool::sort_according_likelihood_unionFind_doFuse(
             // and the fragments [beg...j) on chb
             // the sequence order in each chromosome keep unchanged
             // are fused to maximum the overall score (measured by link strength)
-            std::deque<s32> atail(0);
-            if (cha.size() > i+1)
+            std::deque<s32> atail(0); // TODO (shaoheng): 检查这里是不是应该填 a 的上一个片段
+            if (cha.size() > i+1) // TODO (shaoheng): 检查这里到底是 i + 1 还是 i
                 std::copy(cha.begin()+i+1, cha.end(), std::back_inserter(atail));
             std::deque<s32> bhead(chb.begin(), chb.begin()+j+1);
 
@@ -736,7 +738,7 @@ void FragSortTool::sort_according_likelihood_unionFind_doFuse(
     fprintf(stdout, "[Fusing]: consumed time %.2fs\n", elapsed_seconds.count());
 
     // sort the chromosomes according to the length
-    if (frags)
+    if (frags && sort_according_len_flag)
     {
         std::sort(chromosomes.begin(), chromosomes.end(), 
             [&frags](const std::deque<s32>& a, const std::deque<s32>& b) {

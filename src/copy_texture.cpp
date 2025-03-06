@@ -126,18 +126,11 @@ TexturesArray4AI::TexturesArray4AI(
     is_copied_from_buffer(false), is_compressed(false), hic_shader_initilised(false)
 {   
     
-    MY_CHECK(0);
-
     this->frags = new Frag4compress(Contigs);
 
-    MY_CHECK(0);
     this->compressed_hic = new Matrix3D<f32>(1, 1, 5);  // initialize the compressed_hic with 1x1x5
 
-    MY_CHECK(0);
     this->compressed_extensions = new CompressedExtensions(1); // initialize the compressed_extensions with 1
-
-
-    MY_CHECK(0);
 
     char* tmp = fileName;
     while (*tmp != '\0' && *tmp != '.') 
@@ -177,7 +170,7 @@ TexturesArray4AI::TexturesArray4AI(
         std::cerr << e.what() << " Allocate mem error\n";
         assert(0);
     }
-    MY_CHECK(0);
+    
     // Shader setup and texture binding
     this->shaderProgram = CreateShader(FragmentSource_copyTexture.c_str(), VertexSource_copyTexture.c_str());
 
@@ -265,12 +258,22 @@ TexturesArray4AI::~TexturesArray4AI()
     }
 }
 
-
+/* 
+*/
 u08 TexturesArray4AI::operator()(u32 row, u32 column) const
 {   
     if (row>=num_pixels_1d || column>=num_pixels_1d) 
     {
         printf("Index [%d, %d] is out of range [%d, %d]\n", row, column, num_pixels_1d - 1, num_pixels_1d - 1);
+        assert(0);
+    }
+    if (!this->textures) 
+    {   
+        char buff[512];
+        snprintf(buff, sizeof(buff), "TexturesArray4AI is not initialized, "
+            "please first copy the buffer textures to this->textures[], "
+            "row: %d, column: %d\n", row, column);
+        MY_CHECK(buff);
         assert(0);
     }
     if (row>column) std::swap(row, column);
@@ -316,7 +319,7 @@ void TexturesArray4AI::copy_buffer_to_textures(
 
     const GLuint &contact_matrix_textures = contact_matrix_->textures;
     if (is_copied_from_buffer) return;
-    MY_CHECK(0);
+    
     // Temporary texture setup
     GLuint temptexture;
     glGenTextures(1, &temptexture);
@@ -326,7 +329,7 @@ void TexturesArray4AI::copy_buffer_to_textures(
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    MY_CHECK(0);
+    
 
     GLuint framebuffer;
     glGenFramebuffers(1, &framebuffer);
@@ -338,7 +341,7 @@ void TexturesArray4AI::copy_buffer_to_textures(
         assert(0);
     }
 
-    MY_CHECK(0);
+    
 
     s32 orignal_viewport[4];
     glGetIntegerv(GL_VIEWPORT, orignal_viewport);
@@ -396,8 +399,6 @@ void TexturesArray4AI::copy_buffer_to_textures_dynamic(
     bool show_flag) 
 {
 
-    MY_CHECK(0);
-    // Temporary texture setup
     GLuint temptexture;
     glGenTextures(1, &temptexture);
     glBindTexture(GL_TEXTURE_2D, temptexture);
@@ -416,12 +417,9 @@ void TexturesArray4AI::copy_buffer_to_textures_dynamic(
         assert(0);
     }
 
-    MY_CHECK(0);
-
     s32 orignal_viewport[4];
     glGetIntegerv(GL_VIEWPORT, orignal_viewport);
 
-    // TODO (shaoheng): the shader is using all 4 channels but readpixel only the red channel
     auto model = glm::mat4(1.0f);
     glUseProgram(contact_matrix_->shaderProgram);
     glUniformMatrix4fv(contact_matrix_->matLocation, 1, GL_FALSE, glm::value_ptr(model));
@@ -849,16 +847,16 @@ void TexturesArray4AI::cal_compressed_hic(
 
     // cal the maximum number of shift
     u32 D = 0;
-    f32 global_shift0_diag_mean = cal_diagonal_mean_within_fragments(D, Contigs);
+    f32 global_shift0_diag_mean = this->cal_diagonal_mean_within_fragments(D, Contigs);
     std::vector<f32> norm_diag_mean = {global_shift0_diag_mean};
-    f32 tmp_diag_mean = cal_diagonal_mean_within_fragments(++D, Contigs);
+    f32 tmp_diag_mean = this->cal_diagonal_mean_within_fragments(++D, Contigs);
     while (
         tmp_diag_mean > min_hic_density && 
         tmp_diag_mean > D_hic_ratio * global_shift0_diag_mean && 
         D < maximum_D
     ) {
         norm_diag_mean.push_back(tmp_diag_mean);
-        tmp_diag_mean = cal_diagonal_mean_within_fragments(++D, Contigs); 
+        tmp_diag_mean = this->cal_diagonal_mean_within_fragments(++D, Contigs); 
     }
 
     Values_on_Channel buffer_values_on_channel;
@@ -867,7 +865,7 @@ void TexturesArray4AI::cal_compressed_hic(
     {
         for (u32 j = i+1; j < frags->num; j++)
         {   
-            get_interaction_score(
+            this->get_interaction_score(
                     frags->startCoord[i], 
                     frags->startCoord[j], 
                     frags->length[i], 
@@ -902,7 +900,7 @@ f32 TexturesArray4AI::cal_diagonal_mean_within_fragments(int shift, const contig
     for (int i = 0 ; i < Contigs->numberOfContigs; i ++ )
     {   
         maxlen = std::max(maxlen, Contigs->contigs_arr[i].length);
-        Sum_and_Number tmp = get_fragement_diag_mean_square( 
+        Sum_and_Number tmp = this->get_fragement_diag_mean_square( 
             start_coord, 
             Contigs->contigs_arr[i].length, 
             shift );
@@ -1157,7 +1155,7 @@ Sum_and_Number TexturesArray4AI::get_fragement_diag_mean_square(
         std::cerr << "The shift is less than 0" << std::endl;
         assert(0);
     }
-    check_copied_from_buffer();
+    this->check_copied_from_buffer();
     if (shift >= length)
     {
         return {0, 0};
