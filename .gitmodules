@@ -14,3 +14,6 @@
 [submodule "subprojects/pytorch_scatter"]
 	path = subprojects/pytorch_scatter
 	url = https://github.com/guanshaoheng/pytorch_scatter.git 
+[submodule "subprojects/opencv"]
+	path = subprojects/opencv
+	url = https://github.com/opencv/opencv.git
