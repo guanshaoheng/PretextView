@@ -3,9 +3,34 @@ app/
 ascii.dSYM/
 build_cmake/
 builddir/
-.DS_Store
+*.DS_Store
+__pycache__/
+*.pyc
+.idea/          # JetBrains IDE
+.vscode/        # Visual Studio Code
+*.suo           # VS Code user settings
+*.swp           # Vim swap files
+*.log          
+*.tmp          
+*.bak           # backup files
+venv/           # 
+env/            # 
+*.egg-info/     # Python egg files
+*.eggs/
 
-python/
+python/comparison_fig/
+python/test_data_from_openglbuffer/
+python/graphData_constructor.py
+python/open_plot_saved_compressed_extension.py
+python/open_plot_saved_compressed_hic.py
+python/open_plot_saved_textures.py
+python/test_cal_mass_center.py
+python/test_compresed_data.py
+python/test.py
+python/compressed_data_test/
+python/autoCut/models/cfgs/error_model.pth
+python/autoCut/models/cfgs/chr_model.pth
+python/autoCut/models/swin/mmdet.egg-info/*
 
 subprojects/eigen
 subprojects/glfw
@@ -49,3 +74,4 @@ subprojects/libtorch(not needed in this version)/
 
 hic_figures/
 auto_cut_output/
+python/autoCut/models/swin/README.md
