@@ -75,3 +75,4 @@ subprojects/libtorch(not needed in this version)/
 hic_figures/
 auto_cut_output/
 python/autoCut/models/swin/README.md
+python/autoCut/models/swin/mmcv_custom/

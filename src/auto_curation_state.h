@@ -35,8 +35,8 @@ public:
     f32 link_score_threshold = 0.4f;
 
     // Variables for the editing UI state
-    bool show_yahs_erase_confirm_popup = false;
-    bool show_yahs_redo_confirm_popup = false;
+    bool show_autoSort_erase_confirm_popup = false;
+    bool show_autoSort_redo_confirm_popup = false;
     //sorting mode
     u32 sort_mode = 0; // 0: union find, 1: fuse union find, 2 deep fuse
     std::vector<std::string> sort_mode_names = {"Union Find", "Fuse Union Find", "Deep Fuse"};

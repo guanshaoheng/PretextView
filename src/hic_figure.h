@@ -35,29 +35,6 @@
 using Dict_json = std::map<std::string, std::variant<u64, f32, std::string>>;
 
 
-/*计算数组的 95% 分位数*/
-template <typename T>
-T percentile_cal(T* data, u32 size, f32 percentile=0.95)
-{   
-    u32 heap_size = (u32)((f32)size * (1-percentile));
-    std::priority_queue<T, std::vector<T>, std::greater<T>> min_heap;
-    for (auto i = 0; i < size; i++)
-    {
-        if (min_heap.size() < heap_size)
-        {
-            min_heap.push(data[i]);
-        }
-        else if (data[i] > min_heap.top())
-        {
-            min_heap.pop();
-            min_heap.push(data[i]);
-        }
-    }
-    if (min_heap.size() > 0) 
-        return min_heap.top();
-    else return 0;
-}
-
 
 
 
@@ -210,9 +187,11 @@ public:
     TexturesArray4AI* textures_array;
     f32 bp_per_pixel_hic;
     std::string file_save_dir;
+    std::string hic_figure_save_dir;
     std::string auto_cut_output_dir;
+    std::string info_save_file_full_path;
     #ifdef DEBUG
-        std::vector<f32> resolution_mutiplier = {2, 4};
+        std::vector<f32> resolution_mutiplier = {4};
     #else
         std::vector<f32> resolution_mutiplier = {
             0.5, 1, 2, 4, 8, 16, 32};
@@ -224,44 +203,42 @@ public:
         u64 genome_bp_,
         std::string file_save_dir_, 
         TexturesArray4AI* textures_array_,
-        std::string auto_cut_output_dir_ = "auto_cut_output"
+        std::string hic_figure_dir_name = "/hic_figures",
+        std::string auto_cut_output_name = "/auto_cut_output",
+        std::string info_file_name = "/info.json"
     ) 
         : 
         genome_bp(genome_bp_),
-        hic_pixel_1d(textures_array_->get_num_pixels_1d()),
-        file_save_dir(file_save_dir_),
-        auto_cut_output_dir(auto_cut_output_dir_)
+        hic_pixel_1d(textures_array_->get_num_pixels_1d())
     {   
         this->textures_array = textures_array_;
         this->bp_per_pixel_hic = (f32)this->genome_bp / (f32)this->hic_pixel_1d;
-        if (std::filesystem::exists(this->auto_cut_output_dir))
-        {
-            std::cout << "Remove folder: " 
-                      << (std::filesystem::current_path().string() + this->auto_cut_output_dir) 
-                      << std::endl;
-            std::filesystem::remove_all(this->auto_cut_output_dir);
-            std::filesystem::create_directories(this->auto_cut_output_dir);
-        }
         // if the folder does not exist, create it
-        if (std::filesystem::exists(file_save_dir))
+        this->file_save_dir = std::filesystem::current_path().string() + file_save_dir_;
+        if (std::filesystem::exists(this->file_save_dir))
         {
             // remove this one 
             std::cout << "Remove folder: " 
-                      << (std::filesystem::current_path().string() + file_save_dir) 
+                      << this->file_save_dir
                       << std::endl;
-            std::filesystem::remove_all(file_save_dir);
+            std::filesystem::remove_all(this->file_save_dir);
         }
         std::cout << "Creat folder: " 
-                  << (std::filesystem::current_path().string() + file_save_dir) 
+                  << (std::filesystem::current_path().string() + this->file_save_dir) 
                   << std::endl;
-        std::filesystem::create_directories(file_save_dir);
+        std::filesystem::create_directories(this->file_save_dir);
+        // clear save pics
+        this->auto_cut_output_dir = this->file_save_dir + auto_cut_output_name;
+        std::filesystem::create_directories(this->auto_cut_output_dir);
+        this->hic_figure_save_dir = this->file_save_dir + hic_figure_dir_name;
+        std::filesystem::create_directories(this->hic_figure_save_dir);
         // clear the saved info
-        std::string info_save_file_full_path = this->file_save_dir+"/info.json";
-        std::ofstream out_file(info_save_file_full_path);
+        this->info_save_file_full_path = this->hic_figure_save_dir+info_file_name;
+        std::ofstream out_file(this->info_save_file_full_path);
         if (!out_file.is_open())
         {   
             std::stringstream ss;
-            ss << "Cannot open: " << info_save_file_full_path << std::endl;
+            ss << "Cannot open: " << this->info_save_file_full_path << std::endl;
             MY_CHECK(ss.str().c_str());
             assert(0);
         }
@@ -283,7 +260,7 @@ public:
         u32 end_bp = (u32) ((start_pixel_figure + this->figure_pixel_1d) * bp_per_pixel_figure);
         
         std::string img_id = generate_random_string(16);
-        std::string file_save_path = this->file_save_dir + "/" + img_id;
+        std::string file_save_path = this->hic_figure_save_dir + "/" + img_id;
 
         if (this->figure_info)
         {
@@ -314,12 +291,11 @@ public:
             std::cerr << "The info is empty" << std::endl;
             assert(0);
         }
-        std::string info_save_file_full_path = this->file_save_dir+"/info.json";
-        std::fstream out_file = std::fstream(info_save_file_full_path, std::ios::in | std::ios::out);
+        std::fstream out_file = std::fstream(this->info_save_file_full_path, std::ios::in | std::ios::out);
         if (!out_file.is_open())
         {   
             std::stringstream ss;
-            ss << "Cannot open: " << info_save_file_full_path << std::endl;
+            ss << "Cannot open: " << this->info_save_file_full_path << std::endl;
             MY_CHECK(ss.str().c_str());
             assert(0);
         }
@@ -343,7 +319,7 @@ public:
                     ptr += 2 ;
                 }
                 out_file.seekp(ptr);
-                out_file << "\"" << this->file_save_dir << "/" ; 
+                out_file << "\"" << this->hic_figure_save_dir << "/" ; 
                 std::visit(
                     [&out_file](const auto& v) 
                     {
@@ -403,20 +379,6 @@ public:
             0,                            // output stride
             1                             // number of channels
         );
-        char buff[512];
-        snprintf(
-            buff, sizeof(buff), 
-            "%s/%s.png", 
-            this->file_save_dir.c_str(),  
-            this->figure_info->img_id.c_str()
-            // "%s/multiplier%.2f_%.2f-%.2f_%s.png", 
-            // this->file_save_dir.c_str(), 
-            // this->figure_info->multiplier, 
-            // (f32)this->figure_info->start_bp / (f32)this->figure_info->genome_bp,
-            // (f32)this->figure_info->end_bp / (f32)this->figure_info->genome_bp, 
-            // this->figure_info->img_id.c_str()
-        );
-        // save the figure
 
         // 95 percentile
         u08 percentile_95 = percentile_cal(data_out, num_pixels, 0.95);
@@ -441,10 +403,11 @@ public:
         delete[] data_out_f32;
 
         // 生成保存路径（添加_red后缀）
+        char buff[512];
         snprintf(
             buff, sizeof(buff), 
             "%s/%s.png",  
-            this->file_save_dir.c_str(),  
+            this->hic_figure_save_dir.c_str(),  
             this->figure_info->img_id.c_str()
         );
 

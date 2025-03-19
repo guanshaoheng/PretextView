@@ -766,6 +766,30 @@ void TexturesArray4AI::show_collected_textures()
 }
 
 
+
+void TexturesArray4AI::cal_maximum_number_of_shift(
+    u32& D,
+    std::vector<f32>& norm_diag_mean,
+    const contigs* Contigs,
+    f32 D_hic_ratio,
+    u32 maximum_D,
+    f32 min_hic_density)
+{   
+    f32 global_shift0_diag_mean = this->cal_diagonal_mean_within_fragments(D, Contigs);
+    norm_diag_mean.push_back(global_shift0_diag_mean);
+    f32 tmp_diag_mean = this->cal_diagonal_mean_within_fragments(++D, Contigs);
+    while (
+        tmp_diag_mean > min_hic_density && 
+        tmp_diag_mean > D_hic_ratio * global_shift0_diag_mean && 
+        D < maximum_D
+    ) {
+        norm_diag_mean.push_back(tmp_diag_mean);
+        tmp_diag_mean = this->cal_diagonal_mean_within_fragments(++D, Contigs); 
+    }
+    return ;
+}
+
+
 void TexturesArray4AI::cal_compressed_hic(
     const contigs* Contigs, 
     const extension_sentinel& Extensions,
@@ -846,18 +870,15 @@ void TexturesArray4AI::cal_compressed_hic(
     }
 
     // cal the maximum number of shift
-    u32 D = 0;
-    f32 global_shift0_diag_mean = this->cal_diagonal_mean_within_fragments(D, Contigs);
-    std::vector<f32> norm_diag_mean = {global_shift0_diag_mean};
-    f32 tmp_diag_mean = this->cal_diagonal_mean_within_fragments(++D, Contigs);
-    while (
-        tmp_diag_mean > min_hic_density && 
-        tmp_diag_mean > D_hic_ratio * global_shift0_diag_mean && 
-        D < maximum_D
-    ) {
-        norm_diag_mean.push_back(tmp_diag_mean);
-        tmp_diag_mean = this->cal_diagonal_mean_within_fragments(++D, Contigs); 
-    }
+    u32 D=0;
+    std::vector<f32> norm_diag_mean = {};
+    this->cal_maximum_number_of_shift(
+        D, 
+        norm_diag_mean,
+        Contigs,
+        D_hic_ratio,
+        maximum_D,
+        min_hic_density);
 
     Values_on_Channel buffer_values_on_channel;
     u32 cnt = 0;

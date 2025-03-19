@@ -105,6 +105,7 @@ SOFTWARE.
 #include "showWindowData.h"
 #include "hic_figure.h"
 #include "ai_cut_json_parse.h"
+#include "frag_cut_calculation.h"
 
 #include "shaderSource.h"
 /*
@@ -662,10 +663,10 @@ Yahs_sorting = 0;
 
 global_variable
 u32 
-AI_cutting = 0;
+Auto_cutting = 0;
 
-global_variable s32 ai_cutting_button = 0; 
-global_variable s32 yahs_sort_button = 0;
+global_variable s32 auto_cut_button = 0; 
+global_variable s32 auto_sort_button = 0;
 
 
 global_function
@@ -730,8 +731,6 @@ global_function
 void 
 restore_settings_after_copy(const f32 *original_control_points);
 
-
-#define Max_Number_of_Contigs 4096
 
 
 global_variable
@@ -799,7 +798,7 @@ global_variable auto auto_curation_state = AutoCurationState();
 
 global_function
 void
-UpdateContigsFromMapState()  // todo reading 从map的状态更新contigs
+UpdateContigsFromMapState()  //  reading 从map的状态更新contigs
 {
     u32 lastScaffID = Map_State->scaffIds[0];       // 第一个scaff的编号
     u32 scaffId = lastScaffID ? 1 : 0;              // 
@@ -821,13 +820,17 @@ UpdateContigsFromMapState()  // todo reading 从map的状态更新contigs
         ++length; // current fragment length
 
         pixelIdx = index + 1;   // 像素点编号， 加一因为第一个已经用来初始化了
-        u32 id = Map_State->originalContigIds[pixelIdx];  // 像素点的 contig id
+        u32 id = Map_State->originalContigIds[pixelIdx];  // 像素点的 original contig id, 这里 不使用 % Max_Number_of_Contigs的值是为了区分后面cut之后的片段
         u32 coord = Map_State->contigRelCoords[pixelIdx]; // 像素点的局部坐标
         
-        if (id != lastId || (inverted && coord != (lastCoord - 1)) || (!inverted && coord != (lastCoord + 1))) // 如果不是一个连续片段
+        if (
+            id != lastId || 
+            (inverted && coord != (lastCoord - 1)) || 
+            (!inverted && coord != (lastCoord + 1)) 
+        ) // 如果不是一个连续片段
         {   
-            Original_Contigs[lastId].contigMapPixels[Original_Contigs[lastId].nContigs] = pixelIdx - 1 - (length >> 1);   // update Original_Contigs: contigMapPixels
-            Original_Contigs[lastId].nContigs++; // update Original_Contigs: nContigs, contigMapPixels
+            Original_Contigs[lastId % Max_Number_of_Contigs].contigMapPixels[Original_Contigs[lastId%Max_Number_of_Contigs].nContigs] = pixelIdx - 1 - (length >> 1);   // update Original_Contigs: contigMapPixels
+            Original_Contigs[lastId % Max_Number_of_Contigs].nContigs++; // update Original_Contigs: nContigs, contigMapPixels
 
             contig *last_cont = Contigs->contigs_arr + contigPtr; // 获取上一个contig的指针， 并且给contigPtr + 1
             contigPtr++;
@@ -865,7 +868,7 @@ UpdateContigsFromMapState()  // todo reading 从map的状态更新contigs
     if (contigPtr < Max_Number_of_Contigs) //  contigptr 小于 Number_of_Original_Contigs
     // 更新最后一个contig的最后一个片段信息
     {
-        (Original_Contigs + lastId)->contigMapPixels[(Original_Contigs + lastId)->nContigs++] = pixelIdx - 1 - (length >> 1); 
+        (Original_Contigs + lastId % Max_Number_of_Contigs)->contigMapPixels[(Original_Contigs + lastId % Max_Number_of_Contigs)->nContigs++] = pixelIdx - 1 - (length >> 1); 
 
         ++length;
         contig *cont = Contigs->contigs_arr + contigPtr++;
@@ -901,7 +904,7 @@ RebuildContig(u32 pixel)
     for (;;)
     {
         u32 contigId = Map_State->contigIds[pixel];
-        u32 origContigId = Map_State->originalContigIds[pixel];
+        u32 origContigId = Map_State->get_original_contig_id(pixel);
 
         u32 top = (u32)pixel;
         while (top && (Map_State->contigIds[top - 1] == contigId)) --top;
@@ -919,7 +922,7 @@ RebuildContig(u32 pixel)
         u08 fragmented = 0;
         ForLoop(Number_of_Pixels_1D)
         {
-            if ((Map_State->contigIds[index] != contigId) && (Map_State->originalContigIds[index] == origContigId))
+            if ((Map_State->contigIds[index] != contigId) && (Map_State->get_original_contig_id(index) == origContigId))
             {
                 fragmented = 1;
                 break;
@@ -934,7 +937,7 @@ RebuildContig(u32 pixel)
                 u32 otherPixel = 0;
                 ForLoop(Number_of_Pixels_1D)
                 {
-                    if ((Map_State->originalContigIds[index] == origContigId) && (Map_State->contigRelCoords[index] == (contigTopCoord - 1)))
+                    if ((Map_State->get_original_contig_id(index) == origContigId) && (Map_State->contigRelCoords[index] == (contigTopCoord - 1)))
                     {
                         otherPixel = index;
                         break;
@@ -968,7 +971,7 @@ RebuildContig(u32 pixel)
                 u32 otherPixel = 0;
                 ForLoop(Number_of_Pixels_1D)
                 {
-                    if ((Map_State->originalContigIds[index] == origContigId) && (Map_State->contigRelCoords[index] == (contigBottomCoord + 1)))
+                    if ((Map_State->get_original_contig_id(index) == origContigId) && (Map_State->contigRelCoords[index] == (contigBottomCoord + 1)))
                     {
                         otherPixel = index;
                         break;
@@ -3520,7 +3523,7 @@ Render() {
                     (char *)"K: exit",
                     (char *)"S: clear select area",
                     (char *)"Q/W: quit/redo edit",
-                    (char *)"Space: YaHS sort",
+                    (char *)"Space: Auto sort",
                     (char *)"Left Click: select/unselect the fragment",
                     (char *)selectedFragmentsStr.c_str(),
                     (char *)start_and_end_pixel_str.c_str()
@@ -3834,8 +3837,8 @@ Render() {
             textBoxHeight *= (3.0f + (f32)nExtra);
             textBoxHeight += (2.0f + (f32)nExtra);
 
-            u32 id1 = Map_State->originalContigIds[Tool_Tip_Move.pixels.x];
-            u32 id2 = Map_State->originalContigIds[Tool_Tip_Move.pixels.y];
+            u32 id1 = Map_State->get_original_contig_id(Tool_Tip_Move.pixels.x);
+            u32 id2 = Map_State->get_original_contig_id(Tool_Tip_Move.pixels.y);
             u32 coord1 = Map_State->contigRelCoords[Tool_Tip_Move.pixels.x];
             u32 coord2 = Map_State->contigRelCoords[Tool_Tip_Move.pixels.y];
             
@@ -4097,7 +4100,7 @@ Render() {
                     pix1 = pix1 ? pix1 - 1 : (pix2 < (Number_of_Pixels_1D - 1) ? pix2 + 1 : pix2);
                 }
 
-                original_contig *cont = Original_Contigs + Map_State->originalContigIds[pix1];
+                original_contig *cont = Original_Contigs + Map_State->get_original_contig_id(pix1);
 
                 u32 nPixels = Number_of_Pixels_1D;
                 f64 bpPerPixel = (f64)Total_Genome_Length / (f64)nPixels;
@@ -4116,7 +4119,7 @@ Render() {
                 if (!line1Done)
                 {
                     f64 bpEnd = bpPerPixel * (f64)Map_State->contigRelCoords[pix2];
-                    original_contig *cont2 = Original_Contigs + Map_State->originalContigIds[pix2];
+                    original_contig *cont2 = Original_Contigs + Map_State->get_original_contig_id(pix2);
                     stbsp_snprintf(line1, 64, "%s[%$.2fbp] to %s[%$.2fbp]", cont->name, bpStart, cont2->name, bpEnd);
                     if (Edit_Pixels.editing)
                     {
@@ -4336,12 +4339,12 @@ Render() {
             glUseProgram(UI_Shader->shaderProgram);
             glUniformMatrix4fv(Flat_Shader->matLocation, 1, GL_FALSE, textNormalMat);
             glViewport(0, 0, (s32)width, (s32)height);
-            fonsDrawText(FontStash_Context, width * 0.5f, height * 0.5f, "YaHS Sorting...", 0);
+            fonsDrawText(FontStash_Context, width * 0.5f, height * 0.5f, "Auto Sorting...", 0);
 
             ChangeSize((s32)width, (s32)height);
         }
 
-        if (AI_cutting)
+        if (Auto_cutting)
         {
             u32 colour = glfonsRGBA(Theme_Colour.r, Theme_Colour.g, Theme_Colour.b, Theme_Colour.a);
 
@@ -4354,7 +4357,7 @@ Render() {
             glUseProgram(UI_Shader->shaderProgram);
             glUniformMatrix4fv(Flat_Shader->matLocation, 1, GL_FALSE, textNormalMat);
             glViewport(0, 0, (s32)width, (s32)height);
-            fonsDrawText(FontStash_Context, width * 0.5f, height * 0.5f, "AI cutting...", 0);
+            fonsDrawText(FontStash_Context, width * 0.5f, height * 0.5f, "Auto cutting...", 0);
 
             ChangeSize((s32)width, (s32)height);
         }
@@ -4587,6 +4590,142 @@ TestFile(const char *fileName, u64 *fileSize = 0)
     }
     return(file); // 仅仅返回正确的file指针，否则返回空指针
 }
+
+
+
+global_function
+void 
+add_graph_to_extensions(
+    memory_arena *arena, 
+    const u32* graph_name, 
+    const u32* graph_data)
+{
+    
+    graph *gph = PushStructP(arena, graph);   // create the size to store the extension data
+    extension_node *node = PushStructP(arena, extension_node);
+    u08 *dataPlusName = PushArrayP(arena, u08, ((sizeof(u32) * Number_of_Pixels_1D) + sizeof(gph->name) )); 
+    gph->data = (u32 *)(dataPlusName + sizeof(gph->name)); 
+    u32 *namePtr = (u32 *)graph_name;  
+    for (u32 i = 0; i < ArrayCount(gph->name); i++ )  // get the graph name
+    {
+        gph->name[i] = *(namePtr + i);
+    }
+    for (u32 i = 0; i < Number_of_Pixels_1D; i++)  // get the graph data
+    {
+        gph->data[i] = *(graph_data + i);
+    }
+    node->type = extension_graph;      // assign the gph to node
+    node->extension = gph;
+    AddExtension(node);     // add node to extension
+    
+    return ;
+}
+
+
+
+global_function
+void 
+push_extensions_to_opengl(memory_arena *arena, u32 added_index = 0)
+{   
+    u32 exIndex = 0;
+    // TraverseLinkedList(Extensions.head, extension_node)
+
+    extension_node* node = Extensions.head ;
+    while (added_index--)
+    {
+        node = node->next;
+        exIndex ++ ;
+    }
+    for ( ; node; node = node->next) {
+        
+        switch (node->type) 
+        {
+            case extension_graph:
+                {
+                    graph *gph = (graph *)node->extension; // get the graph ptr and assigned to gph
+#define DefaultGraphScale 0.2f
+#define DefaultGraphBase 32.0f
+#define DefaultGraphLineSize 1.0f
+#define DefaultGraphColour {0.1f, 0.8f, 0.7f, 1.0f}
+                    gph->scale = DefaultGraphScale;
+                    gph->base = DefaultGraphBase;
+                    gph->lineSize = DefaultGraphLineSize;
+                    gph->colour = DefaultGraphColour;
+                    gph->on = 0;
+
+                    gph->shader = PushStructP(arena, editable_plot_shader);
+                    gph->shader->shaderProgram = CreateShader(FragmentSource_EditablePlot.c_str(), VertexSource_EditablePlot.c_str(), GeometrySource_EditablePlot.c_str());
+
+                    glUseProgram(gph->shader->shaderProgram);
+                    glBindFragDataLocation(gph->shader->shaderProgram, 0, "outColor");
+                    gph->shader->matLocation = glGetUniformLocation(gph->shader->shaderProgram, "matrix");
+                    gph->shader->colorLocation = glGetUniformLocation(gph->shader->shaderProgram, "color");
+                    gph->shader->yScaleLocation = glGetUniformLocation(gph->shader->shaderProgram, "yscale");
+                    gph->shader->yTopLocation = glGetUniformLocation(gph->shader->shaderProgram, "ytop");
+                    gph->shader->lineSizeLocation = glGetUniformLocation(gph->shader->shaderProgram, "linewidth");
+
+                    glUniform1i(glGetUniformLocation(gph->shader->shaderProgram, "pixrearrangelookup"), 3);
+                    glUniform1i(glGetUniformLocation(gph->shader->shaderProgram, "yvalues"), 4 + (s32)exIndex);
+
+                    u32 nValues = Number_of_Pixels_1D;
+                    auto* xValues = new f32[nValues]; // allocate memory for xValues, actually, x is the coordinate of the pixel
+                    auto* yValues = new f32[nValues];
+                    
+                    u32 max = 0;
+                    ForLoop(Number_of_Pixels_1D)
+                    {
+                        max = my_Max(max, gph->data[index]);
+                    }
+
+                    ForLoop(Number_of_Pixels_1D)
+                    {
+                        xValues[index] = (f32)index;
+                        yValues[index] = (f32)gph->data[index] / (f32)max ;   // normalise the data
+                    }
+
+                    glActiveTexture(GL_TEXTURE4 + exIndex++);
+
+                    GLuint yVal, yValTex;
+
+                    // generate a buffer object named yVal and save data to yVal
+                    glGenBuffers(1, &yVal);
+                    glBindBuffer(GL_TEXTURE_BUFFER, yVal);
+                    glBufferData(GL_TEXTURE_BUFFER, sizeof(f32) * nValues, yValues, GL_STATIC_DRAW);
+
+                    // add texture and link to the buffer object
+                    glGenTextures(1, &yValTex);
+                    glBindTexture(GL_TEXTURE_BUFFER, yValTex);
+                    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, yVal);
+
+                    gph->shader->yValuesBuffer = yVal;
+                    gph->shader->yValuesBufferTex = yValTex;
+                    
+                    // add the vertext data into buffer
+                    glGenBuffers(1, &gph->vbo);
+                    glBindBuffer(GL_ARRAY_BUFFER, gph->vbo);
+                    glBufferData(GL_ARRAY_BUFFER, sizeof(f32) * nValues, xValues, GL_STATIC_DRAW);
+
+                    // gen the vertex array object
+                    glGenVertexArrays(1, &gph->vao);
+                    glBindVertexArray(gph->vao);
+
+                    GLuint posAttrib = (GLuint)glGetAttribLocation(gph->shader->shaderProgram, "position");
+                    glEnableVertexAttribArray(posAttrib);
+                    glVertexAttribPointer(posAttrib, 1, GL_FLOAT, GL_FALSE, 0, 0);
+
+                    delete[] xValues;
+                    delete[] yValues;
+
+                    glActiveTexture(GL_TEXTURE0);
+                }
+                break;
+        }
+    }
+
+    return ;
+}
+
+
 
 global_function
 u08
@@ -5225,93 +5364,7 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
 
     // Extensions
     {
-        u32 exIndex = 0;
-        // TraverseLinkedList(Extensions.head, extension_node)
-        for (extension_node* node = Extensions.head; node; node = node->next) {
-            
-            switch (node->type)
-            {
-                case extension_graph:
-                    {
-                        graph *gph = (graph *)node->extension; // get the graph ptr and assigned to gph
-#define DefaultGraphScale 0.2f
-#define DefaultGraphBase 32.0f
-#define DefaultGraphLineSize 1.0f
-#define DefaultGraphColour {0.1f, 0.8f, 0.7f, 1.0f}
-                        gph->scale = DefaultGraphScale;
-                        gph->base = DefaultGraphBase;
-                        gph->lineSize = DefaultGraphLineSize;
-                        gph->colour = DefaultGraphColour;
-                        gph->on = 0;
-
-                        gph->shader = PushStructP(arena, editable_plot_shader);
-                        gph->shader->shaderProgram = CreateShader(FragmentSource_EditablePlot.c_str(), VertexSource_EditablePlot.c_str(), GeometrySource_EditablePlot.c_str());
-
-                        glUseProgram(gph->shader->shaderProgram);
-                        glBindFragDataLocation(gph->shader->shaderProgram, 0, "outColor");
-                        gph->shader->matLocation = glGetUniformLocation(gph->shader->shaderProgram, "matrix");
-                        gph->shader->colorLocation = glGetUniformLocation(gph->shader->shaderProgram, "color");
-                        gph->shader->yScaleLocation = glGetUniformLocation(gph->shader->shaderProgram, "yscale");
-                        gph->shader->yTopLocation = glGetUniformLocation(gph->shader->shaderProgram, "ytop");
-                        gph->shader->lineSizeLocation = glGetUniformLocation(gph->shader->shaderProgram, "linewidth");
-
-                        glUniform1i(glGetUniformLocation(gph->shader->shaderProgram, "pixrearrangelookup"), 3);
-                        glUniform1i(glGetUniformLocation(gph->shader->shaderProgram, "yvalues"), 4 + (s32)exIndex);
-
-                        u32 nValues = Number_of_Pixels_1D;
-                        auto* xValues = new f32[nValues]; // allocate memory for xValues, actually, x is the coordinate of the pixel
-                        auto* yValues = new f32[nValues];
-                        
-                        u32 max = 0;
-                        ForLoop(Number_of_Pixels_1D)
-                        {
-                            max = my_Max(max, gph->data[index]);
-                        }
-
-                        ForLoop(Number_of_Pixels_1D)
-                        {
-                            xValues[index] = (f32)index;
-                            yValues[index] = (f32)gph->data[index] / (f32)max ;   // normalise the data
-                        }
-
-                        glActiveTexture(GL_TEXTURE4 + exIndex++);
-
-                        GLuint yVal, yValTex;
-
-                        // generate a buffer object named yVal and save data to yVal
-                        glGenBuffers(1, &yVal);
-                        glBindBuffer(GL_TEXTURE_BUFFER, yVal);
-                        glBufferData(GL_TEXTURE_BUFFER, sizeof(f32) * nValues, yValues, GL_STATIC_DRAW);
-
-                        // add texture and link to the buffer object
-                        glGenTextures(1, &yValTex);
-                        glBindTexture(GL_TEXTURE_BUFFER, yValTex);
-                        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, yVal);
-
-                        gph->shader->yValuesBuffer = yVal;
-                        gph->shader->yValuesBufferTex = yValTex;
-                        
-                        // add the vertext data into buffer
-                        glGenBuffers(1, &gph->vbo);
-                        glBindBuffer(GL_ARRAY_BUFFER, gph->vbo);
-                        glBufferData(GL_ARRAY_BUFFER, sizeof(f32) * nValues, xValues, GL_STATIC_DRAW);
-
-                        // gen the vertex array object
-                        glGenVertexArrays(1, &gph->vao);
-                        glBindVertexArray(gph->vao);
-
-                        GLuint posAttrib = (GLuint)glGetAttribLocation(gph->shader->shaderProgram, "position");
-                        glEnableVertexAttribArray(posAttrib);
-                        glVertexAttribPointer(posAttrib, 1, GL_FLOAT, GL_FALSE, 0, 0);
-
-                        delete[] xValues;
-                        delete[] yValues;
-
-                        glActiveTexture(GL_TEXTURE0);
-                    }
-                    break;
-            }
-        }
+        push_extensions_to_opengl(arena, 0);
     }
 
 #ifdef Internal
@@ -6195,6 +6248,69 @@ RearrangeMap(       // NOTE: VERY IMPORTANT
 }
 
 
+
+global_function
+void 
+BreakMap(
+    const u32& loc, 
+    const u32 ignore_len = 10 // cut点到开头或者结尾的长度不足ignore_len的contig不会被切断
+)
+{  
+    if (loc >= Number_of_Pixels_1D)
+    {
+        char buff[512];
+        snprintf(buff, sizeof(buff), "Error: loc (%d) should be smaller than number of pixels (%d)", loc, Number_of_Pixels_1D);
+        MY_CHECK(buff);
+        assert(0);
+    }
+    u32 original_contig_id = Map_State->originalContigIds[loc];
+    u32 contig_id = Map_State->contigIds[loc];
+    u32 contig_rel_coord = Map_State->contigRelCoords[loc];
+
+    s32 ptr_left = (s32)loc, ptr_right = (s32)loc;
+    u08 inversed = IsContigInverted(contig_id);
+    while (
+        --ptr_left >= 0 && 
+        Map_State->contigIds[ptr_left] == contig_id && 
+        (Map_State->contigRelCoords[ptr_left] ==  Map_State->contigRelCoords[ptr_left+1]+ (inversed ? +1 : -1)) ) {};
+    while (
+        ++ptr_right < Number_of_Pixels_1D && 
+        Map_State->contigIds[ptr_right] == contig_id && 
+        (Map_State->contigRelCoords[ptr_right - 1] ==  Map_State->contigRelCoords[ptr_right]+ (inversed ? +1 : -1)) ) {};
+    
+    if ((loc - ptr_left) < ignore_len || (ptr_right - loc) < ignore_len )  
+    {   
+        char buff[256];
+        snprintf(buff, sizeof(buff), "Error: original_contig_id %d current_contig_id %d, pixel range: [%d, cut(%d), %d], left(%d), right(%d), smaller than ignore_len (%d) \n", original_contig_id>Max_Number_of_Contigs? original_contig_id%Max_Number_of_Contigs:original_contig_id, contig_id, ptr_left, loc, ptr_right, loc - ptr_left, ptr_right - loc, ignore_len);
+        std::cout << buff << std::endl;
+        return;
+    } 
+
+    ptr_left++; ptr_right--;
+    // if ((inversed && Map_State->contigRelCoords[ptr_right] != 0 ) || 
+    //     (!inversed && Map_State->contigRelCoords[ptr_left] != 0))
+    // {
+    //     char buff[256];
+    //     snprintf(buff, sizeof(buff), "Error: contig %d, pixel range: [%d, %d] %s inversed, but the start real coor is not 0 (%d instead)\n", contig_id, ptr_left, ptr_right, inversed ? "(is)" : "(isn\'t)", inversed ? Map_State->contigRelCoords[ptr_right] : Map_State->contigRelCoords[ptr_left]);
+    //     MY_CHECK(buff);
+    //     assert(0);
+    // }
+
+    // cut the contig by amending the relCoords..
+    for (u32 tmp = loc; tmp <= ptr_right; tmp++) // left side
+    {
+        Map_State->originalContigIds[tmp] += Max_Number_of_Contigs;
+    }
+
+    char buff[256];
+    snprintf(buff, sizeof(buff), "Original contig_id (%d), current_id (%d), pixel range: [%d, %d] %s inversed, cut at %d\n", original_contig_id, contig_id, ptr_left, ptr_right, inversed ? "(is)" : "(isn\'t)", loc);
+    std::cout << buff;
+
+    return ; 
+
+}
+
+
 global_function
 std::vector<s32>
 get_exclude_metaData_idx(const std::vector<std::string>& exclude_tags)
@@ -6239,23 +6355,25 @@ void EraseAllEdits(map_editor* map_editor_, u32 max_edit_recorded=Edits_Stack_Si
 void run_ai_detection()
 {
     std::cout << "Running AI detection..." << std::endl;
-    int status = std::system("/Users/sg35/miniconda3/envs/auto_cut/bin/python python/autoCut/auto_cut.py");  
+    int status = std::system("/Users/sg35/miniconda3/envs/auto_cut/bin/python /Users/sg35/PretextView/python/autoCut/auto_cut.py");  
 
     // 检查命令执行状态
     if (status == 0) {
-        std::cout << "命令执行成功!" << std::endl;
+        std::cout << "Command successful!" << std::endl;
     } else {
-        std::cerr << "命令执行失败，错误码: " << status << std::endl;
+        std::cerr << "Command failed, code: " << status << std::endl;
     }
 }
 
-void cut_frags(std::vector<std::vector<u32>> & problem_locs)
+void cut_frags(const std::vector<u32>& problem_locs)
 {
     for (auto & i : problem_locs)
     {
-        InvertMap(i[0], i[1]);
-        AddMapEdit(0, {i[0], i[1]}, true);
+        // cut the fragment
+        BreakMap(i);
+        UpdateContigsFromMapState();
     }
+    Redisplay = 1;
 }
 
 
@@ -6389,16 +6507,17 @@ void AutoCurationFromFragsOrder(
 
 global_function
 void
-ai_cutting_func(
+Auto_cutting_func(
     char * currFileName,
-    std::string file_save_path = std::string("./hic_figures")
+    memory_arena* arena = nullptr,
+    std::string file_save_name = std::string("/auto_curation_tmp")
 )
 {   
-    if (!currFileName || !AI_cutting) return;
+    if (!currFileName || !Auto_cutting) return;
 
     fprintf(stdout, "========================\n");
     // copy textures to cpu
-    fprintf(stdout, "[AI cutting] coping textures...\n");
+    fprintf(stdout, "[Auto cutting] coping textures...\n");
     auto texture_array_4_ai = TexturesArray4AI(Number_of_Textures_1D, Texture_Resolution, (char*)currFileName, Contigs);
     // prepare before reading textures
     f32 original_control_points[3];
@@ -6406,27 +6525,58 @@ ai_cutting_func(
     texture_array_4_ai.copy_buffer_to_textures_dynamic(Contact_Matrix, false); 
     restore_settings_after_copy(original_control_points);
     
-    // generate figures
+    // classic cut 
     if (1)
     {
-        fprintf(stdout, "[AI cutting] generating hic figures...\n");
+        FragCutCal frag_cut_cal(&texture_array_4_ai, Contigs, Number_of_Pixels_1D); 
+        std::vector<u32> cut_locs_pixel = frag_cut_cal.get_cut_locs_pixel();
+        #ifdef DEBUG
+            std::cout << "Cut locs in pixel: [";
+            for (auto & i : cut_locs_pixel) std::cout << i << " ";
+            std::cout << "]" << std::endl;
+        #endif
+        
+        // add the cut locs to the extensions
+        if (arena)
+        {   
+            u32 added_num = Extensions.get_num_extensions();
+            std::string graph_name = "hic_pixel_density";
+            u32* graph_data = new u32[Number_of_Pixels_1D];
+            for (u32 i=0; i < Number_of_Pixels_1D; i ++)
+            {
+                graph_data[i] = (u32)(frag_cut_cal.hic_density[i] * 100.f);
+            }
+            add_graph_to_extensions(arena, (u32*)graph_name.c_str(), graph_data);
+            
+            push_extensions_to_opengl(arena, added_num);
+        }
+        
+        // cut the contigs
+        cut_frags(cut_locs_pixel);
+    }
+
+    // generate figures
+    if (0)
+    {
+        fprintf(stdout, "[Auto cutting] generating hic figures...\n");
         Hic_Figure hic_figure(
             Total_Genome_Length, 
-            file_save_path,
+            file_save_name,
             &texture_array_4_ai
         );
         hic_figure.generate_hic_figures();
-    }
 
-    // run ai model with python script
-    run_ai_detection();
+        // run ai model with python script
+        run_ai_detection();
 
-    // restore the error info via reading the error json
-    HIC_Problems hic_problems("auto_cut_output/infer_result/infer_result.json", (f32) Total_Genome_Length / (f32)Number_of_Pixels_1D ); 
-    std::vector<std::vector<u32>> problem_loc = hic_problems.get_problem_loci();
+        // restore the error info via reading the error json
+        HIC_Problems hic_problems("/auto_curation_tmp/auto_cut_output/infer_result/infer_result.json", (f32) Total_Genome_Length / (f32)Number_of_Pixels_1D ); 
+        std::vector<std::vector<u32>> problem_loc = hic_problems.get_problem_loci();
+        }
+
 
     // cut the contigs 
-    cut_frags(problem_loc);
+    // cut_frags();
 
     return ;
 }
@@ -6434,15 +6584,15 @@ ai_cutting_func(
 
 global_function
 void
-Sort_yahs(char* currFileName)
+Sort_auto_sort(char* currFileName)
 {   
     if (!currFileName || !Yahs_sorting) return;
     
     fprintf(stdout, "========================\n");
-    fprintf(stdout, "[YaHS Sort] start...\n");
-    fprintf(stdout, "[YaHS Sort] smallest_frag_size_in_pixel: %d\n", auto_curation_state.smallest_frag_size_in_pixel);
-    fprintf(stdout, "[YaHS Sort] link_score_threshold:        %.3f\n", auto_curation_state.link_score_threshold);
-    fprintf(stdout, "[YaHS Sort] Sort mode:                   %s\n", auto_curation_state.get_sort_mode_name().c_str());
+    fprintf(stdout, "[Auto Sort] start...\n");
+    fprintf(stdout, "[Auto Sort] smallest_frag_size_in_pixel: %d\n", auto_curation_state.smallest_frag_size_in_pixel);
+    fprintf(stdout, "[Auto Sort] link_score_threshold:        %.3f\n", auto_curation_state.link_score_threshold);
+    fprintf(stdout, "[Auto Sort] Sort mode:                   %s\n", auto_curation_state.get_sort_mode_name().c_str());
     // compress the HiC data
     auto texture_array_4_ai = TexturesArray4AI(Number_of_Textures_1D, Texture_Resolution, (char*)currFileName, Contigs);
 
@@ -6512,7 +6662,7 @@ Sort_yahs(char* currFileName)
     }
     else 
     {
-        fprintf(stderr, "[YaHS Sort] Error: Unknown sort mode (%d)\n", auto_curation_state.sort_mode);
+        fprintf(stderr, "[Auto Sort] Error: Unknown sort mode (%d)\n", auto_curation_state.sort_mode);
         assert(0);
     }
     AutoCurationFromFragsOrder(
@@ -6951,7 +7101,7 @@ global_function
 void
 KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
 {
-    if (!Loading && !Yahs_sorting && !AI_cutting && (action != GLFW_RELEASE || key == GLFW_KEY_SPACE || key == GLFW_KEY_A || key == GLFW_KEY_LEFT_SHIFT))
+    if (!Loading && !Yahs_sorting && !Auto_cutting && (action != GLFW_RELEASE || key == GLFW_KEY_SPACE || key == GLFW_KEY_A || key == GLFW_KEY_LEFT_SHIFT))
     {
         if (UI_On)
         {
@@ -9731,6 +9881,12 @@ restore_initial_state()
         u32 nEdits  = my_Min(Edits_Stack_Size, Map_Editor->nEdits);
         ForLoop(nEdits) UndoMapEdit();
     }
+    
+    // restore all the splited contigs
+    {
+        Map_State->link_splited_contigs(Number_of_Pixels_1D);
+    }
+
 
     // waypoints
     {   
@@ -10153,9 +10309,9 @@ CopyEditsToClipBoard(GLFWwindow *window)
 
             u32 oldFrom = Map_State->contigRelCoords[start];
             u32 oldTo = Map_State->contigRelCoords[end];
-            u32 *name1 = (Original_Contigs + Map_State->originalContigIds[start])->name;
-            u32 *name2 = (Original_Contigs + Map_State->originalContigIds[end])->name;
-            u32 *newName = (Original_Contigs + Map_State->originalContigIds[to])->name;
+            u32 *name1 = (Original_Contigs + Map_State->get_original_contig_id(start))->name;
+            u32 *name2 = (Original_Contigs + Map_State->get_original_contig_id(end))->name;
+            u32 *newName = (Original_Contigs + Map_State->get_original_contig_id(to))->name;
 
             bufferPtr += (u32)stbsp_snprintf((char *)buffer + bufferPtr, (s32)(bufferSize - bufferPtr), "Edit %d:\n       %s[%$.2fbp] to %s[%$.2fbp]\n%s\n       %s[%$.2fbp]\n",
                     index + 1, (char *)name1, (f64)oldFrom * bpPerPixel, (char *)name2, (f64)oldTo * bpPerPixel,
@@ -10552,16 +10708,16 @@ MainArgs {
         if (Yahs_sorting)
         {
             if (currFileName) SaveState(headerHash);
-            Sort_yahs((char*)currFileName);
+            Sort_auto_sort((char*)currFileName);
             Yahs_sorting = 0;
             Redisplay = 1;
         }
 
-        if (AI_cutting)
+        if (Auto_cutting)
         {   
             if (currFileName) SaveState(headerHash);
-            ai_cutting_func((char*)currFileName);
-            AI_cutting = 0;
+            Auto_cutting_func((char*)currFileName, Loading_Arena);
+            Auto_cutting = 0;
             Redisplay = 1;
         }
 
@@ -10667,15 +10823,15 @@ MainArgs {
                     showUserProfileScreen = nk_button_label(NK_Context, "User Profile");
                     showAboutScreen = nk_button_label(NK_Context, "About");
 
-                    // AI & YaHS sort button 
+                    // AI & Auto sort button 
                     struct nk_color sort_button_normal = nk_rgb(153, 50, 204); 
                     struct nk_color sort_button_hover  = nk_rgb(186, 85, 211); 
                     struct nk_color sort_button_active = nk_rgb(128, 0, 128);  
                     push_nk_style(NK_Context, sort_button_normal, sort_button_hover, sort_button_active);
                     nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 3);
-                    ai_cutting_button = nk_button_label(NK_Context, "AI cut");
+                    auto_cut_button = nk_button_label(NK_Context, "Auto cut");
                     bounds = nk_widget_bounds(NK_Context);
-                    yahs_sort_button = nk_button_label(NK_Context, "YaHS Sort");
+                    auto_sort_button = nk_button_label(NK_Context, "Auto Sort");
 
                     // AI sort button
                     /*
@@ -10719,17 +10875,17 @@ MainArgs {
                         }
                     }
                     */
-                    // ai cut
+                    // auto cut
                     {
-                        if (ai_cutting_button && currFileName)
+                        if (auto_cut_button && currFileName)
                         {
-                            AI_cutting = 1;
+                            Auto_cutting = 1;
                         }
                     }
 
-                    // YaHS sort button
+                    // Auto sort button
                     {   
-                        if (yahs_sort_button) 
+                        if (auto_sort_button) 
                         {
                             Yahs_sorting = 1;
                             auto_curation_state.clear();
@@ -10773,7 +10929,7 @@ MainArgs {
                             nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
                             if (nk_button_label(NK_Context, "Cancel")) 
                             {   
-                                printf("[YaHS Sort] Cancel button clicked\n");
+                                printf("[Auto Sort] Cancel button clicked\n");
                                 nk_contextual_close(NK_Context);
                             }
                             if (nk_button_label(NK_Context, "Apply")) 
@@ -10785,21 +10941,21 @@ MainArgs {
                                 nk_contextual_close(NK_Context);
                                 if (auto_curation_state.link_score_threshold > 1.0f || auto_curation_state.link_score_threshold < 0.0f) 
                                 {   
-                                    printf("[YaHS Sort] Warning: link Score Threshold should be in the range of [0, 1]\n");
+                                    printf("[Auto Sort] Warning: link Score Threshold should be in the range of [0, 1]\n");
                                     auto_curation_state.link_score_threshold = std::max(0.0f, std::min(1.0f, auto_curation_state.link_score_threshold));
                                 }
                                 auto_curation_state.set_buf();
-                                printf("[YaHS Sort] smallest_frag_size_in_pixel: %d\n", auto_curation_state.smallest_frag_size_in_pixel);
-                                printf("[YaHS Sort] link_score_threshold:        %.3f\n", auto_curation_state.link_score_threshold);
-                                printf("[YaHS Sort] Sort mode:                   %s\n", auto_curation_state.get_sort_mode_name().c_str());
+                                printf("[Auto Sort] smallest_frag_size_in_pixel: %d\n", auto_curation_state.smallest_frag_size_in_pixel);
+                                printf("[Auto Sort] link_score_threshold:        %.3f\n", auto_curation_state.link_score_threshold);
+                                printf("[Auto Sort] Sort mode:                   %s\n", auto_curation_state.get_sort_mode_name().c_str());
                             }
                             // redo all the changes
-                            if (!auto_curation_state.show_yahs_redo_confirm_popup)
+                            if (!auto_curation_state.show_autoSort_redo_confirm_popup)
                             {
                                 nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
                                 if (nk_button_label(NK_Context, "Redo All (Careful!)")) 
                                 {   
-                                    auto_curation_state.show_yahs_redo_confirm_popup=true;
+                                    auto_curation_state.show_autoSort_redo_confirm_popup=true;
                                 }
                             } else
                             {
@@ -10808,22 +10964,22 @@ MainArgs {
                                 nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
                                 if (nk_button_label(NK_Context, "Yes")) 
                                 {
-                                    auto_curation_state.show_yahs_redo_confirm_popup=false;
-                                    printf("[YaHS Sort] Redo all edits.\n");
+                                    auto_curation_state.show_autoSort_redo_confirm_popup=false;
+                                    printf("[Auto Sort] Redo all edits.\n");
                                     RedoAllEdits(Map_Editor);
                                 }
                                 if (nk_button_label(NK_Context, "No")) 
                                 {
-                                    auto_curation_state.show_yahs_redo_confirm_popup=false;
+                                    auto_curation_state.show_autoSort_redo_confirm_popup=false;
                                 }
                             }
                             // reject all the edits
-                            if (!auto_curation_state.show_yahs_erase_confirm_popup)
+                            if (!auto_curation_state.show_autoSort_erase_confirm_popup)
                             {   
                                 nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
                                 if (nk_button_label(NK_Context, "Erase All (Careful!)")) 
                                 {   
-                                    auto_curation_state.show_yahs_erase_confirm_popup=true;
+                                    auto_curation_state.show_autoSort_erase_confirm_popup=true;
                                 }
                             } else
                             {
@@ -10832,13 +10988,13 @@ MainArgs {
                                 nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
                                 if (nk_button_label(NK_Context, "Yes")) 
                                 {
-                                    auto_curation_state.show_yahs_erase_confirm_popup=false;
-                                    printf("[YaHS Sort] Erase all edits.\n");
+                                    auto_curation_state.show_autoSort_erase_confirm_popup=false;
+                                    printf("[Auto Sort] Erase all edits.\n");
                                     EraseAllEdits(Map_Editor);
                                 }
                                 if (nk_button_label(NK_Context, "No")) 
                                 {
-                                    auto_curation_state.show_yahs_erase_confirm_popup=false;
+                                    auto_curation_state.show_autoSort_erase_confirm_popup=false;
                                 }
                             }
                             nk_contextual_end(NK_Context);
@@ -11330,9 +11486,9 @@ MainArgs {
 
                                     u32 oldFrom = Map_State->contigRelCoords[start];
                                     u32 oldTo = Map_State->contigRelCoords[end];
-                                    u32 *name1 = (Original_Contigs + Map_State->originalContigIds[start])->name;
-                                    u32 *name2 = (Original_Contigs + Map_State->originalContigIds[end])->name;
-                                    u32 *newName = (Original_Contigs + Map_State->originalContigIds[to])->name;
+                                    u32 *name1 = (Original_Contigs + Map_State->get_original_contig_id(start))->name;
+                                    u32 *name2 = (Original_Contigs + Map_State->get_original_contig_id(end))->name;
+                                    u32 *newName = (Original_Contigs + Map_State->get_original_contig_id(to))->name;
                                     
                                     stbsp_snprintf((char *)buff, sizeof(buff), "Edit %d:", index + 1);
                                     nk_label(NK_Context, (const char *)buff, NK_TEXT_LEFT);

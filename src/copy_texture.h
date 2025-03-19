@@ -575,7 +575,6 @@ public:
 };
 
 
-
 class TexturesArray4AI
 {
 private:
@@ -658,6 +657,15 @@ public:
         f32 D_hic_ratio=0.05f, 
         u32 maximum_D=5000, 
         f32 min_hic_density = 30.f);
+
+    void cal_maximum_number_of_shift(
+        u32& D,
+        std::vector<f32>& norm_diag_mean,
+        const contigs* Contigs,
+        f32 D_hic_ratio,
+        u32 maximum_D,
+        f32 min_hic_density);
+
     void cal_compressed_extension(const extension_sentinel &Extensions);
 
     Sum_and_Number get_fragement_diag_mean_square(

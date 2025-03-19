@@ -54,14 +54,14 @@ public:
 
     HIC_Problems(std::string file_path, f32 bp_per_pixel_)
     : bp_per_pixel(bp_per_pixel_)
-    {
+    {   
+        file_path = std::filesystem::current_path().string() + file_path;
         std::ifstream file(file_path, std::ios::in);
         if (!file.is_open())
         {   
             throw std::runtime_error("Cannot open the file: " + file_path);
         }
         
-        // 解析 JSON
         json data = json::parse(file);
 
         for (const auto& i : this->types)

@@ -231,4 +231,28 @@ void my_code_position_handler(const char* file, int line, const char* message=nu
 
 f64 GetTime(); // return current time in seconds
 
+
+/* 计算数组的 95% 分位数 */
+template <typename T>
+T percentile_cal(T* data, u32 size, f32 percentile=0.95)
+{   
+    u32 heap_size = (u32)((f32)size * (1-percentile));
+    std::priority_queue<T, std::vector<T>, std::greater<T>> min_heap;
+    for (auto i = 0; i < size; i++)
+    {
+        if (min_heap.size() < heap_size)
+        {
+            min_heap.push(data[i]);
+        }
+        else if (data[i] > min_heap.top())
+        {
+            min_heap.pop();
+            min_heap.push(data[i]);
+        }
+    }
+    if (min_heap.size() > 0) 
+        return min_heap.top();
+    else return 0;
+}
+
 #endif // UTILS_H

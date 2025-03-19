@@ -29,6 +29,7 @@ SOFTWARE.
 #include "showWindowData.h"
 
 
+#define Max_Number_of_Contigs 4096
 
 struct
 file_atlas_entry
@@ -97,6 +98,19 @@ struct map_state
     u32 *contigRelCoords = nullptr;   // local coordinate on the original contig [num_pixels_1d]
     u32 *scaffIds = nullptr;          // [num_pixels_1d]
     u64 *metaDataFlags = nullptr;     // [num_pixels_1d], 256kb for 32768 pixels
+
+    u32 get_original_contig_id(u32 pixel) const
+    {
+        return originalContigIds[pixel] % Max_Number_of_Contigs;
+    }
+
+    void link_splited_contigs(const u32 num_pixel_1d)
+    {
+        for (u32 i = 0; i < num_pixel_1d; i++)
+        {
+            originalContigIds[i] = originalContigIds[i] % Max_Number_of_Contigs;
+        }
+    }
 };
 
 
@@ -142,6 +156,16 @@ extension_sentinel
 {
     extension_node *head = nullptr;  // point the first node
     extension_node *tail = nullptr;  // point the last node
+
+    u32 get_num_extensions()
+    {
+        u32 added_index = 0;
+        TraverseLinkedList(this->head, extension_node)
+        {
+            added_index++;
+        }
+        return added_index;
+    }
 };
 
 
