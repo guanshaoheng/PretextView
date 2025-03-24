@@ -76,10 +76,26 @@ include_directories(
     subprojects/glfw/include
     subprojects/libdeflate
     subprojects/glm
+    subprojects/fmt/include
 )
 
 add_subdirectory(subprojects/glfw)
 add_subdirectory(subprojects/glm)
+
+find_library(
+    lib_fmt
+    NAMES fmt libfmt
+    PATHS 
+        subprojects/fmt/build 
+        subprojects/fmt/build/debug 
+        subprojects/fmt/build/Release
+        subprojects/fmt/build/release)
+if(NOT lib_fmt)
+    message(FATAL_ERROR "lib_fmt not found")
+else()
+    message(STATUS "lib_fmt found: ${lib_fmt}")
+endif()
+
 
 find_library(
     lib_deflate_static 
@@ -94,6 +110,8 @@ if(NOT lib_deflate_static)
 else()
     message(STATUS "lib_deflate_static found: ${lib_deflate_static}")
 endif()
+
+
 
 
 # set(CMAKE_PREFIX_PATH "subprojects/libtorch/share/cmake/Torch")
@@ -151,6 +169,7 @@ endif()
 target_link_libraries(
     ${target_name} PRIVATE 
     ${lib_deflate_static} 
+    ${lib_fmt}
     sortlib 
     glm 
     glad 

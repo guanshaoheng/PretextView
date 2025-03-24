@@ -49,6 +49,17 @@ git submodule update --init --recursive
 # cd ico_design && cd ico_design &&  iconutil -c icns icon_v2.iconset && cd ..
 
 
+# ========= fmt =========
+cd subprojects/fmt
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=${ARCH} -S . -B build
+
+cmake --build build --target fmt --config Release || {
+    echo "fmt: compile failed!"
+    exit 1
+}
+cd ../../
+
+
 # ========= libdeflate =========
 cd subprojects/libdeflate
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=${ARCH} -S . -B build

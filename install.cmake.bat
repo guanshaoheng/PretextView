@@ -29,6 +29,19 @@ REM ========= pull git repo =========
 git submodule update --init --recursive
 
 
+REM ========= fmt =========
+cd subprojects\fmt
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=%ARCH% -S . -B build
+cmake --build build --config Release --target fmt 
+if errorlevel 1 (
+    echo "CMake fmt failed."
+    goto :error
+) else (
+    echo "CMake fmt completed successfully."
+)
+cd ..\..\
+
+
 REM ========= deflate =========
 cd subprojects\libdeflate
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=%ARCH% -S . -B build
