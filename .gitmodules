@@ -15,3 +15,6 @@
 	path = subprojects/pytorch_scatter
 	url = https://github.com/guanshaoheng/pytorch_scatter.git 
 
+[submodule "subprojects/fmt"]
+	path = subprojects/fmt
+	url = https://github.com/fmtlib/fmt.git
