@@ -55,6 +55,9 @@ else()
     endif()
 endif()
 
+if (MSVC)
+    add_compile_options(/utf-8)  # force MSVC to use UTF-8 
+endif()
 
 message(STATUS "Install path: ${CMAKE_INSTALL_PREFIX}")
 
