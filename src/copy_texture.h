@@ -53,47 +53,78 @@ struct Frag4compress {
 
     void re_allocate_mem(
         const contigs* Contigs, 
-        const SelectArea* select_area=nullptr)
+        const SelectArea* select_area=nullptr, 
+        bool use_for_cut_flag=false)
     {
         cleanup();
         u08 using_select_area = (select_area != nullptr && select_area->select_flag)?1:0;
-        num = Contigs->numberOfContigs;
-        if (using_select_area)
-        {
-            num = select_area->selected_frag_ids.size();
-            if (num < 2)
+        this->num = Contigs->numberOfContigs;
+        std::vector<u32> selected_frag_ids_tmp; 
+        if (using_select_area )
+        {   
+            selected_frag_ids_tmp = select_area->selected_frag_ids;
+            this->num = select_area->selected_frag_ids.size();
+            if (this->num < 2 && !use_for_cut_flag)
             {
-                fprintf(stderr, "The number_of_select_fragments_for_sorting(%d) should not be less than 2, file:%s (line:%d)\n", num, __FILE__, __LINE__);
-                std::abort();
+                fmt::print(
+                    stderr, 
+                    "The number_of_select_fragments_for_sorting({}) should not be less than 2, file:{}, line:{}\n", this->num, __FILE__, __LINE__);
+                assert(0);
+            }
+            if (select_area->source_frag_id >=0 && !use_for_cut_flag) 
+            {
+                this->num ++;
+                selected_frag_ids_tmp.insert(selected_frag_ids_tmp.begin(), select_area->source_frag_id);
+            }
+            if (select_area->sink_frag_id >=0 && !use_for_cut_flag) 
+            {
+                this->num ++;
+                selected_frag_ids_tmp.push_back(select_area->sink_frag_id);
             }
         }
+        else // global area
+        {
+            selected_frag_ids_tmp.resize(this->num);
+            std::iota(selected_frag_ids_tmp.begin(), selected_frag_ids_tmp.end(), 0);
+        }
+
         frag_id = new u32[num];
-        startCoord = new u32[num]; // TODO (shaoheng): it is wired that if I use std::vector<u32> here, the debugger will be stuck where I call the constructor. Sometimes it can work with std::vector, but sometimes it cannot.
+        startCoord = new u32[num]; 
         length = new u32[num];
         inversed = new bool[num];
         metaDataFlags = new u64[num];
         total_length = 0;
 
         // Initialize the startCoord, length, and inversed
+        frag_id[0] = selected_frag_ids_tmp[0];
         inversed[0] = false;
+        startCoord[0] = 0;
         if (using_select_area)
-        {   
-            frag_id[0] = select_area->selected_frag_ids[0];
-            startCoord[0] =select_area->start_pixel;
-            length[0] = Contigs->contigs_arr[select_area->selected_frag_ids[0]].length;
-        }
-        else
         {
-            frag_id[0] = 0;
-            startCoord[0] = 0;
-            length[0] = Contigs->contigs_arr[0].length;
+            s32 tmp = 0;
+            while (tmp < frag_id[0])
+            {
+                startCoord[0] += Contigs->contigs_arr[tmp].length;
+                tmp ++;
+            }
+            if (tmp>=Contigs->numberOfContigs)
+            {
+                fmt::print(
+                    stderr, 
+                    "The frag_id[0]({}) should be less than the number_of_contigs({}), file:{}, line:{}\n", 
+                    frag_id[0], Contigs->numberOfContigs, __FILE__, __LINE__);
+                assert(0);
+            }
         }
+        length[0] = Contigs->contigs_arr[frag_id[0]].length;
+        metaDataFlags[0] = (Contigs->contigs_arr[frag_id[0]].metaDataFlags == nullptr)?0:*(Contigs->contigs_arr[frag_id[0]].metaDataFlags);
         total_length = length[0];
+
         for (u32 i = 1; i < num; i++)
         {   
-            u32 contig_id = using_select_area?select_area->selected_frag_ids[i]:i;
+            u32 contig_id = selected_frag_ids_tmp[i];
             frag_id[i] = contig_id;
-            inversed[i] = false; // todo (shaoheng) add the inversed information
+            inversed[i] = false; // currently, this is not used
             startCoord[i] = startCoord[i-1] + length[i-1];
             length[i] = Contigs->contigs_arr[contig_id].length;
             metaDataFlags[i] = (Contigs->contigs_arr[contig_id].metaDataFlags == nullptr)?0:*(Contigs->contigs_arr[contig_id].metaDataFlags);

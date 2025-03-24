@@ -265,6 +265,7 @@ public:
     void sort_according_likelihood_unionFind(
         const LikelihoodTable& likelihood_table, 
         FragsOrder& frags_order,
+        SelectArea& select_area,
         const f32 threshold=-0.001, 
         const Frag4compress* frags=nullptr, 
         bool sort_according_len_flag=true) const;
@@ -272,6 +273,7 @@ public:
     void sort_according_likelihood_unionFind_doFuse(
         const LikelihoodTable& likelihood_table, 
         FragsOrder& frags_order,
+        SelectArea& select_area,
         const f32 threshold=-0.001, 
         const Frag4compress* frags=nullptr,
         const bool doStageOne=true,

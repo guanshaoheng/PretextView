@@ -34,6 +34,7 @@ SOFTWARE.
 #include <chrono>
 #include <unordered_set>
 #include <queue>
+#include <fmt/core.h>
 
 
 #include <glm/glm.hpp>

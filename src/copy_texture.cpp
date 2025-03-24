@@ -23,7 +23,7 @@ SOFTWARE.
 
 #include "copy_texture.h"
 #include "shaderSource.h"
-
+#include "utilsPretextView.h"
 
 
 Show_State::Show_State()
@@ -263,8 +263,17 @@ TexturesArray4AI::~TexturesArray4AI()
 u08 TexturesArray4AI::operator()(u32 row, u32 column) const
 {   
     if (row>=num_pixels_1d || column>=num_pixels_1d) 
-    {
-        printf("Index [%d, %d] is out of range [%d, %d]\n", row, column, num_pixels_1d - 1, num_pixels_1d - 1);
+    {   
+        fmt::print(
+            stderr,
+            "Index [{}, {}] is out of range [{}, {}], File:{}, line:{}\n", 
+            row, 
+            column, 
+            num_pixels_1d - 1, 
+            num_pixels_1d - 1,
+            __FILE__,
+            __LINE__
+        );
         assert(0);
     }
     if (!this->textures) 
@@ -805,9 +814,17 @@ void TexturesArray4AI::cal_compressed_hic(
     u08 using_select_area = (select_area != nullptr && select_area->select_flag)?1:0;
     // clean the memory of compressed_hic_mx
     frags->re_allocate_mem(Contigs, select_area);
-    if (frags->total_length != (using_select_area? (select_area->end_pixel - select_area->start_pixel + 1): num_pixels_1d))
-    {
-        fprintf(stderr, "\n[Compress Hic] warning: frags->total_length(%d) != num_pixels_1d (%d) (%s).\n\n", frags->total_length, (using_select_area? (select_area->end_pixel - select_area->start_pixel + 1): num_pixels_1d), (using_select_area?"selected area":"full area"));
+    if (frags->total_length != (using_select_area ? select_area->get_selected_len(Contigs) : num_pixels_1d))
+    {   
+        fmt::print(
+            "\n[Compress Hic] warning: frags->total_length({}) != num_pixels_1d ({}) ({}). file:{}, line:{}\n\n",
+            frags->total_length,
+            (using_select_area? (select_area->end_pixel - select_area->start_pixel + 1): num_pixels_1d),
+            (using_select_area?"selected area":"full area"),
+            __FILE__,
+            __LINE__    
+        );
+        assert(0);
     }
     compressed_hic->re_allocate_mem(
         frags->num, 

@@ -659,11 +659,11 @@ Loading = 0;
 
 global_variable
 u32
-Yahs_sorting = 0;
+auto_sort_state = 0;
 
 global_variable
 u32 
-Auto_cutting = 0;
+auto_cut_state = 0;
 
 global_variable s32 auto_cut_button = 0; 
 global_variable s32 auto_sort_button = 0;
@@ -1635,7 +1635,7 @@ global_function
 void
 MouseMove(GLFWwindow* window, f64 x, f64 y)
 {
-    if (Loading || Yahs_sorting)
+    if (Loading || auto_sort_state || auto_cut_state)
     {
         return;
     }
@@ -1647,7 +1647,7 @@ MouseMove(GLFWwindow* window, f64 x, f64 y)
     if (UI_On)
     {
     }
-    else
+    else // ui_on == false
     {
         if (Edit_Mode)
         {
@@ -1672,24 +1672,51 @@ MouseMove(GLFWwindow* window, f64 x, f64 y)
 
             u32 pixel1 = (u32)((f64)nPixels * (0.5 + (f64)wx));
             u32 pixel2 = (u32)((f64)nPixels * (0.5 + (f64)wy));
+            
+            // 防止在尾部溢出
+            pixel1 = my_Max(0, my_Min(nPixels - 1, pixel1));
+            pixel2 = my_Max(0, my_Min(nPixels - 1, pixel2));
 
-            u32 contig = Map_State->contigIds[pixel1];
+            u32 contig = Map_State->contigIds[pixel1]; 
 
             if (!Edit_Pixels.editing && !Edit_Pixels.selecting && Map_State->contigIds[pixel2] != contig)
             {
                 u32 testPixel = pixel1;
                 u32 testContig = contig;
-                while (testContig == contig)
-                {
+                while (testContig == contig) // move testContig to the 1 before the first or 1 after the last pixel of the contig
+                {   
+
+                    if (pixel1 < pixel2) 
+                    {
+                        testPixel ++ ;
+                    }
+                    else
+                    {
+                        testPixel -- ;
+                    }
+
+                    testContig = Map_State->contigIds[testPixel];
+
+                    if (testPixel == 0 || testPixel >= (nPixels - 1)) break;
+
                     testContig = pixel1 < pixel2 ? Map_State->contigIds[++testPixel] : Map_State->contigIds[--testPixel];
                     if (testPixel == 0 || testPixel >= (nPixels - 1)) break;
+                }   
+                if (Map_State->contigIds[testPixel] == contig)
+                {
+                    pixel2 = testPixel;
                 }
-                pixel2 = pixel1 < pixel2 ? testPixel - 1 : testPixel + 1;
+                else
+                {
+                    pixel2 = pixel1 < pixel2 ? testPixel - 1 : testPixel + 1;
+                }
             }
+
             
-            if (Edit_Pixels.selecting)
+            if (Edit_Pixels.selecting) // select the contig
             {
-                Edit_Pixels.selectPixels.x = my_Max(pixel1, my_Max(Edit_Pixels.selectPixels.x, Edit_Pixels.selectPixels.y));
+                Edit_Pixels.selectPixels.x = my_Max(pixel1, my_Max(Edit_Pixels.selectPixels.x, Edit_Pixels.selectPixels.y)); // used to select multiple contigs with pressing space and dragging the mouse
+                Edit_Pixels.selectPixels.x = pixel1;
                 while(  Edit_Pixels.selectPixels.x < (Number_of_Pixels_1D - 1) &&
                         ((Edit_Pixels.scaffSelecting && Map_State->scaffIds[Edit_Pixels.selectPixels.x] && Map_State->scaffIds[Edit_Pixels.selectPixels.x] == Map_State->scaffIds[1 + Edit_Pixels.selectPixels.x] ) || 
                           Map_State->contigIds[Edit_Pixels.selectPixels.x] == Map_State->contigIds[1 + Edit_Pixels.selectPixels.x]))
@@ -1698,6 +1725,7 @@ MouseMove(GLFWwindow* window, f64 x, f64 y)
                 }
 
                 Edit_Pixels.selectPixels.y = my_Min(pixel1, my_Min(Edit_Pixels.selectPixels.x, Edit_Pixels.selectPixels.y));
+                // Edit_Pixels.selectPixels.y = pixel1;
                 while(  Edit_Pixels.selectPixels.y > 0 &&
                         ((Edit_Pixels.scaffSelecting && Map_State->scaffIds[Edit_Pixels.selectPixels.y] && Map_State->scaffIds[Edit_Pixels.selectPixels.y] == Map_State->scaffIds[Edit_Pixels.selectPixels.y - 1]) || Map_State->contigIds[Edit_Pixels.selectPixels.y] == Map_State->contigIds[Edit_Pixels.selectPixels.y - 1]))
                 {
@@ -1741,7 +1769,7 @@ MouseMove(GLFWwindow* window, f64 x, f64 y)
                 Edit_Pixels.worldCoords.x = (f32)(((f64)((2 * Edit_Pixels.pixels.x) + 1)) / ((f64)(2 * nPixels))) - 0.5f;
                 Edit_Pixels.worldCoords.y = (f32)(((f64)((2 * Edit_Pixels.pixels.y) + 1)) / ((f64)(2 * nPixels))) - 0.5f;
             }
-            else
+            else  // edit_pixels.editing == 0
             {
                 if (netDelta || Global_Edit_Invert_Flag)
                 {
@@ -1957,7 +1985,7 @@ Mouse(GLFWwindow* window, s32 button, s32 action, s32 mods)
     s32 primaryMouse = Mouse_Invert ? GLFW_MOUSE_BUTTON_RIGHT : GLFW_MOUSE_BUTTON_LEFT;
     s32 secondaryMouse = Mouse_Invert ? GLFW_MOUSE_BUTTON_LEFT : GLFW_MOUSE_BUTTON_RIGHT;    
     
-    if (Loading || Yahs_sorting)
+    if (Loading || auto_sort_state)
     {
         return;
     }
@@ -2087,7 +2115,7 @@ global_function
 void
 Scroll(GLFWwindow* window, f64 x, f64 y)
 {
-    if (Loading || Yahs_sorting)
+    if (Loading || auto_sort_state)
     {
         return;
     }
@@ -2741,7 +2769,7 @@ Render() {
     }
 
     // Text / UI Rendering
-    if (Contig_Name_Labels->on || Scale_Bars->on || Tool_Tip->on || UI_On || Loading || Yahs_sorting || Edit_Mode || Waypoint_Edit_Mode || Waypoints_Always_Visible || Scaff_Edit_Mode || Scaffs_Always_Visible || MetaData_Edit_Mode || MetaData_Always_Visible || graphNamesOn)
+    if (Contig_Name_Labels->on || Scale_Bars->on || Tool_Tip->on || UI_On || Loading || auto_sort_state || Edit_Mode || Waypoint_Edit_Mode || Waypoints_Always_Visible || Scaff_Edit_Mode || Scaffs_Always_Visible || MetaData_Edit_Mode || MetaData_Always_Visible || graphNamesOn)
     {
         f32 textNormalMat[16];
         f32 textRotMat[16];
@@ -2847,7 +2875,7 @@ Render() {
 
                 if (rightPixel > 0.0f && leftPixel < width)
                 {
-                    const char *name = (const char *)(Original_Contigs + cont->originalContigId)->name;
+                    const char *name = (const char *)(Original_Contigs + cont->get_original_contig_id())->name;
                     f32 x = (rightPixel + leftPixel) * 0.5f;
                     f32 y = my_Max(wy0, 0.0f) + 10.0f;
                     f32 textWidth = fonsTextBounds(FontStash_Context, x, y, name, 0, NULL);
@@ -2896,7 +2924,7 @@ Render() {
 
                 if (topPixel < height && bottomPixel > 0.0f)
                 {
-                    const char *name = (const char *)(Original_Contigs + cont->originalContigId)->name;
+                    const char *name = (const char *)(Original_Contigs + cont->get_original_contig_id())->name;
                     f32 y = (topPixel + bottomPixel) * 0.5f;
                     f32 x = my_Max(wx0, 0.0f) + 10.0f;
                     f32 textWidth = fonsTextBounds(FontStash_Context, x, y, name, 0, NULL);
@@ -3504,13 +3532,11 @@ Render() {
             f32 end_fraction   = (f32)auto_curation_state.get_end()  /(f32)Number_of_Pixels_1D;
 
             // selected frags into a string
-            std::vector<u32> selected_frag_ids;
-            auto_curation_state.get_selected_fragments(selected_frag_ids, Map_State, Number_of_Pixels_1D);
-            std::stringstream ss;
-            if (selected_frag_ids.size() > 0) ss << selected_frag_ids[0];
-            for (u32 i = 1; i < selected_frag_ids.size(); i++) ss <<", " << selected_frag_ids[i] ;
-            std::string selectedFragmentsStr = "Selected fragments number: " + std::to_string(selected_frag_ids.size());
-            std::string start_and_end_pixel_str = "Select range: " + std::to_string(auto_curation_state.get_start()) + " - " + std::to_string(auto_curation_state.get_end());
+            SelectArea select_area;
+            auto_curation_state.get_selected_fragments(select_area, Map_State, Number_of_Pixels_1D, Contigs);
+            std::string selectedFragmentsStr = fmt::format(
+                "Selected fragments number: {}", select_area.selected_frag_ids.size());
+            std::string start_and_end_pixel_str = fmt::format("Select range: {} - {}", auto_curation_state.get_start(), auto_curation_state.get_end());
 
             { // draw the help text in the bottom right corner
                 fonsSetFont(FontStash_Context, Font_Bold);
@@ -3574,7 +3600,7 @@ Render() {
                     // draw the start & end point
                     {   
                         f32 line_width = 0.002f / Camera_Position.z;
-                        f32 mask_color[4] = {1.0f, 0.f, 0.f, 0.8f};
+                        f32 mask_color[4] = {1.0f, 0.f, 0.f, 0.8f}; // red
                         glUseProgram(Flat_Shader->shaderProgram);
                         glUniform4fv(Flat_Shader->colorLocation, 1, (GLfloat *)&mask_color);
                         for (auto loc_fraction : {start_fraction, end_fraction})
@@ -3593,7 +3619,7 @@ Render() {
 
                     // draw the cover on selected area
                     {   
-                        f32 mask_color[4] = {0.906f, 0.03921f, 0.949f, 0.5f}; 
+                        // f32 mask_color[4] = {0.906f, 0.03921f, 0.949f, 0.5f}; 
                         vert[0].x = ModelXToScreen(start_fraction - 0.5f);     vert[0].y = ModelYToScreen(0.5f - start_fraction);
                         vert[1].x = ModelXToScreen(start_fraction - 0.5f);     vert[1].y = ModelYToScreen(0.5f - end_fraction);
                         vert[2].x = ModelXToScreen(end_fraction - 0.5f);       vert[2].y = ModelYToScreen(0.5f - end_fraction);
@@ -3603,7 +3629,7 @@ Render() {
                         u32 colour = FourFloatColorToU32(*((nk_colorf *)font_color));
 
                         glUseProgram(Flat_Shader->shaderProgram);
-                        glUniform4fv(Flat_Shader->colorLocation, 1, (GLfloat *)&mask_color);
+                        glUniform4fv(Flat_Shader->colorLocation, 1, (GLfloat *)&auto_curation_state.mask_color);
 
                         glBindBuffer(GL_ARRAY_BUFFER, Scaff_Bar_Data->vbos[ptr]);
                         glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
@@ -3612,15 +3638,19 @@ Render() {
 
                         glUseProgram(UI_Shader->shaderProgram);
                         fonsSetColor(FontStash_Context, colour);
+                        
+                        std::string buff = fmt::format(
+                            "{}: ({}) pixels, ({}) fragments", 
+                            auto_curation_state.selected_or_exclude==0?"Selected" :"Excluded", 
+                            std::abs(auto_curation_state.get_end() - auto_curation_state.get_start()), 
+                            select_area.selected_frag_ids.size());
 
-                        char buff[256];
                         f32 lh = 0.0f;
-                        stbsp_snprintf(buff, sizeof(buff), "%s (%d) Pixs: %s", auto_curation_state.selected_or_exclude==0?"Select" :"Exclude", std::abs(auto_curation_state.get_end() - auto_curation_state.get_start()), std::to_string(selected_frag_ids.size()).c_str());
-                        f32 textWidth = fonsTextBounds(FontStash_Context, 0, 0, buff, 0, NULL);
+                        f32 textWidth = fonsTextBounds(FontStash_Context, 0, 0, buff.c_str(), 0, NULL);
                         fonsDrawText(
                             FontStash_Context, 
                             ModelXToScreen( 0.5f * (end_fraction + start_fraction ) - 0.5f) - (0.5f * textWidth), 
-                            ModelYToScreen(0.5f - 0.5f*(start_fraction + end_fraction)) - lh * 0.5f, buff, 0);
+                            ModelYToScreen(0.5f - 0.5f*(start_fraction + end_fraction)) - lh * 0.5f, buff.c_str(), 0);
                     }
                 }
             }
@@ -4326,7 +4356,7 @@ Render() {
         }
 
 
-        if (Yahs_sorting)
+        if (auto_sort_state)
         {
             u32 colour = glfonsRGBA(Theme_Colour.r, Theme_Colour.g, Theme_Colour.b, Theme_Colour.a);
 
@@ -4344,7 +4374,7 @@ Render() {
             ChangeSize((s32)width, (s32)height);
         }
 
-        if (Auto_cutting)
+        if (auto_cut_state)
         {
             u32 colour = glfonsRGBA(Theme_Colour.r, Theme_Colour.g, Theme_Colour.b, Theme_Colour.a);
 
@@ -6059,20 +6089,26 @@ RearrangeMap(       // NOTE: VERY IMPORTANT
     bool update_contigs_flag // if true, update the contigs from the map state
     )       
 {
-    if (pixelFrom > pixelTo)  // Swap, make sure pixelFrom is less than pixelTo
-    {
-        u32 tmp = pixelFrom;
-        pixelFrom = pixelTo;
-        pixelTo = tmp;
-    }
 
     u32 nPixels = Number_of_Pixels_1D;
 
-    Assert((delta > 0 ? (u32)delta : (u32)(-delta)) < nPixels);
+    if (std::abs(delta) >= nPixels ||
+        pixelFrom >= nPixels ||
+        pixelTo >= nPixels)
+    {
+        fmt::print(
+            stderr,
+            "RearrangeMap: Invalid parameters: delta = {}, pixelFrom = {}, pixelTo = {},  nPixels = {}, file: {}, line: {}\n",
+            delta, pixelFrom, pixelTo, nPixels, 
+            __FILE__, __LINE__
+        );
+        assert(0);
+    }
 
-    Assert(pixelFrom < nPixels);
-    Assert(pixelTo < nPixels);
-
+    if (pixelFrom > pixelTo)  // Swap, make sure pixelFrom is less than pixelTo
+    {
+        std::swap(pixelFrom, pixelTo);
+    }
     u32 nPixelsInRange = pixelTo - pixelFrom + 1;
 
     pixelFrom += nPixels;
@@ -6269,42 +6305,55 @@ BreakMap(
 
     s32 ptr_left = (s32)loc, ptr_right = (s32)loc;
     u08 inversed = IsContigInverted(contig_id);
-    while (
+    while ( // 从loc向左遍历，找到第一个不满足条件的像素点索引
         --ptr_left >= 0 && 
         Map_State->contigIds[ptr_left] == contig_id && 
         (Map_State->contigRelCoords[ptr_left] ==  Map_State->contigRelCoords[ptr_left+1]+ (inversed ? +1 : -1)) ) {};
-    while (
+    while ( // 从loc向右遍历，找到第一个不满足条件的像素点索引
         ++ptr_right < Number_of_Pixels_1D && 
         Map_State->contigIds[ptr_right] == contig_id && 
         (Map_State->contigRelCoords[ptr_right - 1] ==  Map_State->contigRelCoords[ptr_right]+ (inversed ? +1 : -1)) ) {};
     
     if ((loc - ptr_left) < ignore_len || (ptr_right - loc) < ignore_len )  
     {   
-        char buff[256];
-        snprintf(buff, sizeof(buff), "Error: original_contig_id %d current_contig_id %d, pixel range: [%d, cut(%d), %d], left(%d), right(%d), smaller than ignore_len (%d) \n", original_contig_id>Max_Number_of_Contigs? original_contig_id%Max_Number_of_Contigs:original_contig_id, contig_id, ptr_left, loc, ptr_right, loc - ptr_left, ptr_right - loc, ignore_len);
-        std::cout << buff << std::endl;
+        fmt::print(
+            "Error: original_contig_id {} current_contig_id {}, pixel range: [{}, cut({}), {}], left({}), right({}), smaller than ignore_len ({})\n", 
+            original_contig_id%Max_Number_of_Contigs, 
+            contig_id, 
+            ptr_left, 
+            loc, 
+            ptr_right, 
+            loc - ptr_left, 
+            ptr_right - loc, 
+            ignore_len);
         return;
     } 
 
     ptr_left++; ptr_right--;
-    // if ((inversed && Map_State->contigRelCoords[ptr_right] != 0 ) || 
-    //     (!inversed && Map_State->contigRelCoords[ptr_left] != 0))
-    // {
-    //     char buff[256];
-    //     snprintf(buff, sizeof(buff), "Error: contig %d, pixel range: [%d, %d] %s inversed, but the start real coor is not 0 (%d instead)\n", contig_id, ptr_left, ptr_right, inversed ? "(is)" : "(isn\'t)", inversed ? Map_State->contigRelCoords[ptr_right] : Map_State->contigRelCoords[ptr_left]);
-    //     MY_CHECK(buff);
-    //     assert(0);
-    // }
 
-    // cut the contig by amending the relCoords..
+    // cut the contig by amending the original Contig Ids.
     for (u32 tmp = loc; tmp <= ptr_right; tmp++) // left side
-    {
-        Map_State->originalContigIds[tmp] += Max_Number_of_Contigs;
+    {   
+        if (Map_State->originalContigIds[tmp] > (std::numeric_limits<u32>::max() - Max_Number_of_Contigs))
+        {
+            fmt::print("Error: originalContigIds[{}] + {} = {} is greater than the max number of contigs ({}), file: {}, line: {}\n", tmp, 
+            Max_Number_of_Contigs, 
+            (u64)Map_State->originalContigIds[tmp] + Max_Number_of_Contigs, 
+            std::numeric_limits<u32>::max(), 
+            __FILE__, __LINE__);
+            assert(0);
+        }
+        Map_State->originalContigIds[tmp] += Max_Number_of_Contigs;  // NOTE: the number can not exceed the max number 2**32 - 1 = 4294967295. However, it is not easy to exceed the max number of contigs, as 4294967295 / 4096 = 1048575.9997
     }
 
-    char buff[256];
-    snprintf(buff, sizeof(buff), "Original contig_id (%d), current_id (%d), pixel range: [%d, %d] %s inversed, cut at %d\n", original_contig_id, contig_id, ptr_left, ptr_right, inversed ? "(is)" : "(isn\'t)", loc);
-    std::cout << buff;
+    fmt::print(
+        "Original contig_id ({}), current_id ({}), pixel range: [{}, {}] {} inversed, cut at {}\n", 
+        original_contig_id%Max_Number_of_Contigs, 
+        contig_id, 
+        ptr_left, 
+        ptr_right, 
+        inversed ? "(is)" : "(isn\'t)", 
+        loc );
 
     return ; 
 
@@ -6385,10 +6434,25 @@ void AutoCurationFromFragsOrder(
 {   
     u08 using_select_area = (select_area && select_area->select_flag)? 1 : 0;
     u32 num_frags = contigs_->numberOfContigs;
-    if (!using_select_area && num_frags != frags_order_->get_num_frags()) 
+    if (!using_select_area ) 
+    {   
+        if ( num_frags != frags_order_->get_num_frags())
+        {
+            fprintf(stderr, "Number of contigs(%d) and fragsOrder.num_frags(%d) do not match.\n", num_frags, frags_order_->get_num_frags());
+            assert(0);
+        }
+    }
+    else
     {
-        fprintf(stderr, "Number of contigs(%d) and fragsOrder.num_frags(%d) do not match.\n", num_frags, frags_order_->get_num_frags());
-        return;
+        if (select_area->get_to_sort_frags_num() != frags_order_->get_num_frags())
+        {
+            fmt::print(
+                stderr, 
+                "num_to_sort_contigs({}) != fragsOrder.num_frags({}), file:{}, line:{}\n", select_area->get_to_sort_frags_num(), 
+                frags_order_->get_num_frags(), 
+                __FILE__, __LINE__);
+            assert(0);
+        }
     }
 
     u32 num_autoCurated_edits=0;
@@ -6401,8 +6465,9 @@ void AutoCurationFromFragsOrder(
     {
         std::vector<s32> full_predicted_order(num_frags);
         std::iota(full_predicted_order.begin(), full_predicted_order.end(), 1);
-        for (u32 i=0; i< select_area->selected_frag_ids.size(); i++) 
-            full_predicted_order[select_area->selected_frag_ids[i]] = (predicted_order[i]>0?1:-1) * (select_area->selected_frag_ids[0] + std::abs(predicted_order[i]));
+        auto frags_id_to_sort = select_area->get_to_sort_frags_id(Contigs);
+        for (u32 i=0; i< select_area->get_to_sort_frags_num(); i++) 
+            full_predicted_order[frags_id_to_sort[i]] = (predicted_order[i]>0?1:-1) * (select_area->get_first_frag_id() + std::abs(predicted_order[i]));
         predicted_order = full_predicted_order;
     }
     for (s32 i = 0; i < num_frags; ++i) current_order[i] = {i+1, contigs_->contigs_arr[i].length}; // start from 1
@@ -6505,6 +6570,7 @@ void AutoCurationFromFragsOrder(
     return ;
 }
 
+
 global_function
 void
 Auto_cutting_func(
@@ -6513,7 +6579,20 @@ Auto_cutting_func(
     std::string file_save_name = std::string("/auto_curation_tmp")
 )
 {   
-    if (!currFileName || !Auto_cutting) return;
+    if (!currFileName || !auto_cut_state) return;
+
+    if (auto_cut_state == 2) // restore the cutted frags within the selected area
+    {   
+        u32 start = auto_curation_state.get_start();
+        u32 end = auto_curation_state.get_end();
+        if (start < 0 || end < 0) return ;
+        fprintf(stdout, "========================\n");
+        fmt::print(stdout, "[Auto cutting] restoring the cutted frags within the selected area: [{}, {}]\n", start, end);
+        Map_State->restore_cutted_contigs( start, end );
+        UpdateContigsFromMapState();
+        Redisplay = 1;
+        return ;
+    }
 
     fprintf(stdout, "========================\n");
     // copy textures to cpu
@@ -6526,9 +6605,21 @@ Auto_cutting_func(
     restore_settings_after_copy(original_control_points);
     
     // classic cut 
-    if (1)
-    {
-        FragCutCal frag_cut_cal(&texture_array_4_ai, Contigs, Number_of_Pixels_1D); 
+    {   
+        SelectArea selected_area;
+        auto_curation_state.get_selected_fragments(
+            selected_area, 
+            Map_State, 
+            Number_of_Pixels_1D, 
+            Contigs);
+        FragCutCal frag_cut_cal(
+            &texture_array_4_ai, 
+            Contigs, 
+            Number_of_Pixels_1D, 
+            &selected_area, 
+            auto_curation_state.auto_cut_diag_window_for_pixel_mean,
+            auto_curation_state.auto_cut_threshold, 
+            auto_curation_state.auto_cut_smallest_frag_size_in_pixel); 
         std::vector<u32> cut_locs_pixel = frag_cut_cal.get_cut_locs_pixel();
         #ifdef DEBUG
             std::cout << "Cut locs in pixel: [";
@@ -6537,19 +6628,21 @@ Auto_cutting_func(
         #endif
         
         // add the cut locs to the extensions
-        if (arena)
-        {   
-            u32 added_num = Extensions.get_num_extensions();
-            std::string graph_name = "hic_pixel_density";
-            u32* graph_data = new u32[Number_of_Pixels_1D];
-            for (u32 i=0; i < Number_of_Pixels_1D; i ++)
-            {
-                graph_data[i] = (u32)(frag_cut_cal.hic_density[i] * 100.f);
+        #ifdef DEBUG    
+            if (arena)
+            {   
+                u32 added_num = Extensions.get_num_extensions();
+                std::string graph_name = "hic_pixel_density";
+                u32* graph_data = new u32[Number_of_Pixels_1D];
+                for (u32 i=0; i < Number_of_Pixels_1D; i ++)
+                {
+                    graph_data[i] = (u32)(frag_cut_cal.hic_density[i] * 100.f);
+                }
+                add_graph_to_extensions(arena, (u32*)graph_name.c_str(), graph_data);
+                
+                push_extensions_to_opengl(arena, added_num);
             }
-            add_graph_to_extensions(arena, (u32*)graph_name.c_str(), graph_data);
-            
-            push_extensions_to_opengl(arena, added_num);
-        }
+        #endif // DEBUG
         
         // cut the contigs
         cut_frags(cut_locs_pixel);
@@ -6584,9 +6677,9 @@ Auto_cutting_func(
 
 global_function
 void
-Sort_auto_sort(char* currFileName)
+Auto_sort_func(char* currFileName)
 {   
-    if (!currFileName || !Yahs_sorting) return;
+    if (!currFileName || !auto_sort_state) return;
     
     fprintf(stdout, "========================\n");
     fprintf(stdout, "[Auto Sort] start...\n");
@@ -6604,7 +6697,12 @@ Sort_auto_sort(char* currFileName)
 
     // check if select the area for sorting
     SelectArea selected_area;
-    auto_curation_state.get_selected_fragments(selected_area.selected_frag_ids, Map_State, Number_of_Pixels_1D);
+    auto_curation_state.get_selected_fragments(
+        selected_area, 
+        Map_State, 
+        Number_of_Pixels_1D, 
+        Contigs
+    );
     if (auto_curation_state.get_start() >=0 && auto_curation_state.get_end() >= 0 && selected_area.selected_frag_ids.size() > 0)
     {   
         fprintf(stdout, "Using selected area for sorting:\n");
@@ -6630,8 +6728,8 @@ Sort_auto_sort(char* currFileName)
     std::vector<std::string> exclude_tags = {"haplotig", "unloc"};
     std::vector<s32> exclude_meta_tag_idx = get_exclude_metaData_idx(exclude_tags);
     LikelihoodTable likelihood_table(
-        texture_array_4_ai.get_frags(), 
-        texture_array_4_ai.get_compressed_hic(), 
+        texture_array_4_ai.get_frags(),
+        texture_array_4_ai.get_compressed_hic(),
         (f32)auto_curation_state.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), 
         exclude_meta_tag_idx, 
         Number_of_Pixels_1D);
@@ -6641,6 +6739,7 @@ Sort_auto_sort(char* currFileName)
         frag_sort_method->sort_according_likelihood_unionFind( 
             likelihood_table, 
             frags_order, 
+            selected_area,
             auto_curation_state.link_score_threshold, 
             texture_array_4_ai.get_frags());
     }
@@ -6649,6 +6748,7 @@ Sort_auto_sort(char* currFileName)
         frag_sort_method->sort_according_likelihood_unionFind_doFuse( 
             likelihood_table, 
             frags_order, 
+            selected_area,
             auto_curation_state.link_score_threshold, 
             texture_array_4_ai.get_frags(), true, true);
     }
@@ -6657,6 +6757,7 @@ Sort_auto_sort(char* currFileName)
         frag_sort_method->sort_according_likelihood_unionFind_doFuse( 
             likelihood_table, 
             frags_order, 
+            selected_area,
             auto_curation_state.link_score_threshold, 
             texture_array_4_ai.get_frags(), false, true);
     }
@@ -6671,7 +6772,7 @@ Sort_auto_sort(char* currFileName)
         Map_State, 
         &selected_area);
     std::cout << std::endl;
-    Yahs_sorting = 0;
+    auto_sort_state = 0;
 
     return;
 }
@@ -7101,7 +7202,7 @@ global_function
 void
 KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
 {
-    if (!Loading && !Yahs_sorting && !Auto_cutting && (action != GLFW_RELEASE || key == GLFW_KEY_SPACE || key == GLFW_KEY_A || key == GLFW_KEY_LEFT_SHIFT))
+    if (!Loading && !auto_sort_state && !auto_cut_state && (action != GLFW_RELEASE || key == GLFW_KEY_SPACE || key == GLFW_KEY_A || key == GLFW_KEY_LEFT_SHIFT))
     {
         if (UI_On)
         {
@@ -7234,23 +7335,31 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                     break;
 
                 case GLFW_KEY_C:
-                    if (!Extensions.head) break;
-                    TraverseLinkedList(Extensions.head, extension_node)
+                    if (Select_Sort_Area_Mode && auto_curation_state.get_selected_fragments_num(Map_State, Number_of_Pixels_1D) > 0) // local area break
                     {
-                        switch (node->type)
+                        auto_cut_state = 1;
+                    }
+                    else // open "coverage" extension
+                    {
+                        if (!Extensions.head) break;
+                        TraverseLinkedList(Extensions.head, extension_node)
                         {
-                        case extension_graph:
-                        {
-
-                            graph *gph = (graph *)node->extension;
-                            if (strcmp((char *)gph->name, "coverage") == 0)
+                            switch (node->type)
                             {
-                                gph->on = !gph->on;
-                                break;
+                            case extension_graph:
+                            {
+
+                                graph *gph = (graph *)node->extension;
+                                if (strcmp((char *)gph->name, "coverage") == 0)
+                                {
+                                    gph->on = !gph->on;
+                                    break;
+                                }
+                            }
                             }
                         }
-                        }
                     }
+                    
                     break;
 
                 case GLFW_KEY_D:
@@ -7268,6 +7377,7 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                     break;
 
                 case GLFW_KEY_F:
+                    keyPressed = ToggleSelectSortAreaMode(window);
                     break;
 
                 case GLFW_KEY_G:
@@ -7302,7 +7412,6 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                     break;
 
                 case GLFW_KEY_K:
-                    keyPressed = ToggleSelectSortAreaMode(window);
                     break;
 
                 case GLFW_KEY_L:
@@ -7382,7 +7491,7 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                     }
                     else if (Select_Sort_Area_Mode)
                     {
-                        auto_curation_state.clear();
+                        auto_curation_state.clear(); // clear the selected area
                     }
                     else
                     {
@@ -7424,6 +7533,10 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                     break;
 
                 case GLFW_KEY_V:
+                    if (Select_Sort_Area_Mode)
+                    {
+                        auto_cut_state = 2; // restore the cutted frags within the selected area
+                    }
                     break;
 
                 case GLFW_KEY_W:
@@ -7493,11 +7606,10 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                     }
                     else if (Select_Sort_Area_Mode && action == GLFW_PRESS)
                     {   
-                        std::vector<u32> frags_id;
-                        auto_curation_state.get_selected_fragments(frags_id, Map_State, Number_of_Pixels_1D);
-                        if (frags_id.size() >= 2)
+                        u32 selected_frag_num = auto_curation_state.get_selected_fragments_num(Map_State, Number_of_Pixels_1D);
+                        if (selected_frag_num >= 2)
                         {
-                            Yahs_sorting = 1;
+                            auto_sort_state = 1;
                         }
                     }
                     else
@@ -8608,6 +8720,28 @@ global_function
             nk_tree_pop(NK_Context);
         }
 
+
+        // select the color for the selected area
+        if (nk_tree_push(NK_Context, NK_TREE_TAB, "Colour Selected Area", NK_MINIMIZED))
+        {
+            struct nk_colorf colour_bg = {
+                auto_curation_state.mask_color[0], 
+                auto_curation_state.mask_color[1], 
+                auto_curation_state.mask_color[2], 
+                auto_curation_state.mask_color[3]};
+            nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 200.0f, 4);
+            colour_bg = nk_color_picker(NK_Context, colour_bg, NK_RGBA);
+            auto_curation_state.mask_color[0] = colour_bg.r;
+            auto_curation_state.mask_color[1] = colour_bg.g;
+            auto_curation_state.mask_color[2] = colour_bg.b;
+            auto_curation_state.mask_color[3] = colour_bg.a;
+            nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30, 4);
+            if (nk_button_label(NK_Context, "Default")) 
+            {
+                auto_curation_state.set_mask_color(auto_curation_state.mask_color_default);
+            }
+            nk_tree_pop(NK_Context);
+        }
         // nk_tree_pop(NK_Context); // used to have this here, but it was causing a crash
 
         nk_style_set_font(ctx, &NK_Font->handle);
@@ -8808,9 +8942,19 @@ global_variable
 u08
 SaveState_Magic_Tail_Manual = 3;
 
+/* 
+保存当前状态，
+    headerHash: 用于生成文件名的哈希值
+    path: 保存路径
+    overwrite: 是否覆盖
+    version: 版本号，用于控制生成文件的版本，兼容上一个版本
+*/
 global_function
 u08
-SaveState(u64 headerHash, char *path = 0, u08 overwrite = 0)
+SaveState(
+    u64 headerHash, char *path = 0, u08 overwrite = 0, 
+    u32 version = 0
+)
 {
     if (!path)
     {
@@ -8851,7 +8995,8 @@ SaveState(u64 headerHash, char *path = 0, u08 overwrite = 0)
                     break;
             }
         }
-
+        
+        // number of scaffs and metaFlags
         u32 nScaffs = 0;
         u32 nMetaFlags = 0;
         ForLoop(Contigs->numberOfContigs)
@@ -8859,7 +9004,7 @@ SaveState(u64 headerHash, char *path = 0, u08 overwrite = 0)
             if ((Contigs->contigs_arr + index)->scaffId) ++nScaffs;
             if (*(Contigs->contigs_arr + index)->metaDataFlags) ++nMetaFlags;
         }
-        
+        // number of meta tags
         u08 nMetaTags = 0;
         u32 totalMetaTagSpace = 0;
         ForLoop(ArrayCount(Meta_Data->tags))
@@ -9213,8 +9358,10 @@ SaveState(u64 headerHash, char *path = 0, u08 overwrite = 0)
 
         if (!path) // save the name SaveState_Name to file named as ptlsn 
         {
-            u08 nameCache[17];
-            CopyNullTerminatedString((u08 *)SaveState_Name, (u08 *)nameCache);
+            // u08 nameCache[17];
+            // CopyNullTerminatedString((u08 *)SaveState_Name, (u08 *)nameCache);
+
+            std::string nameCache_string = std::string((char *)SaveState_Name);
 
             *(SaveState_Name + 0) = 'p';
             *(SaveState_Name + 1) = 't';
@@ -9224,7 +9371,8 @@ SaveState(u64 headerHash, char *path = 0, u08 overwrite = 0)
             *(SaveState_Name + 5) = '\0';
 
             file = fopen((const char *)SaveState_Path, "wb");
-            fwrite((u08 *)nameCache, 1, sizeof(nameCache), file);
+            // fwrite((u08 *)nameCache, 1, sizeof(nameCache), file);
+            fwrite((u08 *)nameCache_string.c_str(), 1, nameCache_string.size(), file);
             fclose(file);
         }
     }
@@ -9884,7 +10032,7 @@ restore_initial_state()
     
     // restore all the splited contigs
     {
-        Map_State->link_splited_contigs(Number_of_Pixels_1D);
+        Map_State->restore_cutted_contigs_all(Number_of_Pixels_1D);
     }
 
 
@@ -10138,6 +10286,9 @@ UserSaveState(const char *headerHash = "userprofile", u08 overwrite = 1, char *p
     fwrite(&userColourMapOrder.nMaps, sizeof(userColourMapOrder.nMaps), 1, file);
     fwrite(userColourMapOrder.order, sizeof(u32), userColourMapOrder.nMaps, file);
 
+    // save selected area color 
+    fwrite(&auto_curation_state.mask_color, sizeof(auto_curation_state.mask_color), 1, file);
+
     fclose(file);
 
     printf("[UserProfile]: Saved to: %s\n", path);
@@ -10248,6 +10399,17 @@ global_function
     fread(&useCustomOrder, sizeof(useCustomOrder), 1, file);
     fread(&userColourMapOrder.nMaps, sizeof(userColourMapOrder.nMaps), 1, file);
     fread(userColourMapOrder.order, sizeof(u32), userColourMapOrder.nMaps, file);
+
+    // load selected area color 
+    f32 tmp_mask_color[4];
+    if (fread(tmp_mask_color, sizeof(tmp_mask_color), 1, file) == 1)
+    {
+        auto_curation_state.set_mask_color(tmp_mask_color);
+    }
+    else 
+    {
+        auto_curation_state.set_mask_color(auto_curation_state.mask_color_default);
+    }
 
     fclose(file);
     return 0; // Success
@@ -10373,7 +10535,7 @@ GenerateAGP(char *path, u08 overwrite, u08 formatSingletons, u08 preserveOrder)
                 u64 contRealEndCoord = (u64)((f64)(startCoord + cont->length) / (f64)Number_of_Pixels_1D * (f64)Total_Genome_Length);
                 u64 contRealSize = contRealEndCoord - contRealStartCoord + 1;
 
-                char *contName = (char *)((Original_Contigs + cont->originalContigId)->name);
+                char *contName = (char *)((Original_Contigs + cont->get_original_contig_id())->name);
 
                 if (cont->scaffId && !type)
                 {
@@ -10705,19 +10867,19 @@ MainArgs {
             Redisplay = 1;
         }
 
-        if (Yahs_sorting)
+        if (auto_sort_state)
         {
             if (currFileName) SaveState(headerHash);
-            Sort_auto_sort((char*)currFileName);
-            Yahs_sorting = 0;
+            Auto_sort_func((char*)currFileName);
+            auto_sort_state = 0;
             Redisplay = 1;
         }
 
-        if (Auto_cutting)
+        if (auto_cut_state)
         {   
             if (currFileName) SaveState(headerHash);
             Auto_cutting_func((char*)currFileName, Loading_Arena);
-            Auto_cutting = 0;
+            auto_cut_state = 0;
             Redisplay = 1;
         }
 
@@ -10829,9 +10991,6 @@ MainArgs {
                     struct nk_color sort_button_active = nk_rgb(128, 0, 128);  
                     push_nk_style(NK_Context, sort_button_normal, sort_button_hover, sort_button_active);
                     nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 3);
-                    auto_cut_button = nk_button_label(NK_Context, "Auto cut");
-                    bounds = nk_widget_bounds(NK_Context);
-                    auto_sort_button = nk_button_label(NK_Context, "Auto Sort");
 
                     // AI sort button
                     /*
@@ -10877,24 +11036,84 @@ MainArgs {
                     */
                     // auto cut
                     {
+                        bounds = nk_widget_bounds(NK_Context);
+                        auto_cut_button = nk_button_label(NK_Context, "Auto cut");
+
                         if (auto_cut_button && currFileName)
                         {
-                            Auto_cutting = 1;
+                            auto_cut_state = 1;
+                            auto_curation_state.clear(); // if click the button, the sort/cut will be applied globally
+                        }
+                        // window to set the parameters for cut
+                        if (nk_contextual_begin(NK_Context, 0, nk_vec2(Screen_Scale.x * 480, Screen_Scale.y * 800), bounds))
+                        {   
+                            nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
+
+                            nk_label(NK_Context, "Cut threshold (default: 0.05)", NK_TEXT_LEFT);
+                            nk_edit_string_zero_terminated(
+                                NK_Context, 
+                                NK_EDIT_FIELD, 
+                                (char*)auto_curation_state.auto_cut_threshold_buf, 
+                                sizeof(auto_curation_state.auto_cut_threshold_buf), 
+                                nk_filter_float);
+                            
+                            nk_label(NK_Context, "Pixel_mean window size (default: 8)", NK_TEXT_LEFT); //  见鬼了，见鬼了，这个地方，如果我使用 "Pixel_mean windows (default: 8)" 点击弹出的窗口外面程序就会卡死，但是使用"Pixel_mean window size (default: 8)" 就不会卡死
+                            nk_edit_string_zero_terminated(
+                                NK_Context, 
+                                NK_EDIT_FIELD, 
+                                (char*)auto_curation_state.auto_cut_diag_window_for_pixel_mean_buf, 
+                                sizeof(auto_curation_state.auto_cut_diag_window_for_pixel_mean_buf), 
+                                nk_filter_decimal);
+
+                            nk_label(NK_Context, "Smallest frag size (default: 8)", NK_TEXT_LEFT);
+                            nk_edit_string_zero_terminated(
+                                NK_Context, 
+                                NK_EDIT_FIELD, 
+                                (char*)auto_curation_state.auto_cut_smallest_frag_size_in_pixel_buf, 
+                                sizeof(auto_curation_state.auto_cut_smallest_frag_size_in_pixel_buf), 
+                                nk_filter_decimal);
+
+                            nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
+                            if (nk_button_label(NK_Context, "Cancel")) 
+                            {   
+                                printf("[Auto Cut] Cancel button clicked\n");
+                                auto_curation_state.set_buf();
+                                nk_contextual_close(NK_Context);
+                            }
+                            if (nk_button_label(NK_Context, "Apply")) 
+                            {
+                                // Apply changes
+                                // Convert text to integer and float
+                                auto_curation_state.update_value_from_buf();
+                                
+                                nk_contextual_close(NK_Context);
+
+                                auto_curation_state.set_buf();
+                                fmt::print("[Auto Cut] cut_threshold:               {:.3f}\n", auto_curation_state.auto_cut_threshold);
+                                fmt::print("[Auto Cut] pixel mean window size:      {}\n", auto_curation_state.auto_cut_diag_window_for_pixel_mean);
+                                fmt::print("[Auto Cut] smallest_frag_size_in_pixel: {}\n", auto_curation_state.auto_cut_smallest_frag_size_in_pixel);
+                            }
+
+                            nk_contextual_end(NK_Context);
+
+                            
                         }
                     }
 
                     // Auto sort button
+                    bounds = nk_widget_bounds(NK_Context);
+                    auto_sort_button = nk_button_label(NK_Context, "Auto Sort");
                     {   
-                        if (auto_sort_button) 
+                        if (auto_sort_button && currFileName) 
                         {
-                            Yahs_sorting = 1;
-                            auto_curation_state.clear();
+                            auto_sort_state = 1;
+                            auto_curation_state.clear(); // if click the button, the sort/cut will be applied globally
                         }
                         // window to set the parameters for sort
                         if (nk_contextual_begin(NK_Context, 0, nk_vec2(Screen_Scale.x * 480, Screen_Scale.y * 400), bounds))
                         {
                             nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
-                            nk_label(NK_Context, "Smallest Frag Size (pixels):", NK_TEXT_LEFT);
+                            nk_label(NK_Context, "Smallest Frag Size (default: 2)", NK_TEXT_LEFT);
                             nk_edit_string_zero_terminated(
                                 NK_Context, 
                                 NK_EDIT_FIELD, 
@@ -10902,7 +11121,7 @@ MainArgs {
                                 sizeof(auto_curation_state.frag_size_buf), 
                                 nk_filter_decimal);
 
-                            nk_label(NK_Context, "Link Score Threshold:", NK_TEXT_LEFT);
+                            nk_label(NK_Context, "Link score threshold (default: 0.4)", NK_TEXT_LEFT);
                             nk_edit_string_zero_terminated(
                                 NK_Context, 
                                 NK_EDIT_FIELD, 
@@ -10930,24 +11149,21 @@ MainArgs {
                             if (nk_button_label(NK_Context, "Cancel")) 
                             {   
                                 printf("[Auto Sort] Cancel button clicked\n");
+                                auto_curation_state.set_buf();
                                 nk_contextual_close(NK_Context);
                             }
                             if (nk_button_label(NK_Context, "Apply")) 
                             {
                                 // Apply changes
                                 // Convert text to integer and float
-                                auto_curation_state.smallest_frag_size_in_pixel = (u32)atoi((char*)auto_curation_state.frag_size_buf);
-                                auto_curation_state.link_score_threshold = (float)atof((char*)auto_curation_state.score_threshold_buf);
+                                auto_curation_state.update_value_from_buf();
+
                                 nk_contextual_close(NK_Context);
-                                if (auto_curation_state.link_score_threshold > 1.0f || auto_curation_state.link_score_threshold < 0.0f) 
-                                {   
-                                    printf("[Auto Sort] Warning: link Score Threshold should be in the range of [0, 1]\n");
-                                    auto_curation_state.link_score_threshold = std::max(0.0f, std::min(1.0f, auto_curation_state.link_score_threshold));
-                                }
+
                                 auto_curation_state.set_buf();
-                                printf("[Auto Sort] smallest_frag_size_in_pixel: %d\n", auto_curation_state.smallest_frag_size_in_pixel);
-                                printf("[Auto Sort] link_score_threshold:        %.3f\n", auto_curation_state.link_score_threshold);
-                                printf("[Auto Sort] Sort mode:                   %s\n", auto_curation_state.get_sort_mode_name().c_str());
+                                fmt::print("[Auto Sort] smallest_frag_size_in_pixel: {}\n", auto_curation_state.smallest_frag_size_in_pixel);
+                                fmt::print("[Auto Sort] link_score_threshold:        {:.3f}\n", auto_curation_state.link_score_threshold);
+                                fmt::print("[Auto Sort] Sort mode:                   {}\n", auto_curation_state.get_sort_mode_name());
                             }
                             // redo all the changes
                             if (!auto_curation_state.show_autoSort_redo_confirm_popup)
@@ -11000,7 +11216,7 @@ MainArgs {
                             nk_contextual_end(NK_Context);
                         }
                     }
-                    pop_nk_style(NK_Context, 3);
+                    pop_nk_style(NK_Context, 3); // pop the style for auto cut and auto sort button
 
                     // waypoint edit mode
                     nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 3);
@@ -11600,9 +11816,10 @@ MainArgs {
                         }
 
                         // Input Sequences
-                        {
+                        {   
+                            std::string input_sequence_name = fmt::format("Input Sequences ({})", Number_of_Original_Contigs);
                             nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
-                            if (nk_tree_push(NK_Context, NK_TREE_TAB, "Input Sequences", NK_MINIMIZED))
+                            if (nk_tree_push(NK_Context, NK_TREE_TAB, input_sequence_name.c_str(), NK_MINIMIZED))
                             {   
                                 nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 3);
                                 nk_label(NK_Context, "Search: ", NK_TEXT_LEFT);
@@ -11697,7 +11914,7 @@ MainArgs {
                                                     u32 startCoord = cont->startCoord;
                                                     u32 endCoord = IsContigInverted(index2) ? (startCoord - cont->length + 1) : (startCoord + cont->length);
 
-                                                    stbsp_snprintf((char *)buff, sizeof(buff), "%s [%$" PRIu64 "bp to %$" PRIu64 "bp]", (char *)((Original_Contigs + cont->originalContigId)->name), (u64)((f64)startCoord / (f64)Number_of_Pixels_1D * (f64)Total_Genome_Length), (u64)((f64)(endCoord) / (f64)Number_of_Pixels_1D * (f64)Total_Genome_Length));
+                                                    stbsp_snprintf((char *)buff, sizeof(buff), "%s [%$" PRIu64 "bp to %$" PRIu64 "bp]", (char *)((Original_Contigs + cont->get_original_contig_id())->name), (u64)((f64)startCoord / (f64)Number_of_Pixels_1D * (f64)Total_Genome_Length), (u64)((f64)(endCoord) / (f64)Number_of_Pixels_1D * (f64)Total_Genome_Length));
                                                     if (nk_button_label(NK_Context, (char *)buff))
                                                     {
                                                         f32 p = pos + (0.5f * contLen);

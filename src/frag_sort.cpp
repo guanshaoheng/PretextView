@@ -218,6 +218,199 @@ void initilise_chromosomes(
     }
 }
 
+/*
+source and sink frags should not be sorted
+    return: 
+            0: not attachable, 
+            1: attachable
+*/
+bool check_source_sink_attachable(
+    const Link& lnk, 
+    u32 source_frag_id, u32 sink_frag_id, 
+    const u32& source_chain_id, const u32& sink_chain_id,
+    const u32& ca, const u32& cb
+)
+{   
+    if ((source_chain_id == ca && sink_chain_id == cb) || 
+        (sink_chain_id == ca && source_chain_id == cb)) return 0;
+    source_frag_id--; sink_frag_id -- ; // 在link中，从0开始编号，但是source_frag_id从1开始编号
+
+    if ((lnk.frag_a == source_frag_id && lnk.frag_b==sink_frag_id)||
+        (lnk.frag_b == source_frag_id && lnk.frag_a==sink_frag_id))
+        return 0;
+    // source can not be linked to the head
+    if ( source_frag_id >= 0 && 
+        ((lnk.frag_a == source_frag_id && lnk.is_a_head_linked) || 
+        (lnk.frag_b == source_frag_id && lnk.is_b_head_linked))
+    ) 
+        return 0;
+    // sink can not be linked to the end
+    if ( sink_frag_id >= 0 && 
+        ((lnk.frag_a == sink_frag_id && !lnk.is_a_head_linked) || 
+        (lnk.frag_b == sink_frag_id && !lnk.is_b_head_linked))
+    ) 
+        return 0;
+    return 1;
+}
+
+/*
+reverse the chain and return the new chain_id
+*/
+void reverse_chain(
+    std::deque<s32>& cha
+)
+{
+    std::reverse(cha.begin(), cha.end());
+    for (auto &val: cha) val = -val; // flip orientation
+}
+void reverse_chain(
+    std::deque<s32>& cha,
+    u32& i
+)
+{
+    std::reverse(cha.begin(), cha.end());
+    for (auto &val: cha) val = -val; // flip orientation
+    i = cha.size() - 1 - i;
+}
+
+
+
+/* 
+union find operation
+*/
+void union_find_process(
+    const std::vector<Link>& all_links, 
+    std::vector<std::deque<s32>>& chromosomes, 
+    SelectArea& select_area, 
+    std::vector<s32> & chain_id, 
+    const s32& source_frag_id, 
+    const s32& sink_frag_id,
+    s32& source_chain_id,
+    s32& sink_chain_id
+)
+{
+    
+    // Process links in order of decreasing score
+    for (const Link &lnk : all_links)
+    {
+        u32 a = lnk.frag_a;
+        u32 b = lnk.frag_b;
+        s32 ca = chain_id[a], cb = chain_id[b];
+
+        if (ca < 0 || cb < 0) 
+        {
+            fprintf(stderr, "Error: ca(%d) or cb(%d) should >= 0, only chain_id of excluded fragment can be smaller than 0.\n", ca, cb);
+            assert(0);
+        }
+
+        if (ca == cb) continue;
+
+
+        // Decide how to connect them:
+        auto &cha = chromosomes[ca];
+        auto &chb = chromosomes[cb];
+
+        // if a/b is the source, it can only be linked to the tail
+        // if a/b is the sink, it can only be linked to the head
+        // if a and b are source and sink or sink and source, they can not be linked
+        // source and link can not be linked into one chromosome
+        if (!check_source_sink_attachable(lnk, source_frag_id, sink_frag_id, source_chain_id, sink_chain_id, ca, cb)) continue;
+        
+        // find the index i/j of a/b on cha/chb
+        u32 i = 0, j = 0;
+        for (; i < cha.size(); i++)
+            if (std::abs(cha[i]) == a+1)
+                break;
+        for (; j < chb.size(); j++)
+            if (std::abs(chb[j]) == b+1)
+                break;
+        if (i == cha.size() || j == chb.size())
+        {
+            fprintf(stderr, "Error: i(%d should no more than %zu)/j(%d should no more than %zu) not found\n", i, cha.size(), j, chb.size());
+            assert(0);
+        }
+        
+        // Reverse a and/or b if necessary to make it always a->b
+        if (lnk.is_a_head_linked != (cha[i] < 0))
+        {
+            reverse_chain(cha, i);
+        }
+        if (lnk.is_b_head_linked != (chb[j] > 0))
+        {
+            reverse_chain(chb, j);
+        }
+        
+        // join cha and chb if a is the last and b is the first
+        if (i == cha.size() - 1 && j == 0) 
+        {
+            std::copy(chb.begin(), chb.end(), std::back_inserter(cha));
+            for (auto &val: chb)
+                chain_id[std::abs(val)-1] = ca;
+            if (sink_chain_id == cb) sink_chain_id = ca;
+            if (source_chain_id == cb) source_chain_id = ca;
+            chb.clear();
+        }
+    }
+
+}
+
+
+void fix_source_sink_frag(
+    std::vector<std::deque<s32>>& chromosomes, 
+    SelectArea& select_area, 
+    const s32& source_frag_id,
+    const s32 sink_frag_id
+)
+{   
+    /*
+    TODO (SHAOHENG) 这里还是有问题，当只有一个片段的时候有时候会把第一个片段反向，检查这个地方
+    */
+
+    if (sink_frag_id < 0 && source_frag_id < 0) return ;
+
+    if (select_area.selected_frag_ids.size() > 0)
+    {   
+        for (u32 i = 0; i < chromosomes.size() ; i ++ )
+        {   
+            std::deque<s32>& tmp = chromosomes[i];
+            if (tmp.empty()) continue;
+            
+            if (std::abs(tmp.back()) == source_frag_id && tmp.size() > 1 ) reverse_chain(tmp);
+            if (std::abs(tmp.front()) == source_frag_id && i != 0)
+            {   
+                if (tmp.front() < 0)
+                {
+                    fmt::print(
+                        stderr,
+                        "Error: the source_frag_id({}) should not be inversed, chromosome[{}].font() = {} \n", 
+                        source_frag_id, 
+                        i, 
+                        tmp.front());
+                }
+                std::swap(tmp, chromosomes.front());
+                continue;
+            }
+
+            if (std::abs(tmp.front()) == sink_frag_id && tmp.size() > 1) reverse_chain(tmp);
+            if (std::abs(tmp.back()) == sink_frag_id)
+            {   
+                if (tmp.back() < 0)
+                {
+                    fmt::print(
+                        stderr,
+                        "Error: the sink_frag_id({}) should not be inversed, chromosome[{}].back() = {} \n", 
+                        sink_frag_id, 
+                        i, 
+                        tmp.back());
+                }
+                std::swap(tmp, chromosomes.back());
+                continue;
+            }
+        }
+    }
+}
+
+
 
 FragSortTool::FragSortTool() {}
 
@@ -226,10 +419,25 @@ FragSortTool::~FragSortTool() {}
 void FragSortTool::sort_according_likelihood_unionFind(
     const LikelihoodTable& likelihood_table, 
     FragsOrder& frags_order, 
+    SelectArea& select_area,
     const f32 threshold, 
     const Frag4compress* frags, 
     bool sort_according_len_flag) const
-{
+{   
+    // this is used to fix the source and sink during local sort
+    s32 source_frag_id = -1, source_chain_id = -1, 
+        sink_frag_id = -1,   sink_chain_id = -1;
+    if (select_area.source_frag_id >=0)
+    {
+        source_frag_id = 1;
+        source_chain_id = 0;
+    }
+    if (select_area.sink_frag_id >=0)
+    {
+        sink_frag_id = select_area.get_to_sort_frags_num();
+        sink_chain_id = sink_frag_id - 1;
+    }
+
     u32 n = likelihood_table.get_num_frags();
     std::vector<Link> all_links;
 
@@ -262,66 +470,17 @@ void FragSortTool::sort_according_likelihood_unionFind(
     std::vector<std::deque<s32>> chromosomes_excluded;
     initilise_chromosomes(chromosomes, chromosomes_excluded, chain_id, n, likelihood_table);
 
-    // Process links in order of decreasing score
-    for (auto &lnk : all_links)
-    {
-        u32 a = lnk.frag_a;
-        u32 b = lnk.frag_b;
-        s32 ca = chain_id[a], cb = chain_id[b];
-
-        if (ca < 0 || cb < 0) 
-        {
-            fprintf(stderr, "Error: ca(%d) or cb(%d) should >= 0, only chain_id of excluded fragment can be smaller than 0.\n", ca, cb);
-            assert(0);
-        }
-
-        if (ca == cb) continue;
-
-        // Decide how to connect them:
-        auto &cha = chromosomes[ca];
-        auto &chb = chromosomes[cb];
-        
-        // if the fragments are not the head or end of the chain, 
-        // thus they can not be linked
-        if (!is_head_or_end(cha, a) || !is_head_or_end(chb, b)) continue;
-
-        // find the index i/j of a/b on cha/b
-        u32 i = 0, j = 0;
-        for (; i < cha.size(); i++)
-            if (std::abs(cha[i]) == a+1)
-                break;
-        for (; j < chb.size(); j++)
-            if (std::abs(chb[j]) == b+1)
-                break;
-        if (i == cha.size() || j == chb.size())
-        {
-            fprintf(stderr, "Error: i(%d should no more than %zu)/j(%d should no more than %zu) not found\n", i, cha.size(), j, chb.size());
-            assert(0);
-        }
-        
-        // Reverse a and/or b if necessary to make it always a->b
-        if (lnk.is_a_head_linked != (cha[i] < 0))
-        {
-            std::reverse(cha.begin(), cha.end());
-            for (auto &val: cha) val = -val; // flip orientation
-            i = cha.size() - 1 - i;
-        }
-        if (lnk.is_b_head_linked != (chb[j] > 0))
-        {
-            std::reverse(chb.begin(), chb.end());
-            for (auto &val: chb) val = -val; // flip orientation
-            j = chb.size() - 1 - j;
-        }
-        
-        // join cha and chb if a is the last and b is the first
-        if (i == cha.size() - 1 && j == 0) 
-        {
-            std::copy(chb.begin(), chb.end(), std::back_inserter(cha));
-            for (auto &val: chb)
-                chain_id[std::abs(val)-1] = ca;
-            chb.clear();
-        }
-    }
+    // run union find sort
+    union_find_process(
+        all_links, 
+        chromosomes, 
+        select_area,
+        chain_id,
+        source_frag_id, 
+        sink_frag_id, 
+        source_chain_id, 
+        sink_chain_id
+    );
 
     // sort the chromosomes according to the length
     if (frags && sort_according_len_flag)
@@ -342,6 +501,15 @@ void FragSortTool::sort_according_likelihood_unionFind(
                 return len_a > len_b;
             });
     }
+
+    // fix source and sink to the head and end
+    fix_source_sink_frag(
+        chromosomes, 
+        select_area, 
+        source_frag_id, 
+        sink_frag_id
+    );
+
     // merge two vectors
     chromosomes.insert(chromosomes.end(), chromosomes_excluded.begin(), chromosomes_excluded.end());
 
@@ -360,7 +528,9 @@ f32 link_score(
     u64 k = (u64)(std::abs(source)<<1|(source<0?1:0))<<32|(std::abs(sink)<<1|(sink<0?1:0));
     auto it = map_links.find(k);
     if (it != map_links.end())
+    {
         return all_links[it->second].score;
+    }
     return -std::numeric_limits<f32>::infinity();
 }
 
@@ -564,12 +734,29 @@ std::deque<s32> fuse_chromosomes_shguan(
 void FragSortTool::sort_according_likelihood_unionFind_doFuse(
     const LikelihoodTable& likelihood_table, 
     FragsOrder& frags_order, 
+    SelectArea& select_area,
     const f32 threshold, 
     const Frag4compress* frags,
     const bool doStageOne,
     const bool doStageTwo, 
     bool sort_according_len_flag) const 
 {   
+
+    // this is used to fix the source and sink during local sort
+    s32 source_frag_id = -1, source_chain_id = -1, 
+        sink_frag_id = -1,   sink_chain_id = -1;
+    if (select_area.source_frag_id >=0)
+    {
+        source_frag_id = 1;
+        source_chain_id = 0;
+    }
+    if (select_area.sink_frag_id >=0)
+    {
+        sink_frag_id = select_area.get_to_sort_frags_num();
+        sink_chain_id = sink_frag_id - 1;
+    }
+
+    // *** 
     u32 n = likelihood_table.get_num_frags();
     std::vector<Link> all_links;
     std::map<u64, u32> map_links;
@@ -596,7 +783,7 @@ void FragSortTool::sort_according_likelihood_unionFind_doFuse(
     std::sort(all_links.begin(), all_links.end(), [](const Link& a, const Link& b) {
         return a.score > b.score;
     });
-    if (doStageTwo) 
+    if (doStageTwo)
     {
         // Map sort links to frag pairs  (frga<<1|oria)<<32|(frgb<<1|orib)
         for (u32 i = 0; i < all_links.size(); i++)
@@ -616,51 +803,16 @@ void FragSortTool::sort_according_likelihood_unionFind_doFuse(
     // Process links in order of decreasing score
     if (doStageOne)
     {
-        // Stage I end to end join
-        for (auto &lnk : all_links)
-        {
-            u32 a = lnk.frag_a;
-            u32 b = lnk.frag_b;
-            u32 ca = chain_id[a], cb = chain_id[b];
-
-            if (ca == cb) continue;
-
-            // Decide how to connect them:
-            auto &cha = chromosomes[ca];
-            auto &chb = chromosomes[cb];
-            
-            // Find the index i/j of a/b on cha/b
-            u32 i = 0, j = 0;
-            for (; i < cha.size(); i++)
-                if (std::abs(cha[i]) == a+1)
-                    break;
-            for (; j < chb.size(); j++)
-                if (std::abs(chb[j]) == b+1)
-                    break;
-            
-            // Reverse a and/or b if necessary to make it always a->b
-            if (lnk.is_a_head_linked != (cha[i] < 0))
-            {
-                std::reverse(cha.begin(), cha.end());
-                for (auto &val: cha) val = -val; // flip orientation
-                i = cha.size() - 1 - i;
-            }
-            if (lnk.is_b_head_linked != (chb[j] > 0))
-            {
-                std::reverse(chb.begin(), chb.end());
-                for (auto &val: chb) val = -val; // flip orientation
-                j = chb.size() - 1 - j;
-            }
-            
-            // join cha and chb if a is the last and b is the first
-            if (i == cha.size() - 1 && j == 0) 
-            {
-                std::copy(chb.begin(), chb.end(), std::back_inserter(cha));
-                for (auto &val: chb)
-                    chain_id[std::abs(val)-1] = ca;
-                chb.clear();
-            }
-        }
+        union_find_process(
+            all_links, 
+            chromosomes,
+            select_area,
+            chain_id, 
+            source_frag_id, 
+            sink_frag_id, 
+            source_chain_id,
+            sink_chain_id
+        );
     }
 
     auto start_time = std::chrono::high_resolution_clock::now();
@@ -674,6 +826,7 @@ void FragSortTool::sort_according_likelihood_unionFind_doFuse(
             u32 ca = chain_id[a], cb = chain_id[b];
 
             if (ca == cb) continue;
+            if (!check_source_sink_attachable(lnk, source_frag_id, sink_frag_id, source_chain_id, sink_chain_id, ca, cb)) continue;
 
             // Decide how to connect them:
             auto &cha = chromosomes[ca];
@@ -691,24 +844,24 @@ void FragSortTool::sort_according_likelihood_unionFind_doFuse(
             // Reverse a and/or b if necessary to make it always a->b
             if (lnk.is_a_head_linked != (cha[i] < 0))
             {
-                std::reverse(cha.begin(), cha.end());
-                for (auto &val: cha) val = -val; // flip orientation
-                i = cha.size() - 1 - i;
+                reverse_chain(cha, i);
             }
             if (lnk.is_b_head_linked != (chb[j] > 0))
             {
-                std::reverse(chb.begin(), chb.end());
-                for (auto &val: chb) val = -val; // flip orientation
-                j = chb.size() - 1 - j;
+                reverse_chain(chb, j);
             }
+            
+            // should not fuse the source or sink inside of the chain   
+            if (std::abs(cha.back()) ==  source_frag_id || std::abs(cha.back()) ==  sink_frag_id || 
+                std::abs(chb.front()) == source_frag_id || std::abs(chb.front()) == sink_frag_id ) continue;
 
             // Now try to fuse cha and chb at position i and j
             // the fragments (i...end] on cha
             // and the fragments [beg...j) on chb
             // the sequence order in each chromosome keep unchanged
             // are fused to maximum the overall score (measured by link strength)
-            std::deque<s32> atail(0); // TODO (shaoheng): 检查这里是不是应该填 a 的上一个片段
-            if (cha.size() > i+1) // TODO (shaoheng): 检查这里到底是 i + 1 还是 i
+            std::deque<s32> atail(0); 
+            if (cha.size() > i+1) 
                 std::copy(cha.begin()+i+1, cha.end(), std::back_inserter(atail));
             std::deque<s32> bhead(chb.begin(), chb.begin()+j+1);
 
@@ -729,13 +882,19 @@ void FragSortTool::sort_according_likelihood_unionFind_doFuse(
                     std::copy(chb.begin()+j+1, chb.end(), std::back_inserter(cha)); // append the rest of chb to cha
                 for (auto &val: chb)                                                // update chain_id of fragments in chb 
                     chain_id[std::abs(val)-1] = ca;
+                if (sink_chain_id == cb) sink_chain_id = ca;
+                if (source_chain_id == cb) source_chain_id = ca;
                 chb.clear();
             }
         }
     }
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<f64> elapsed_seconds = end_time-start_time;
-    fprintf(stdout, "[Fusing]: consumed time %.2fs\n", elapsed_seconds.count());
+    fmt::print(
+        stdout, 
+        "[Fusing]: consumed time {:.2f}s\n", 
+        elapsed_seconds.count()
+    );
 
     // sort the chromosomes according to the length
     if (frags && sort_according_len_flag)
@@ -756,6 +915,15 @@ void FragSortTool::sort_according_likelihood_unionFind_doFuse(
                 return len_a > len_b;
             });
     }
+
+    // fix source and sink to the head and end
+    fix_source_sink_frag(
+        chromosomes, 
+        select_area, 
+        source_frag_id, 
+        sink_frag_id
+    );
+
     // merge two vectors
     chromosomes.insert(chromosomes.end(), chromosomes_excluded.begin(), chromosomes_excluded.end());
 

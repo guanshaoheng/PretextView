@@ -34,10 +34,15 @@ class FragCutCal
 {
 public: 
     TexturesArray4AI *textures_array = nullptr;
-    const Frag4compress* frags = nullptr;
+    Frag4compress* frags = nullptr;
     contigs* Contigs = nullptr;
     std::string file_save_dir = std::filesystem::current_path().string() + "/hic_density_curve";
     std::vector<f32> hic_density={};
+    const SelectArea* select_area = nullptr;
+
+    const u32 pixel_mean_window_size;
+    const f32 cut_threshold;
+    const u32 smallest_frag_size;
 
     u32 D = 0;
     std::vector<f32> norm_diag_mean={};
@@ -46,8 +51,15 @@ public:
     u32 maximum_D=5000;
     f32 min_hic_density=30.f;
 
-    FragCutCal(TexturesArray4AI* textures_array_, contigs* Contigs_, const u32& num_pixels_1d)
-        : textures_array(textures_array_), Contigs(Contigs_)
+    FragCutCal(
+        TexturesArray4AI* textures_array_, 
+        contigs* Contigs_, 
+        const u32& num_pixels_1d, 
+        const SelectArea* select_area_, 
+        u32 pixel_mean_window_size_, 
+        f32 cut_threshold_, 
+        u32 smallest_frag_size_)
+        : textures_array(textures_array_), Contigs(Contigs_), select_area(select_area_), pixel_mean_window_size(pixel_mean_window_size_), cut_threshold(cut_threshold_), smallest_frag_size(smallest_frag_size_)
     {   
         if (textures_array == nullptr)
         {
@@ -64,15 +76,17 @@ public:
         #endif
 
         this->frags = textures_array->get_frags();
-        textures_array->cal_maximum_number_of_shift(
+        this->frags->re_allocate_mem(this->Contigs, this->select_area, true);
+        textures_array->cal_maximum_number_of_shift( // and get the norm_diag_mean
             this->D, 
             this->norm_diag_mean, 
             this->Contigs,
             this->D_hic_ratio,
             this->maximum_D,
             this->min_hic_density);
-        this->hic_density.resize(num_pixels_1d, 0.f);
         
+        // cal the hic_density
+        this->hic_density.resize(num_pixels_1d, 0.f);
         for (u32 frag_id = 0; frag_id < this->frags->num; frag_id++)
         {
             this->get_single_fragment_hic_density(
@@ -80,7 +94,6 @@ public:
                 this->frags->length[frag_id],
                 this->hic_density.data() + this->frags->startCoord[frag_id]);
         }
-
     }
 
     std::vector<u32> get_cut_locs_pixel()
@@ -97,19 +110,18 @@ public:
     void find_break_points(
         const u32 start_pixel,
         const std::vector<f32>& arr,
-        const std::vector<f32>& order1_derivative,
-        const std::vector<f32>& order2_derivative,
-        std::vector<u32>& break_points,
-        const u32 windows_size=8,  
-        const f32 threshold=0.05)
-    {
+        std::vector<u32>& break_points)
+    {   
+        const auto& windows_size = this->pixel_mean_window_size;
+        const auto& threshold = this->cut_threshold;
+
         int n = arr.size();
         if (n < 2 * windows_size + 1) 
         {
             return ; 
         }
 
-        if (1)  // detect the break points according to the value
+        // detect the break points according to the value
         {
             std::vector<f32> prefix_sum(n + 1, 0.f);
             cal_prefix_sum(arr, prefix_sum);
@@ -148,28 +160,6 @@ public:
             }
         }
 
-        if (0) // detect break points according to derivatives
-        {   
-            u08 increase_flag = 1;
-            u32 len_count = 0;
-            for (u32 i = 1; i < n; i ++ )
-            {
-                if ((order1_derivative[i] > 0) == increase_flag)
-                {
-                    len_count++;
-                }
-                else
-                {
-                    if (len_count > windows_size * 2)
-                    {
-                        break_points.push_back(i + start_pixel);
-                    }
-                    len_count = 0;
-                    increase_flag = !increase_flag;
-                }
-            }
-        }
-
         return ;
     }
 
@@ -181,10 +171,11 @@ public:
             this->hic_density.begin() + this->frags->startCoord[frag_id] + this->frags->length[frag_id]);
 
         u32 n = hic_density_tmp.size();
-        std::vector<f32> order1_derivative(n, 0.f);
-        std::vector<f32> order2_derivative(n, 0.f);
-        get_smoothed_1st_order_derivative(hic_density_tmp, order1_derivative);
-        get_smoothed_1st_order_derivative(order1_derivative, order2_derivative);
+
+        // std::vector<f32> order1_derivative(n, 0.f);
+        // std::vector<f32> order2_derivative(n, 0.f);
+        // get_smoothed_1st_order_derivative(hic_density_tmp, order1_derivative);
+        // get_smoothed_1st_order_derivative(order1_derivative, order2_derivative);
         
         #ifdef DEBUG // output the hic_density to text file
             std::string filename = this->file_save_dir +  "/current_id_" + std::to_string(frag_id) + ".txt";
@@ -192,7 +183,7 @@ public:
             std::ofstream out(filename);
             for (u32 i = 0; i < hic_density_tmp.size(); i++)
             {
-                out << hic_density_tmp[i] << ", " << order1_derivative[i] << ", " << order2_derivative[i] << std::endl;
+                out << hic_density_tmp[i] << std::endl;
             }
             out.close();
         #endif
@@ -201,8 +192,6 @@ public:
         this->find_break_points(
             this->frags->startCoord[frag_id],
             hic_density_tmp,
-            order1_derivative,
-            order2_derivative,
             break_points);
         if (break_points.size() > 0)
         {
@@ -246,7 +235,7 @@ public:
         u32 num = 0, pixel_index=frag_start_pixel+relative_index;
         f32 sum = 0.f;
 
-        for (u32 i = 1; i < 8 ; i++) 
+        for (u32 i = 1; i < this->pixel_mean_window_size ; i++) 
         {   
             if (diag_flag)
             {   

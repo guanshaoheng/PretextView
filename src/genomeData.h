@@ -60,7 +60,7 @@ struct original_contig
 {
     u32 name[16];         // contig name
     u32 *contigMapPixels = nullptr; // global center coordinate of the fragments
-    u32 nContigs;         // num of contigs
+    u32 nContigs;         // num of contigs, 原contig被分成了多少个fragments
     u32 pad;
 };
 
@@ -73,6 +73,11 @@ struct contig
     u32 startCoord;       // local coordinate on the original contig
     u32 scaffId;
     u32 pad;
+
+    u32 get_original_contig_id() const 
+    {
+        return originalContigId % Max_Number_of_Contigs;
+    }
 };
 
 
@@ -104,9 +109,18 @@ struct map_state
         return originalContigIds[pixel] % Max_Number_of_Contigs;
     }
 
-    void link_splited_contigs(const u32 num_pixel_1d)
+    void restore_cutted_contigs_all(const u32& num_pixel_1d)
     {
         for (u32 i = 0; i < num_pixel_1d; i++)
+        {
+            originalContigIds[i] = originalContigIds[i] % Max_Number_of_Contigs;
+        }
+    }
+
+    void restore_cutted_contigs(const s32 start_pixel, const s32 end_pixel)
+    {   
+        if (start_pixel < 0 || end_pixel < 0) return;
+        for (u32 i = start_pixel; i <= end_pixel; i++)
         {
             originalContigIds[i] = originalContigIds[i] % Max_Number_of_Contigs;
         }
