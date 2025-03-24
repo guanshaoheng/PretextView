@@ -31,6 +31,7 @@ python/compressed_data_test/
 python/autoCut/models/cfgs/error_model.pth
 python/autoCut/models/cfgs/chr_model.pth
 python/autoCut/models/swin/mmdet.egg-info/*
+python/classic_cut/show_hic_density.py
 
 subprojects/eigen
 subprojects/glfw
