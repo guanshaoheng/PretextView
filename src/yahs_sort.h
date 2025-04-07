@@ -5,7 +5,7 @@
 #include "likelihood_table.h"
 // frags_order
 #include "frags_order.h"
-
+#include <memory>
 
 
 // 定义图相关的结构体
