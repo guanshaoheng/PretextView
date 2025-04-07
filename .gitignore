@@ -32,6 +32,9 @@ python/autoCut/models/cfgs/error_model.pth
 python/autoCut/models/cfgs/chr_model.pth
 python/autoCut/models/swin/mmdet.egg-info/*
 python/classic_cut/show_hic_density.py
+python/colormap_colorblind/*
+python/greedy_topo_sort_test/*
+python/linear_weight_test/*
 
 subprojects/eigen
 subprojects/glfw
@@ -77,3 +80,5 @@ hic_figures/
 auto_cut_output/
 python/autoCut/models/swin/README.md
 python/autoCut/models/swin/mmcv_custom/
+
+yahs_archive/
