@@ -1,6 +1,3 @@
-
-
-
 #ifndef AUTO_CURATION_STATE_H 
 #define AUTO_CURATION_STATE_H
 
@@ -115,8 +112,8 @@ public:
     bool show_autoSort_erase_confirm_popup = false;
     bool show_autoSort_redo_confirm_popup = false;
     //sorting mode
-    u32 sort_mode = 0; // 0: union find, 1: fuse union find, 2 deep fuse
-    std::vector<std::string> sort_mode_names = {"Union Find", "Fuse Union Find", "Deep Fuse"};
+    u32 sort_mode = 1; // 0: union find, 1: fuse union find, 2 deep fuse, 3 yahs
+    std::vector<std::string> sort_mode_names = {"Union Find", "Fuse", "Deep Fuse"};
     
     // auto sort
     char frag_size_buf[16];
@@ -162,6 +159,14 @@ public:
         for (u32 i = 0; i < 4; i++)
         {
             this->mask_color[i] = color[i];
+        }
+    }
+
+    void set_default_mask_color()
+    {
+        for (u32 i = 0; i < 4; i++)
+        {
+            this->mask_color[i] = this->mask_color_default[i];
         }
     }
 
@@ -414,6 +419,18 @@ public:
             if (Map_State->contigIds[tmp_pixel] != Map_State->contigIds[this->end_pixel]) this->end_pixel --;
         }
         return;
+    }
+
+    void adjust_cut_threshold(s32 delta)
+    {
+        this->auto_cut_threshold += delta * 0.002f;
+        this->auto_cut_threshold = std::max(0.0f, std::min(1.0f, this->auto_cut_threshold));
+        fmt::format_to((char*)auto_cut_threshold_buf, "{:.4f}", this->auto_cut_threshold);
+    }
+
+    void change_sort_mode(s32 delta)
+    {
+        this->sort_mode = (this->sort_mode + this->sort_mode_names.size() + (delta>0?1:-1)) % this->sort_mode_names.size();
     }
 
 };

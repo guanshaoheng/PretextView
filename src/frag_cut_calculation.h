@@ -13,6 +13,7 @@
 #include "genomeData.h"
 #include "utilsPretextView.h"
 #include "copy_texture.h"
+#include "auto_curation_state.h"
 
 
 
@@ -35,31 +36,22 @@ class FragCutCal
 public: 
     TexturesArray4AI *textures_array = nullptr;
     Frag4compress* frags = nullptr;
-    contigs* Contigs = nullptr;
-    std::string file_save_dir = std::filesystem::current_path().string() + "/hic_density_curve";
-    std::vector<f32> hic_density={};
+    std::string file_save_dir = std::filesystem::current_path().string() + "/hic_pixel_density_curve";
+    std::vector<f32> hic_pixel_density_origin={};
+    std::vector<f32> hic_pixel_density={};
     const SelectArea* select_area = nullptr;
 
     const u32 pixel_mean_window_size;
-    const f32 cut_threshold;
-    const u32 smallest_frag_size;
-
-    u32 D = 0;
-    std::vector<f32> norm_diag_mean={};
-
-    f32 D_hic_ratio=0.05f;
-    u32 maximum_D=5000;
-    f32 min_hic_density=30.f;
+    f32 cut_threshold=0.05f;
+    u32 smallest_frag_size_in_pixel = 8;
 
     FragCutCal(
         TexturesArray4AI* textures_array_, 
-        contigs* Contigs_, 
         const u32& num_pixels_1d, 
-        const SelectArea* select_area_, 
-        u32 pixel_mean_window_size_, 
-        f32 cut_threshold_, 
-        u32 smallest_frag_size_)
-        : textures_array(textures_array_), Contigs(Contigs_), select_area(select_area_), pixel_mean_window_size(pixel_mean_window_size_), cut_threshold(cut_threshold_), smallest_frag_size(smallest_frag_size_)
+        const u32 pixel_mean_window_size_)
+
+        : textures_array(textures_array_), 
+        pixel_mean_window_size(pixel_mean_window_size_)
     {   
         if (textures_array == nullptr)
         {
@@ -67,41 +59,80 @@ public:
             assert(0);
         }
 
-        #ifdef DEBUG // create folder to save the hic_density_curve
+        #ifdef DEBUG // create folder to save the hic_pixel_density_curve
             if (std::filesystem::exists(this->file_save_dir))
             {
                 std::filesystem::remove_all(this->file_save_dir);
             }
             std::filesystem::create_directory(this->file_save_dir);
         #endif
-
-        this->frags = textures_array->get_frags();
-        this->frags->re_allocate_mem(this->Contigs, this->select_area, true);
-        textures_array->cal_maximum_number_of_shift( // and get the norm_diag_mean
-            this->D, 
-            this->norm_diag_mean, 
-            this->Contigs,
-            this->D_hic_ratio,
-            this->maximum_D,
-            this->min_hic_density);
         
-        // cal the hic_density
-        this->hic_density.resize(num_pixels_1d, 0.f);
+        this->frags = textures_array->get_frags(); // 需要得到最初没有进行排序的contig 信息
+
+        // cal the hic_pixel_density
+        this->cal_pixel_density(num_pixels_1d);
+    }
+
+    void cal_pixel_density(u32 num_pixels_1d)
+    {   
+        this->hic_pixel_density_origin.resize(num_pixels_1d, 0.f);
         for (u32 frag_id = 0; frag_id < this->frags->num; frag_id++)
         {
-            this->get_single_fragment_hic_density(
+            this->get_single_fragment_hic_pixel_density(
                 this->frags->startCoord[frag_id],
                 this->frags->length[frag_id],
-                this->hic_density.data() + this->frags->startCoord[frag_id]);
+                this->hic_pixel_density_origin.data() + this->frags->startCoord[frag_id]);
+        }
+
+        #ifdef DEBUG // output the hic_pixel_density to text file
+            std::string filename = fmt::format("{}/hic_pixel_density_origin.txt", this->file_save_dir);
+            std::ofstream out(filename);
+            if (!out)
+            {
+                fmt::print(stderr, "Cannot open the file {}\n", filename);
+                assert(0);
+            }
+            for (u32 i = 0; i < this->hic_pixel_density_origin.size(); i++)
+            {
+                out << this->hic_pixel_density_origin[i] << std::endl;
+            }
+            out.close();
+            fmt::print("[Pixel Cut]: output hic_pixel_density to {}\n", filename);
+        #endif
+    }
+
+    void rearrange_hic_pixel_density(const u32* pixel_rearrange_index)
+    {   
+        this->hic_pixel_density.resize(this->hic_pixel_density_origin.size(), 0.f);
+        for (u32 i = 0; i < this->hic_pixel_density.size(); i++)
+        {   
+            if (pixel_rearrange_index[i]<0 || pixel_rearrange_index[i] >= this->hic_pixel_density.size())
+            {
+                fmt::print("The pixel_rearrange_index ({}) is out of range[{}, {}]", pixel_rearrange_index[i], 0, this->hic_pixel_density.size()-1);
+            }
+            this->hic_pixel_density[i] = this->hic_pixel_density_origin[pixel_rearrange_index[i]];
         }
     }
 
-    std::vector<u32> get_cut_locs_pixel()
-    {
+    std::vector<u32> get_cut_locs_pixel(
+        const AutoCurationState& auto_curation_state,
+        const u32* pixel_rearrange_index_, 
+        const contigs* Contigs,
+        const SelectArea* select_area=nullptr)
+    {   
+        // 设定cut的参数
+        this->smallest_frag_size_in_pixel = auto_curation_state.auto_cut_smallest_frag_size_in_pixel;
+        this->cut_threshold = auto_curation_state.auto_cut_threshold;
+
+        // rearrange index 
+        this->rearrange_hic_pixel_density(pixel_rearrange_index_);
+
+        // 在 select_area 中进行cut 
+        this->frags->re_allocate_mem(Contigs, select_area, 1);
         std::vector<u32> cut_locs_pixel;
         for (u32 i = 0; i < this->frags->num; i++)
         {
-            this->get_single_fragment_cut_locs(i, cut_locs_pixel);
+            this->get_single_fragment_cut_locs(i, cut_locs_pixel); 
         }
         return cut_locs_pixel;
     }
@@ -112,7 +143,7 @@ public:
         const std::vector<f32>& arr,
         std::vector<u32>& break_points)
     {   
-        const auto& windows_size = this->pixel_mean_window_size;
+        const auto& windows_size = this->smallest_frag_size_in_pixel;
         const auto& threshold = this->cut_threshold;
 
         int n = arr.size();
@@ -164,34 +195,40 @@ public:
     }
 
     void get_single_fragment_cut_locs(
-        const u32& frag_id, std::vector<u32>& cut_locs)
+        const u32& frag_id, 
+        std::vector<u32>& cut_locs)
     {   
         // copy orginal to local
-        std::vector<f32> hic_density_tmp(this->hic_density.begin() + this->frags->startCoord[frag_id], 
-            this->hic_density.begin() + this->frags->startCoord[frag_id] + this->frags->length[frag_id]);
+        std::vector<f32> hic_pixel_density_tmp(this->hic_pixel_density.begin() + this->frags->startCoord[frag_id], 
+            this->hic_pixel_density.begin() + this->frags->startCoord[frag_id] + this->frags->length[frag_id]);
 
-        u32 n = hic_density_tmp.size();
+        u32 n = hic_pixel_density_tmp.size();
 
         // std::vector<f32> order1_derivative(n, 0.f);
         // std::vector<f32> order2_derivative(n, 0.f);
-        // get_smoothed_1st_order_derivative(hic_density_tmp, order1_derivative);
+        // get_smoothed_1st_order_derivative(hic_pixel_density_tmp, order1_derivative);
         // get_smoothed_1st_order_derivative(order1_derivative, order2_derivative);
         
-        #ifdef DEBUG // output the hic_density to text file
-            std::string filename = this->file_save_dir +  "/current_id_" + std::to_string(frag_id) + ".txt";
-            std::cout << "[Auto Cut]: (classic) output hic_density to " << filename << std::endl;
+        #ifdef DEBUG_OUTPUT_PIXEL_CUT_FILE // output the hic_pixel_density to text file
+            std::string filename = fmt::format("{}/current_id_{}.txt", this->file_save_dir, frag_id);
+            fmt::print("[Pixel Cut]: output hic_pixel_density to {}\n", filename);
             std::ofstream out(filename);
-            for (u32 i = 0; i < hic_density_tmp.size(); i++)
+            if (!out)
             {
-                out << hic_density_tmp[i] << std::endl;
+                fmt::print(stderr, "Cannot open the file {}\n", filename);
+                assert(0);
+            }
+            for (u32 i = 0; i < hic_pixel_density_tmp.size(); i++)
+            {
+                out << hic_pixel_density_tmp[i] << std::endl;
             }
             out.close();
-        #endif
+        #endif // DEBUG_OUTPUT_PIXEL_CUT_FILE
 
         std::vector<u32> break_points(0);
         this->find_break_points(
             this->frags->startCoord[frag_id],
-            hic_density_tmp,
+            hic_pixel_density_tmp,
             break_points);
         if (break_points.size() > 0)
         {
@@ -201,68 +238,50 @@ public:
     }
 
     
-    void get_single_fragment_hic_density(
+    void get_single_fragment_hic_pixel_density(
         const u32& start_pixel,
         const u32& len_pixel,
-        f32* hic_density
+        f32* hic_pixel_density
     )
     {   
         for (u32 i=0; i < len_pixel; i++)
         {
-            hic_density[i] = this->pixel_mean(start_pixel, i, len_pixel);
+            hic_pixel_density[i] = this->pixel_mean(start_pixel, i, len_pixel);
         }
         if (len_pixel > 4)
         {
-            hic_density[0] = hic_density[1] = hic_density[2];
-            hic_density[len_pixel-1] = hic_density[len_pixel-2] = hic_density[len_pixel-3];
+            hic_pixel_density[0] = hic_pixel_density[1] = hic_pixel_density[2];
+            hic_pixel_density[len_pixel-1] = hic_pixel_density[len_pixel-2] = hic_pixel_density[len_pixel-3];
         }
         else 
         {
             for (u32 i = 0; i < len_pixel; i++)
             {
-                hic_density[i] = 1.0f;
+                hic_pixel_density[i] = 1.0f;
             }
         }
         return ;
     }
 
+    // 计算对角线上的距离为 i < this->pixel_mean_window_size 的像素的和
     f32 pixel_mean(
         const u32& frag_start_pixel,
         const u32& relative_index, 
-        const u32& len_pixel, 
-        const u08 diag_flag=1) 
+        const u32& len_pixel) 
     {   
         u32 num = 0, pixel_index=frag_start_pixel+relative_index;
         f32 sum = 0.f;
 
         for (u32 i = 1; i < this->pixel_mean_window_size ; i++) 
         {   
-            if (diag_flag)
-            {   
-                if (i < relative_index && i + relative_index < len_pixel-1)
-                {
-                    sum += ( (f32)((*(this->textures_array))(
-                        pixel_index - i,
-                        pixel_index + i)) ); // / this->norm_diag_mean[i]
-                    num++;
-                }
-            } else 
+            if (i < relative_index && i + relative_index < len_pixel-1)
             {
-                if ( i+relative_index < len_pixel)
-                {
-                    sum += ((*(this->textures_array))(
-                        pixel_index, 
-                        pixel_index + i) / this->norm_diag_mean[i]);
-                    num++;
-                }
-                if (relative_index >= i)
-                {
-                    sum += ((*(this->textures_array))(
-                        pixel_index, 
-                        pixel_index - i) / this->norm_diag_mean[i]);
-                    num++;
-                }
+                sum += ( (f32)((*(this->textures_array))(
+                    pixel_index - i,
+                    pixel_index + i)) ); // / this->norm_diag_mean[i]
+                num++;
             }
+            else break;
         }
         return num==0 ? 0.f : (f32)sum / (f32)num;
     }
