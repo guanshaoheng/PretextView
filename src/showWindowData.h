@@ -24,7 +24,11 @@ SOFTWARE.
 #ifndef SHOW_WINDOW_DATA_H
 #define SHOW_WINDOW_DATA_H
 
+#include <vector>
+#include <fmt/core.h>
 #include "utilsPretextView.h"
+#include "genomeData.h"
+
 
 struct pointi
 {
@@ -223,6 +227,8 @@ enum global_mode
     mode_extension = 5,
     mode_selectExclude_sort_area = 6
 };
+
+
 
 
 #endif // SHOW_WINDOW_DATA_H

@@ -233,7 +233,7 @@ void my_code_position_handler(const char* file, int line, const char* message=nu
 f64 GetTime(); // return current time in seconds
 
 
-/* 计算数组的 95% 分位数 */
+/* 计算数组的 95% 分位数, 最大的 0.05 */
 template <typename T>
 T percentile_cal(T* data, u32 size, f32 percentile=0.95)
 {   
