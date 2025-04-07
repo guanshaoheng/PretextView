@@ -93,6 +93,11 @@ struct contigs
 struct meta_data
 {
     u32 tags[64][16];
+
+    meta_data()
+    {
+        memset(tags, 0, sizeof(tags));
+    }
 };
 
 
@@ -127,6 +132,30 @@ struct map_state
     }
 };
 
+
+/*
+用于存储计算得到的pixel_density值
+*/
+struct Extension_Graph_Data
+{   
+    bool is_prepared = false;
+    f32* data=nullptr;
+    Extension_Graph_Data(u32 num_pixel_1d) 
+    {
+        data = new f32[num_pixel_1d];
+        memset(data, 0, num_pixel_1d * sizeof(f32));
+    }
+
+    ~Extension_Graph_Data()
+    {
+        if (data)
+        {
+            delete[] data;
+            data = nullptr;
+        }
+    }
+    
+};
 
 
 // extension structures
@@ -179,6 +208,26 @@ extension_sentinel
             added_index++;
         }
         return added_index;
+    }
+
+    bool is_empty()
+    {
+        return this->head == nullptr;
+    }
+
+    bool is_graph_name_exist(const std::string& name)
+    {
+        TraverseLinkedList(this->head, extension_node)
+        {
+            if (node->type == extension_graph)
+            {
+                if (strcmp((char*)((graph*)node->extension)->name, name.c_str()) == 0)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 };
 
