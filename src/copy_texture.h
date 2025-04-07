@@ -26,10 +26,11 @@ SOFTWARE.
 #include <utility>
 #include <fstream>
 #include <random>
-
+#include <cstdio>
 #include "utilsPretextView.h"
 #include "genomeData.h"
 #include "auto_curation_state.h"
+#include <fmt/core.h>
 
 struct Frag4compress {
     u32 num;
@@ -293,10 +294,8 @@ public:
     void cleanup()
     {   
 
-        MY_CHECK(0);
         if (data)
         {   
-            MY_CHECK(0);
             delete[] data;
             data = nullptr;
         }
@@ -304,7 +303,6 @@ public:
 
     void re_allocate_mem(u32 row_num_, u32 col_num_, u32 layer_)
     {   
-        MY_CHECK(0);
         cleanup();
         row_num = row_num_;
         col_num = col_num_;
@@ -314,12 +312,9 @@ public:
         shape[2] = layer_;
         length = row_num * col_num * layer_num;
 
-        MY_CHECK(0);
         data = new T[length];
 
-        MY_CHECK(0);
         memset(data, 0, length * sizeof(T));
-        MY_CHECK(0);
     }
 
     void check_indexing(const u32& row, const u32& col, const u32& layer) const
@@ -347,6 +342,23 @@ public:
     {
         check_indexing(row, col, layer);
         data[row * col_num * layer_num + col* layer_num + layer] = value;
+    }
+
+    void output_to_file(FILE* fp) const
+    {
+        fmt::print(fp, "# Matrix shape: {} {} {}\n", row_num, col_num, layer_num);
+        for (u32 l = 0; l < layer_num; l++)
+        {   
+            fmt::print(fp, "# layer: {}\n", l);
+            for (u32 i = 0; i < row_num; i++)
+            {
+                for (u32 j = 0; j < col_num; j++)
+                {
+                    fmt::print(fp, "{:.4f} ", data[i * col_num * layer_num + j * layer_num + l]);
+                }
+                fmt::print(fp, "\n");
+            }
+        }
     }
 };
 
@@ -469,10 +481,11 @@ struct Values_on_Channel
     }
     void initilize()
     {
-        c[0] = 0.f;
-        c[1] = 0.f;
-        c[2] = 0.f;
-        c[3] = 0.f;
+        // c[0] = 0.f;
+        // c[1] = 0.f;
+        // c[2] = 0.f;
+        // c[3] = 0.f;
+        memset(c, 0, 4 * sizeof(f32));
     }
 }; 
 
@@ -755,6 +768,10 @@ public:
     void output_mass_centres_to_file() const;
     void output_frags4AI_to_file() const;
     void output_compressed_hic_massCetre_extension_for_python() const;
+    void initialise_textures();
+    void clear_textures();
+    void clear_compressed_hic();
+    void rearrange_textures(const u32* rearrange_index);
 };
 
 
