@@ -17,10 +17,10 @@ PretextView is a desktop application for viewing pretext contact maps.<br/>
 - `S`: enter the Scaffold painting mode.
 - `X`: enter the extension edit mode.
 - `W`: enter the Waypoint edit mode.
-- `J`: window jump to the diagnol line without changing the zoom-level, which is usefull for selecting the correct place for a small fragment.
-- `L`: open / close the Grid.
-- `T`: open / close the Tooltip.
-- `I`: open / close the ID bar.
+- `J`: window jump to the diagonal line without changing the zoom-level, which is useful for selecting the correct place for a small fragment.
+- `L`: toggle the Grid Line.
+- `T`: toggle the Tooltip.
+- `I`: toggle the ID bar.
 - `Up` / `Down`: change the color map.
 - `Left` / `Right`: decrease / increase the Gamma mid (default: 0.5).
 
