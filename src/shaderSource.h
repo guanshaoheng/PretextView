@@ -70,14 +70,14 @@ float linearTextureID(vec2 coords)
 }
 
 // https://community.khronos.org/t/mipmap-level-calculation-using-dfdx-dfdy/67480
-float mip_map_level(in vec2 texture_coordinate)
+float mip_map_level(in vec2 texture_coordinate) // textCoord.xy * textureSize(tex, 0).xy
 {
     // The OpenGL Graphics System: A Specification 4.2
     //  - chapter 3.9.11, equation 3.21
-    vec2  dx_vtc        = dFdx(texture_coordinate);
-    vec2  dy_vtc        = dFdy(texture_coordinate);
+    vec2  dx_vtc        = dFdx(texture_coordinate); // change velocity in x direction
+    vec2  dy_vtc        = dFdy(texture_coordinate); // change velocity in y direction
     float delta_max_sqr = max(dot(dx_vtc, dx_vtc), dot(dy_vtc, dy_vtc));
-    return 0.5 * log2(delta_max_sqr);
+    return 0.5 * log2(delta_max_sqr); // the faster the change, the higher the mip level
 }
 
 vec3 pixLookup(vec3 inCoords)
