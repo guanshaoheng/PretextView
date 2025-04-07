@@ -1,4 +1,3 @@
-
 /*
 Copyright (c) 2024 Shaoheng Guan, Wellcome Sanger Institute
 
@@ -22,8 +21,7 @@ SOFTWARE.
 */
 
 
-#include <frag_sort.h>
-
+#include "frag_sort.h"
 
 
 void dfs(
@@ -219,25 +217,38 @@ void initilise_chromosomes(
 }
 
 /*
-source and sink frags should not be sorted
+条件：
+1. source frag 的头不能连
+2. sink frag   的尾不能连
+3. source 和 sink不能连到一起
+
+
+
     return: 
             0: not attachable, 
             1: attachable
 */
 bool check_source_sink_attachable(
     const Link& lnk, 
-    u32 source_frag_id, u32 sink_frag_id, 
-    const u32& source_chain_id, const u32& sink_chain_id,
-    const u32& ca, const u32& cb
+    u32 source_frag_id, 
+    u32 sink_frag_id, 
+    const u32& source_chain_id, 
+    const u32& sink_chain_id,
+    const u32& ca, 
+    const u32& cb
 )
 {   
+    // source and sink can not be linked to the same chain
     if ((source_chain_id == ca && sink_chain_id == cb) || 
         (sink_chain_id == ca && source_chain_id == cb)) return 0;
+
     source_frag_id--; sink_frag_id -- ; // 在link中，从0开始编号，但是source_frag_id从1开始编号
 
+    // source and sink can not be linked to each other
     if ((lnk.frag_a == source_frag_id && lnk.frag_b==sink_frag_id)||
         (lnk.frag_b == source_frag_id && lnk.frag_a==sink_frag_id))
         return 0;
+
     // source can not be linked to the head
     if ( source_frag_id >= 0 && 
         ((lnk.frag_a == source_frag_id && lnk.is_a_head_linked) || 
@@ -257,15 +268,15 @@ bool check_source_sink_attachable(
 reverse the chain and return the new chain_id
 */
 void reverse_chain(
-    std::deque<s32>& cha
-)
+    std::deque<s32>& cha)
 {
     std::reverse(cha.begin(), cha.end());
     for (auto &val: cha) val = -val; // flip orientation
 }
+
 void reverse_chain(
     std::deque<s32>& cha,
-    u32& i
+    u32& i // frag_id in the chain
 )
 {
     std::reverse(cha.begin(), cha.end());
@@ -289,7 +300,6 @@ void union_find_process(
     s32& sink_chain_id
 )
 {
-    
     // Process links in order of decreasing score
     for (const Link &lnk : all_links)
     {
@@ -362,50 +372,52 @@ void fix_source_sink_frag(
     const s32 sink_frag_id
 )
 {   
-    /*
-    TODO (SHAOHENG) 这里还是有问题，当只有一个片段的时候有时候会把第一个片段反向，检查这个地方
-    */
 
-    if (sink_frag_id < 0 && source_frag_id < 0) return ;
+    if (select_area.selected_frag_ids.empty() || (sink_frag_id < 0 && source_frag_id < 0 ) ) return ;
 
-    if (select_area.selected_frag_ids.size() > 0)
+    for (u32 i = 0; i < chromosomes.size() ; i ++ )
     {   
-        for (u32 i = 0; i < chromosomes.size() ; i ++ )
-        {   
-            std::deque<s32>& tmp = chromosomes[i];
-            if (tmp.empty()) continue;
-            
-            if (std::abs(tmp.back()) == source_frag_id && tmp.size() > 1 ) reverse_chain(tmp);
-            if (std::abs(tmp.front()) == source_frag_id && i != 0)
-            {   
-                if (tmp.front() < 0)
-                {
-                    fmt::print(
-                        stderr,
-                        "Error: the source_frag_id({}) should not be inversed, chromosome[{}].font() = {} \n", 
-                        source_frag_id, 
-                        i, 
-                        tmp.front());
-                }
-                std::swap(tmp, chromosomes.front());
-                continue;
-            }
+        std::deque<s32>& tmp = chromosomes[i];
+        if (tmp.empty()) continue;
+        
+        if (std::abs(tmp.back()) == source_frag_id && tmp.size() > 1 ) 
+        {
+            if (tmp.back() > 0) 
+            {
+                fmt::print(
+                    stderr,
+                    "Error: source_frag({})'s head should not be linked, chromosome[{}].back() = {} \n", 
+                    source_frag_id, 
+                    i, 
+                    tmp.back());
+                assert(0);
+            } 
+            reverse_chain(tmp);
+        }
+        if (std::abs(tmp.front()) == source_frag_id && i != 0)
+        {
+            std::swap(tmp, chromosomes.front());
+            continue;
+        }
 
-            if (std::abs(tmp.front()) == sink_frag_id && tmp.size() > 1) reverse_chain(tmp);
-            if (std::abs(tmp.back()) == sink_frag_id)
-            {   
-                if (tmp.back() < 0)
-                {
-                    fmt::print(
-                        stderr,
-                        "Error: the sink_frag_id({}) should not be inversed, chromosome[{}].back() = {} \n", 
-                        sink_frag_id, 
-                        i, 
-                        tmp.back());
-                }
-                std::swap(tmp, chromosomes.back());
-                continue;
+        if (std::abs(tmp.front()) == sink_frag_id && tmp.size() > 1) 
+        {
+            if (tmp.front() > 0 )
+            {
+                fmt::print(
+                    stderr,
+                    "Error: the sink_frag_id({})'s end should not be linked, chromosome[{}].front() = {} \n", 
+                    sink_frag_id, 
+                    i, 
+                    tmp.front());
+                assert(0);
             }
+            reverse_chain(tmp);
+        }
+        if (std::abs(tmp.back()) == sink_frag_id && i != chromosomes.size()-1)
+        {   
+            std::swap(tmp, chromosomes.back());
+            continue;
         }
     }
 }
@@ -415,6 +427,8 @@ void fix_source_sink_frag(
 FragSortTool::FragSortTool() {}
 
 FragSortTool::~FragSortTool() {}
+
+
 
 void FragSortTool::sort_according_likelihood_unionFind(
     const LikelihoodTable& likelihood_table, 
@@ -441,6 +455,12 @@ void FragSortTool::sort_according_likelihood_unionFind(
     u32 n = likelihood_table.get_num_frags();
     std::vector<Link> all_links;
 
+    // 计算的分位数
+    f32 threshold_val = percentile_cal(
+        likelihood_table.data, likelihood_table.size, this->threshold_ratio);
+    f32 threshold_using = std::min(threshold_val, threshold);
+    fmt::print(stderr, "[Pixel Sort] threshold at {}: {}, fixed_threshold: {}, using: {}\n", this->threshold_ratio, threshold_val, threshold, threshold_using);
+
     std::vector<std::pair<bool, bool>> link_kinds = {
         {true,  true}, {true,  false}, 
         {false, true}, {false, false}};
@@ -451,7 +471,7 @@ void FragSortTool::sort_according_likelihood_unionFind(
             for (u32 k = 0; k < 4; k++)
             {   
                 f32 val = likelihood_table(i, j, k);
-                if (val >= threshold) {
+                if (val >= threshold_using) {
                     all_links.push_back(
                         Link(val, i, j, link_kinds[k].first, link_kinds[k].second));
                 }
@@ -517,7 +537,6 @@ void FragSortTool::sort_according_likelihood_unionFind(
 }
 
 
-// Chenxi Zhou
 f32 link_score(
     const std::vector<Link>& all_links,
     const std::map<u64,u32>& map_links,
@@ -535,113 +554,7 @@ f32 link_score(
 }
 
 
-// Chenxi Zhou
 std::deque<s32> fuse_chromosomes(
-    const std::vector<Link>& all_links,
-    const std::map<u64,u32>& map_links,
-    std::deque<s32>& cha,
-    std::deque<s32>& chb,
-    s32 source, s32 sink,
-    const f32 threshold)
-    /*
-    cha:    tail of a
-    chb:    head of b
-    source: cha[i]
-    sink:   chb.size() > (j+1) ? chb[j+1] : 0
-    */
-{
-    int n = cha.size();
-    int m = chb.size();
-    
-    // push source
-    cha.push_front(source);
-    chb.push_front(source);
-
-    // need two DP matrices
-    // one for DP[i,j] ending with i-th element in cha
-    // one for DP[i,j] ending with j-th element in chb
-    // fill matrices row by row
-    std::vector<double> pre_row_a(m+1, -std::numeric_limits<double>::infinity());   // i - 1
-    std::vector<double> curr_row_a(m+1, -std::numeric_limits<double>::infinity());  // i
-    std::vector<double> pre_row_b(m+1, -std::numeric_limits<double>::infinity());   // i - 1
-    std::vector<double> curr_row_b(m+1, -std::numeric_limits<double>::infinity());  // i
-
-    // backtracking matrix could be big - n*m*2
-    // use one bit per position
-    // tracking if need to switch list
-    std::vector<std::vector<uint8_t>> bt(2, std::vector<uint8_t>(((int64_t)n*m-1)/8+1, 0));
-
-    pre_row_a[0] = 0;
-    pre_row_b[0] = 0;
-    for (int j = 1; j <= m; ++j)  // initialise the score of the original chb
-        pre_row_b[j] = pre_row_b[j-1] + link_score(all_links, map_links, chb[j-1], chb[j]);
-    
-    // fill DP and backtracking matrices
-    double link1, link2;
-    int64_t b;
-    for (int i = 1; i <= n; ++i)  // check all the elements in cha
-    {
-        curr_row_a[0] = pre_row_a[0] + link_score(all_links, map_links, cha[i-1], cha[i]); // i = i, j = 0
-        curr_row_b[0] = -std::numeric_limits<double>::infinity();                          // i = i, j = 0  // original code
-        // curr_row_b[0] = pre_row_a[0] ; // i = i, j = 0  // changed code
-        for (int j = 1; j <= m; ++j) {
-            b = (i-1)*m + (j-1);
-            link1 = pre_row_a[j] + link_score(all_links, map_links, cha[i-1], cha[i]);    // last is cha[i-1]
-            link2 = pre_row_b[j] + link_score(all_links, map_links, chb[j], cha[i]);      // last is chb[j]
-            curr_row_a[j] = std::max(link1, link2);
-            bt[0][b/8] |= (uint8_t)(link1<link2?1:0)<<(b%8);
-            link1 = curr_row_a[j-1] + link_score(all_links, map_links, cha[i], chb[j]);   // last is cha[i]
-            link2 = curr_row_b[j-1] + link_score(all_links, map_links, chb[j-1], chb[j]); // last is chb[j-1]
-            curr_row_b[j] = std::max(link1, link2);
-            bt[1][b/8] |= (uint8_t)(link1<link2?0:1)<<(b%8);
-        }
-        std::swap(curr_row_a, pre_row_a);
-        std::swap(curr_row_b, pre_row_b);
-    }
-
-    double link, maxLink;
-    link = 0;
-    for (int i = 1; i < cha.size(); ++i)
-        link += link_score(all_links, map_links, cha[i-1], cha[i]);
-    for (int j = 2; j < chb.size(); ++j)
-        link += link_score(all_links, map_links, chb[j-1], chb[j]);
-    link += link_score(all_links, map_links, chb.back(), sink);
-        
-    link1 = pre_row_a[m] + link_score(all_links, map_links, cha[n], sink);
-    link2 = pre_row_b[m] + link_score(all_links, map_links, chb[m], sink);
-    maxLink = std::max(link1, link2);
-
-    // link is not strong enough
-    if (maxLink < link + threshold)
-        return std::deque<s32>();
-
-    // pop source
-    cha.pop_front();
-    chb.pop_front();
-
-    // do backtracking
-    std::deque<s32> fused(0);
-    std::array<std::reference_wrapper<std::deque<s32>>, 2> 
-        lists = {std::ref(cha), std::ref(chb)};
-    std::array<int, 2> sizes = {n-1, m-1};
-    uint8_t k = link1<link2? 1 : 0;
-    while(sizes[0] >= 0 && sizes[1] >= 0) // push cha and chb to fused according to backtracking matrix
-    {
-        b = sizes[0]*m + sizes[1];
-        fused.push_front(lists[k].get()[sizes[k]--]);
-        k ^= !!(bt[k][b/8]&((uint8_t)1<<(b%8)));
-    }
-    while(sizes[0] >= 0)
-        fused.push_front(lists[0].get()[sizes[0]--]);
-    while(sizes[1] >= 0)
-        fused.push_front(lists[1].get()[sizes[1]--]);
-    
-    return fused;
-}
-
-
-// from Chenxi's code
-std::deque<s32> fuse_chromosomes_shguan(
     const std::vector<Link>& all_links,
     const std::map<u64, u32>& map_links,
     std::deque<s32>& cha,
@@ -730,7 +643,6 @@ std::deque<s32> fuse_chromosomes_shguan(
 }
 
 
-// Chenxi Zhou
 void FragSortTool::sort_according_likelihood_unionFind_doFuse(
     const LikelihoodTable& likelihood_table, 
     FragsOrder& frags_order, 
@@ -743,8 +655,10 @@ void FragSortTool::sort_according_likelihood_unionFind_doFuse(
 {   
 
     // this is used to fix the source and sink during local sort
-    s32 source_frag_id = -1, source_chain_id = -1, 
-        sink_frag_id = -1,   sink_chain_id = -1;
+    s32 source_frag_id = -1,  // 第一个片段的id
+        sink_frag_id = -1,    // 最后一个片段的id
+        source_chain_id = -1, // 第一个片段所在的chain的id
+        sink_chain_id = -1;   // 最后一个片段所在的chain的id 
     if (select_area.source_frag_id >=0)
     {
         source_frag_id = 1;
@@ -756,7 +670,12 @@ void FragSortTool::sort_according_likelihood_unionFind_doFuse(
         sink_chain_id = sink_frag_id - 1;
     }
 
-    // *** 
+    // 计算的分位数
+    f32 threshold_val = percentile_cal(likelihood_table.data, likelihood_table.size, this->threshold_ratio);
+    f32 threshold_using = std::min(threshold_val, threshold);
+    fmt::print(stderr, "[Pixel Sort]: link score threshold at {}: {}, fixed_threshold: {}, using: {}\n", this->threshold_ratio, threshold_val, threshold, threshold_using);
+
+    // 建立所有的links 
     u32 n = likelihood_table.get_num_frags();
     std::vector<Link> all_links;
     std::map<u64, u32> map_links;
@@ -771,7 +690,7 @@ void FragSortTool::sort_according_likelihood_unionFind_doFuse(
             for (u32 k = 0; k < 4; k++)
             {   
                 f32 val = likelihood_table(i, j, k);
-                if (val >= threshold) {
+                if (val >= threshold_using) {
                     all_links.push_back(
                         Link(val, i, j, link_kinds[k].first, link_kinds[k].second));
                 }
@@ -808,10 +727,10 @@ void FragSortTool::sort_according_likelihood_unionFind_doFuse(
             chromosomes,
             select_area,
             chain_id, 
-            source_frag_id, 
-            sink_frag_id, 
-            source_chain_id,
-            sink_chain_id
+            source_frag_id,   
+            sink_frag_id,     
+            source_chain_id,  
+            sink_chain_id     
         );
     }
 
@@ -851,9 +770,10 @@ void FragSortTool::sort_according_likelihood_unionFind_doFuse(
                 reverse_chain(chb, j);
             }
             
-            // should not fuse the source or sink inside of the chain   
+            // should not fuse the source or sink inside of the chain 
             if (std::abs(cha.back()) ==  source_frag_id || std::abs(cha.back()) ==  sink_frag_id || 
-                std::abs(chb.front()) == source_frag_id || std::abs(chb.front()) == sink_frag_id ) continue;
+                std::abs(chb.front()) == source_frag_id || std::abs(chb.front()) == sink_frag_id 
+            ) continue;
 
             // Now try to fuse cha and chb at position i and j
             // the fragments (i...end] on cha
@@ -865,14 +785,15 @@ void FragSortTool::sort_according_likelihood_unionFind_doFuse(
                 std::copy(cha.begin()+i+1, cha.end(), std::back_inserter(atail));
             std::deque<s32> bhead(chb.begin(), chb.begin()+j+1);
 
-            std::deque<s32> fused = fuse_chromosomes_shguan(
+            // todo （3, Apr. 2025） 检查为什么在deep fuse的时候还是会弄乱
+            std::deque<s32> fused = fuse_chromosomes(
                 all_links, 
                 map_links, 
                 atail,                       // cha 
                 bhead,                       // chb
-                cha[i],                      // source
-                chb.size()>(j+1)?chb[j+1]:0, // sink 
-                threshold);
+                cha[i],                      // source frag id
+                chb.size()>(j+1)?chb[j+1]:0, // sink frag id
+                threshold_using);
             if (!fused.empty()) 
             {
                 if (cha.size() > i+1) 
@@ -892,7 +813,7 @@ void FragSortTool::sort_according_likelihood_unionFind_doFuse(
     std::chrono::duration<f64> elapsed_seconds = end_time-start_time;
     fmt::print(
         stdout, 
-        "[Fusing]: consumed time {:.2f}s\n", 
+        "[Pixel Sort]: fusing consumed time {:.2f}s\n", 
         elapsed_seconds.count()
     );
 
@@ -928,4 +849,32 @@ void FragSortTool::sort_according_likelihood_unionFind_doFuse(
     chromosomes.insert(chromosomes.end(), chromosomes_excluded.begin(), chromosomes_excluded.end());
 
     frags_order.set_order(chromosomes);
+}
+
+void FragSortTool::sort_according_yahs(
+    const LikelihoodTable& likelihood_table,
+    FragsOrder& frags_order,
+    SelectArea& select_area,
+    const f32 threshold,
+    const Frag4compress* frags) const
+{
+    // Create YaHS instance
+    YaHS yahs;
+    
+    // Run YaHS sorting with the given parameters
+    auto chromosomes = yahs.yahs_sorting(likelihood_table, threshold, 0.1);
+    
+    // Convert chromosomes to frags_order format
+    std::vector<std::deque<s32>> formatted_chromosomes;
+    for (const auto& chromosome : chromosomes) {
+        std::deque<s32> formatted_chromosome;
+        for (uint32_t frag_id : chromosome) {
+            formatted_chromosome.push_back(frag_id + 1); // Convert to 1-based indexing
+        }
+        formatted_chromosomes.push_back(std::move(formatted_chromosome));
+    }
+    
+    // Set the order in frags_order
+    frags_order.set_order(formatted_chromosomes);
+    
 }
