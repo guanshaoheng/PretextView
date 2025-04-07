@@ -1,4 +1,4 @@
-![GitHub all releases](https://img.shields.io/github/downloads/guanshaoheng/PretextView/total?style=plastic)
+![GitHub all releases](https://img.shields.io/github/downloads/sanger-tol/PretextView/total?style=plastic)
 # PretextView
 Paired REad TEXTure Viewer. OpenGL Powered Pretext Contact Map Viewer.<br/>
 
