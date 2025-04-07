@@ -39,8 +39,9 @@ Show_State::Show_State()
 Show_State::~Show_State() {}
 
 
-void get_linear_mask(f32* linear_array, u32 length)
+void get_linear_mask(std::vector<f32>& linear_array)
 {   
+    u32 length = linear_array.size();
     if (length < 2)
     {
         fmt::print(stderr, "Error: link score calculation: length({}) < 2\n", length);
@@ -50,7 +51,7 @@ void get_linear_mask(f32* linear_array, u32 length)
     {
         linear_array[i] = std::sqrt(1.0f / (f32)(i+1)) ;
     }
-    f32 sum = std::accumulate(linear_array, linear_array+length, 0.0f);
+    f32 sum = std::accumulate(linear_array.data(), linear_array.data()+length, 0.0f);
     for (int i  = 0 ; i < length; i++)
     {
         linear_array[i] /= sum;
@@ -867,6 +868,13 @@ void TexturesArray4AI::cal_maximum_number_of_shift(
         norm_diag_mean.push_back(tmp_diag_mean);
         tmp_diag_mean = this->cal_diagonal_mean_within_fragments(++D, Contigs); 
     }
+
+    if (D < 2)
+    {
+        fmt::print(stderr, 
+            "Warning: D is less than 2, please check the Contigs of this sample.\n");
+        assert(0);
+    }
     return ;
 }
 
@@ -991,7 +999,8 @@ void TexturesArray4AI::cal_compressed_hic(
                     frags->length[i], 
                     frags->length[j], 
                     D,
-                    norm_diag_mean, buffer_values_on_channel);
+                    norm_diag_mean, 
+                    buffer_values_on_channel);
             for (u32 channel = 0; channel < 4 ; channel ++ )
             {
                 (*compressed_hic)(i, j, channel) = (*compressed_hic)(j, i, Switch_Channel_Symetric[channel]) = buffer_values_on_channel.c[channel];
@@ -1035,7 +1044,9 @@ f32 TexturesArray4AI::cal_diagonal_mean_within_fragments(int shift, const contig
     return (f32)sum / (f32)std::max(cnt, 1u);
 }
 
-
+/* todo 
+windows： 编译错误，尝试访问 d 
+*/
 void TexturesArray4AI::get_interaction_score(
     const u32& row, 
     const u32& column, 
@@ -1055,10 +1066,11 @@ void TexturesArray4AI::get_interaction_score(
         };
 
     u32 number_of_scores = std::min(D-1, std::max(num_row, num_column));
+    u32 len_of_weight_mask = std::min(D-1, (u32)(number_of_scores + 5) );  // 往外多算几个像素点，因此小的片段的link score分就会相对下降, 特别是很小的片段
     // f32 linear_weight[number_of_scores]; 
     // get_linear_mask(linear_weight, number_of_scores);  // assign the linear weight mask
-    f32 linear_weight[std::min(D-1, (u32)(number_of_scores +5) ) ];  // use this to consider the score caused by repeat 
-    get_linear_mask(linear_weight, std::min(D-1, (u32)(number_of_scores +5) ) );  // 往外多算几个像素点，因此小的片段的link score分就会相对下降, 特别是很小的片段
+    std::vector<f32> linear_weight(len_of_weight_mask, 0.f);
+    get_linear_mask(linear_weight ); 
 
     buffer_values_on_channel.initilize();
     for (int channel = 0; channel < 4; channel++)
