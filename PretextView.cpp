@@ -5510,7 +5510,7 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
         if (!is_pix_density_added) // 未添加pixel density
         {
             u32 added_num = Extensions.get_num_extensions();
-            u32 graph_data[Number_of_Pixels_1D];
+            u32* graph_data = new u32[Number_of_Pixels_1D];
             f32 max_desity = 0.f;
             for (auto& i : frag_cut_cal_ptr->hic_pixel_density_origin) max_desity = std::max(max_desity, i);
             for (u32 i=0; i < Number_of_Pixels_1D; i ++)
@@ -5518,6 +5518,7 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
                 graph_data[i] = (u32)(255 * (1.001f- frag_cut_cal_ptr->hic_pixel_density_origin[i] / max_desity));
             }
             add_graph_to_extensions(arena, (u32*)graph_name.c_str(), graph_data);
+            delete[] graph_data;
             
             push_extensions_to_opengl(arena, added_num, 0.05f); // push hic_pixel_density to opengl buffer
         }
