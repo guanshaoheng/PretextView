@@ -10718,7 +10718,7 @@ GenerateAGP(char *path, u08 overwrite, u08 formatSingletons, u08 preserveOrder)
 {   
 
     // 这里粘贴所有的original contigs
-    u32 tmp_orignal_contig_ids[Number_of_Pixels_1D];
+    u32* tmp_orignal_contig_ids = new u32[Number_of_Pixels_1D];
     for (u32 i = 0 ; i< Number_of_Pixels_1D; i++ )tmp_orignal_contig_ids[i] = Map_State->originalContigIds[i];
     Map_State->restore_cutted_contigs_all(Number_of_Pixels_1D);
     UpdateContigsFromMapState(); // todo 检查粘贴后会不会影响 painted 的 scaffolds
@@ -10831,6 +10831,7 @@ GenerateAGP(char *path, u08 overwrite, u08 formatSingletons, u08 preserveOrder)
     // 把临时切开的再粘贴上
     for (u32 i = 0; i < Number_of_Pixels_1D; i++) Map_State->originalContigIds[i] = tmp_orignal_contig_ids[i]; 
     UpdateContigsFromMapState();
+    delete[] tmp_orignal_contig_ids;
     return;
 }
 
