@@ -12,14 +12,14 @@ namespace py = pybind11;
 template<typename T>
 py::array_t<T> create_tensor(const int n, const int channel, const T* data_ptr) {
     // 总元素个数
-    size_t total_size = n * n * channel;
+    s32 total_size = n * n * channel;
 
     // 指定 shape 和 strides
-    std::vector<ssize_t> shape = {n, n, channel};
-    std::vector<ssize_t> strides = {
-        static_cast<ssize_t>(n * channel * sizeof(T)),  // 跨 n 行
-        static_cast<ssize_t>(channel * sizeof(T)),      // 跨 n 列
-        static_cast<ssize_t>(sizeof(T))           // 跨特征维
+    std::vector<s32> shape = {n, n, channel};
+    std::vector<s32> strides = {
+        static_cast<s32>(n * channel * sizeof(T)),  // 跨 n 行
+        static_cast<s32>(channel * sizeof(T)),      // 跨 n 列
+        static_cast<s32>(sizeof(T))           // 跨特征维
     };
 
     return py::array_t<T>(shape, strides, data_ptr);
