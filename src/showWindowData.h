@@ -225,7 +225,7 @@ enum global_mode
     mode_scaff_edit = 3,
     mode_meta_edit = 4,
     mode_extension = 5,
-    mode_selectExclude_sort_area = 6
+    mode_select_sort_area = 6
 };
 
 

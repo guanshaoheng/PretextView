@@ -55,11 +55,6 @@ SOFTWARE.
 
 
 
-#include <imgui.h>
-#include <backends/imgui_impl_glfw.h>
-#include <backends/imgui_impl_opengl3.h>
-
-
 /*
     original version not commented here
 */
@@ -238,6 +233,7 @@ template <typename T>
 T percentile_cal(T* data, u32 size, f32 percentile=0.95)
 {   
     u32 heap_size = (u32)((f32)size * (1-percentile));
+    if (heap_size <=0) return 1.;
     std::priority_queue<T, std::vector<T>, std::greater<T>> min_heap;
     for (auto i = 0; i < size; i++)
     {
@@ -251,6 +247,18 @@ T percentile_cal(T* data, u32 size, f32 percentile=0.95)
             min_heap.push(data[i]);
         }
     }
+    
+    if (min_heap.top() < 0 )
+    {
+        s32 cnt_neg_1 = 0;
+        for (int i = 0; i< size; i++)  if (data[i] < 0) cnt_neg_1++;
+        fmt::print(
+            stderr, 
+            "[percentile_cal::error] Number of negative value: {} / {}, file:{}, line:{}\n", 
+            cnt_neg_1, size, __FILE__, __LINE__);
+        assert(0);
+    }
+
     if (min_heap.size() > 0) 
         return min_heap.top();
     else return 0;

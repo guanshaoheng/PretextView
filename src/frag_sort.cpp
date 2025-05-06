@@ -436,7 +436,8 @@ void FragSortTool::sort_according_likelihood_unionFind(
     SelectArea& select_area,
     const f32 threshold, 
     const Frag4compress* frags, 
-    bool sort_according_len_flag) const
+    const bool sort_according_len_flag
+) const
 {   
     // this is used to fix the source and sink during local sort
     s32 source_frag_id = -1, source_chain_id = -1, 
@@ -672,6 +673,12 @@ void FragSortTool::sort_according_likelihood_unionFind_doFuse(
 
     // 计算的分位数
     f32 threshold_val = percentile_cal(likelihood_table.data, likelihood_table.size, this->threshold_ratio);
+    if (threshold_val < 0)
+    {   
+        fmt::print(stderr, "[Pixel Sort::error]: threshold at {}: {}, fixed_threshold: {}, using: {}, table.size={} \n", this->threshold_ratio, threshold_val, threshold, threshold_val, likelihood_table.size);
+        assert(0);
+        threshold_val = 0;
+    }
     f32 threshold_using = std::min(threshold_val, threshold);
     fmt::print(stderr, "[Pixel Sort]: link score threshold at {}: {}, fixed_threshold: {}, using: {}\n", this->threshold_ratio, threshold_val, threshold, threshold_using);
 

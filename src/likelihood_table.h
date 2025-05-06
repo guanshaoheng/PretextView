@@ -19,11 +19,20 @@ public:
         const Matrix3D<f32>* compressed_hic, 
         const f32 threshold=10.f/32769.f, 
         const std::vector<s32>& exclude_tag_idx=std::vector<s32>(),
-        const u32 num_pixels_1d=32768) 
-        :num_frags(frags->num), frags(frags), data(nullptr)
+        const u32 num_pixels_1d=32768,
+        const std::vector<s32>* selected_frags_id=nullptr)
+        :num_frags(frags->num), frags(frags)
     {   
+        frags = frags;
+        num_frags = frags->num;
+        if (selected_frags_id && frags->num != selected_frags_id->size())
+        {
+            fmt::print(stderr, "Error: frags->num({}) != selected_frags_id.size({})\n", frags->num, selected_frags_id->size());
+            assert(0);
+        }
+
         auto is_exclude_tag = [&](u32 idx) -> bool
-        {   
+        {
             if ((f32)frags->length[idx]/(f32)num_pixels_1d <= threshold) 
             {
                 this->excluded_fragment_idx.insert(idx);
@@ -44,18 +53,29 @@ public:
         size = num_frags * num_frags * 4;
         data = new f32[size];
         for (u32 i = 0; i<num_frags * num_frags * 4; i++) data[i] = -1.f;
+
+        u32 frag_index_i = 0, frag_index_j = 0;
         for (u32 i = 0; i<num_frags; i++)
         {   
+            frag_index_i =  selected_frags_id ? (*selected_frags_id)[i] : i;
             if ( is_exclude_tag(i) ) continue;
             for (u32 j = 0; j < num_frags; j++)
             {   
+                frag_index_j =  selected_frags_id ? (*selected_frags_id)[j] : j;
                 if ( is_exclude_tag(j)) continue;
-                (*this)(i, j, 0) = (*compressed_hic)(i, j, 0);
-                (*this)(i, j, 1) = (*compressed_hic)(i, j, 1);
-                (*this)(i, j, 2) = (*compressed_hic)(i, j, 3);
-                (*this)(i, j, 3) = (*compressed_hic)(i, j, 2);
+                (*this)(i, j, 0) = (*compressed_hic)(frag_index_i, frag_index_j, 0);
+                (*this)(i, j, 1) = (*compressed_hic)(frag_index_i, frag_index_j, 1);
+                (*this)(i, j, 2) = (*compressed_hic)(frag_index_i, frag_index_j, 3);
+                (*this)(i, j, 3) = (*compressed_hic)(frag_index_i, frag_index_j, 2);
             }
         }
+
+        if (excluded_fragment_idx.size() > frags->num / 2 )
+        {
+            fmt::print(stderr, "[LikelihoodTable::warning]: too many excluded fragments: {} / {}\n", excluded_fragment_idx.size(), frags->num);
+        }
+
+        return ;
     }
 
     ~LikelihoodTable()
@@ -104,12 +124,11 @@ public:
         {
             fmt::print(
                 ofs, 
-                "{}\t{}\t{}\t{}\t{}\n", 
+                "{}\t{}\t{}\t{}\n", 
                 i, 
                 frags->length[i], 
                 0, 
-                0, 
-                0);
+                0 );
         }
         fmt::print(ofs, "\n");
 

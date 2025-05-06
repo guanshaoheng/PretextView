@@ -90,6 +90,7 @@ CMAKE_OPTIONS=(
     -DCMAKE_INSTALL_PREFIX="$install_path"
     -DCMAKE_PREFIX_PATH="$cmake_prefix_path_tmp"
     -DCMAKE_OSX_ARCHITECTURES=${ARCH}
+    -DPYTHON_SCOPED_INTERPRETER=ON
 )
 if [[ "$OS" == "Darwin" ]]; then
     if [[ "$FORCE_MAC_X86" == true ]]; then

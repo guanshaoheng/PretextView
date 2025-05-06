@@ -60,71 +60,71 @@ void get_linear_mask(std::vector<f32>& linear_array)
 }
 
 
+#ifdef DEBUG
+    // Callback function for mouse scroll
+    void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) 
+    {   
+        // pass the scroll event to the ImGui
+        ImGuiIO& io = ImGui::GetIO();
+        io.MouseWheelH += (f32)xoffset;
+        io.MouseWheel += (f32)yoffset;
 
-// Callback function for mouse scroll
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) 
-{   
-    // pass the scroll event to the ImGui
-    ImGuiIO& io = ImGui::GetIO();
-    io.MouseWheelH += (f32)xoffset;
-    io.MouseWheel += (f32)yoffset;
+        if (io.WantCaptureMouse) return ;
+        auto* show_state = reinterpret_cast<Show_State*>(glfwGetWindowUserPointer(window));
+        if (show_state->show_menu_window)  return;
+        f32* zoomlevel = &show_state->zoomlevel;
+        // Adjust the zoom level based on the scroll input
+        *zoomlevel *= (1.0 - yoffset * 0.05f);  // Change 0.1f to adjust sensitivity
 
-    if (io.WantCaptureMouse) return ;
-    auto* show_state = reinterpret_cast<Show_State*>(glfwGetWindowUserPointer(window));
-    if (show_state->show_menu_window)  return;
-    f32* zoomlevel = &show_state->zoomlevel;
-    // Adjust the zoom level based on the scroll input
-    *zoomlevel *= (1.0 - yoffset * 0.05f);  // Change 0.1f to adjust sensitivity
-
-    // Clamp the zoom level to prevent excessive zooming
-    if (*zoomlevel < 1.0 / 32. / 4.) *zoomlevel = 1.0 / 32. / 4.;
-    if (*zoomlevel > 1.0f) *zoomlevel = 1.f;
-}
-
-
-void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
-{   
-    // pass the mouse button event to the ImGui
-    ImGuiIO& io = ImGui::GetIO();
-    if (button >= 0 && button < IM_ARRAYSIZE(io.MouseDown)) {
-        io.MouseDown[button] = (action == GLFW_PRESS);
+        // Clamp the zoom level to prevent excessive zooming
+        if (*zoomlevel < 1.0 / 32. / 4.) *zoomlevel = 1.0 / 32. / 4.;
+        if (*zoomlevel > 1.0f) *zoomlevel = 1.f;
     }
 
-    if (io.WantCaptureMouse) return ;
-    auto* show_state = reinterpret_cast<Show_State*>(glfwGetWindowUserPointer(window));
-    if (show_state->show_menu_window)  return;
-    if (button == GLFW_MOUSE_BUTTON_LEFT) {
-        if (action == GLFW_PRESS) {
-            show_state->isDragging = true;
-            glfwGetCursorPos(window, &show_state->lastMouseX, &show_state->lastMouseY); // Initial cursor position
-        } else if (action == GLFW_RELEASE) {
-            show_state->isDragging = false;
+    void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+    {   
+        // pass the mouse button event to the ImGui
+        ImGuiIO& io = ImGui::GetIO();
+        if (button >= 0 && button < IM_ARRAYSIZE(io.MouseDown)) {
+            io.MouseDown[button] = (action == GLFW_PRESS);
+        }
+
+        if (io.WantCaptureMouse) return ;
+        auto* show_state = reinterpret_cast<Show_State*>(glfwGetWindowUserPointer(window));
+        if (show_state->show_menu_window)  return;
+        if (button == GLFW_MOUSE_BUTTON_LEFT) {
+            if (action == GLFW_PRESS) {
+                show_state->isDragging = true;
+                glfwGetCursorPos(window, &show_state->lastMouseX, &show_state->lastMouseY); // Initial cursor position
+            } else if (action == GLFW_RELEASE) {
+                show_state->isDragging = false;
+            }
         }
     }
-}
 
-void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) 
-{
-    // pass the cursor position to the ImGui
-    ImGuiIO& io = ImGui::GetIO();
-    io.MousePos = ImVec2((f32)xpos, (f32)ypos);
+    void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) 
+    {
+        // pass the cursor position to the ImGui
+        ImGuiIO& io = ImGui::GetIO();
+        io.MousePos = ImVec2((f32)xpos, (f32)ypos);
 
-    if (io.WantCaptureMouse) return ;
-    auto* show_state = reinterpret_cast<Show_State*>(glfwGetWindowUserPointer(window));
-    if (show_state->show_menu_window)  return;
+        if (io.WantCaptureMouse) return ;
+        auto* show_state = reinterpret_cast<Show_State*>(glfwGetWindowUserPointer(window));
+        if (show_state->show_menu_window)  return;
 
-    if (show_state->isDragging) {
-        double dx = xpos - show_state->lastMouseX;
-        double dy = ypos - show_state->lastMouseY;
+        if (show_state->isDragging) {
+            double dx = xpos - show_state->lastMouseX;
+            double dy = ypos - show_state->lastMouseY;
 
-        // Adjust the translation offset based on mouse movement (scale as needed)
-        show_state->translationOffset.x += static_cast<f32>(dx) * 0.00175f * show_state->zoomlevel; // Adjust sensitivity with 0.01f
-        show_state->translationOffset.y -= static_cast<f32>(dy) * 0.00175f * show_state->zoomlevel;
+            // Adjust the translation offset based on mouse movement (scale as needed)
+            show_state->translationOffset.x += static_cast<f32>(dx) * 0.00175f * show_state->zoomlevel; // Adjust sensitivity with 0.01f
+            show_state->translationOffset.y -= static_cast<f32>(dy) * 0.00175f * show_state->zoomlevel;
 
-        show_state->lastMouseX = xpos;
-        show_state->lastMouseY = ypos;
+            show_state->lastMouseX = xpos;
+            show_state->lastMouseY = ypos;
+        }
     }
-}
+#endif // DEBUG
 
 
 TexturesArray4AI::TexturesArray4AI(
@@ -410,12 +410,10 @@ void TexturesArray4AI::copy_buffer_to_textures(
     glBindTexture(GL_TEXTURE_2D, 0);
     glDeleteTextures(1, &temptexture);
 
-    if (show_flag)
-    {
-        // show_collected_texture();
-        show_collected_textures();
-    }
-    
+    #ifdef DEBUG
+        if (show_flag) show_collected_textures();
+    #endif // DEBUG 
+
     // return back to the original viewport
     glViewport(orignal_viewport[0], orignal_viewport[1], orignal_viewport[2], orignal_viewport[3]);
 
@@ -513,10 +511,9 @@ void TexturesArray4AI::copy_buffer_to_textures_dynamic(
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glDeleteFramebuffers(1, &framebuffer);
 
-    if (show_flag)
-    {
-        show_collected_textures();
-    }
+    #ifdef DEBUG
+        if (show_flag) show_collected_textures();
+    #endif // DEBUG
 
     glViewport(orignal_viewport[0], orignal_viewport[1], orignal_viewport[2], orignal_viewport[3]);
     return ;
@@ -701,151 +698,154 @@ void TexturesArray4AI::show_collected_texture()
     return ;
 }
 
-
-void TexturesArray4AI::show_collected_textures()
-{
-    GLuint tmp_texture2d_array;
-    this->prepare_tmp_texture2d_array(tmp_texture2d_array);
-    
-    GLFWwindow* window = glfwGetCurrentContext();
-    if(!window) assert(0);
-    glfwSwapInterval(1);
-    glfwMakeContextCurrent(window);
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) assert(0);
-    glfwSetWindowShouldClose(window, false);
-
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-    // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
-    //ImGui::StyleColorsLight();
-    // Setup Platform/Renderer backends
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    #ifdef __EMSCRIPTEN__
-        ImGui_ImplGlfw_InstallEmscriptenCallbacks(window, "#canvas");
-    #endif
-        ImGui_ImplOpenGL3_Init((const char*)"#version 330");
-    // Our state
-    bool show_demo_window = false;
-    bool show_another_window = false;
-    glm::vec4 clear_color(0.45f, 0.55f, 0.60f, 1.00f);
-    bool m_pressed = false;
-
-    int width = 1080, height = 1080;
-    glViewport(0, 0, width, height);
-    glDisable(GL_CULL_FACE); // can also see the back face
-    Show_State show_state;
-
-    glfwSetWindowUserPointer(window, &show_state);
-    // register the scroll and mouse move callback function
-    glfwSetScrollCallback(window, scroll_callback);
-    glfwSetMouseButtonCallback(window, mouse_button_callback);
-    glfwSetCursorPosCallback(window, cursor_position_callback);
-    glUseProgram(shaderProgram);
-    GLcall(glUniform1i(glGetUniformLocation(shaderProgram, "texArray"), 0));
-    glm::mat4 model_not_flipped = glm::scale( // 控制显示大小
-        glm::mat4(1.0f), 
-        glm::vec3(
-            1.0f/(f32)num_textures_1d, 
-            -1.0f/(f32)num_textures_1d, // flipped on y axis 
-            1.0f));
-    glm::mat4 model_flipped = glm::scale( // 控制显示大小
-        glm::rotate(model_not_flipped, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f)), 
-        glm::vec3(1.0f, -1.0f, 1.0f));
-    while (!glfwWindowShouldClose(window))
-    {   
-        int viewport[4];
-        glGetIntegerv(GL_VIEWPORT, viewport);
-        f32 ratio_w_h = (f32)viewport[2] / (f32)viewport[3];
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glActiveTexture(GL_TEXTURE0);
-        glBindBuffer(GL_TEXTURE_2D_ARRAY, tmp_texture2d_array);
-
-        glBindVertexArray(vao);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-        glm::mat4 projection = glm::ortho( // 控制镜头远近
-            -1.0f * ratio_w_h * show_state.zoomlevel, 1.0f * ratio_w_h * show_state.zoomlevel, 
-            -1.0f * show_state.zoomlevel, 1.0f * show_state.zoomlevel, 
-            -1.0f, 1.0f);
+#ifdef DEBUG
+    void TexturesArray4AI::show_collected_textures()
+    {
+        GLuint tmp_texture2d_array;
+        this->prepare_tmp_texture2d_array(tmp_texture2d_array);
         
-        glm::mat4 model_tmp;
-        for (int row = 0; row < num_textures_1d; row++ )// 显示所有的 tile
-        {
-            for (int column = 0; column < num_textures_1d; column ++ )
-            {   
-                // if (row > column) continue;
-                u32 layer = texture_id_cal((u32)row, (u32)column, num_textures_1d);
-                GLcall(glUniform1i(glGetUniformLocation(shaderProgram, "layer"), (int)layer));
-                model_tmp =  glm::translate( // 控制显示位置
-                    glm::mat4(1.0f), 
-                    glm::vec3( 
-                        -1.0f + ((f32)column + 0.5f) * 2.0f / (f32)num_textures_1d + show_state.translationOffset.x,
-                            1.0f - ((f32)row + 0.5f) * 2.0f / (f32)num_textures_1d + show_state.translationOffset.y,
-                            0.0f)
-                    ) * (row>column?model_flipped:model_not_flipped);
-                model_tmp = projection * model_tmp;
-                GLcall(glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model_tmp)));
-                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        GLFWwindow* window = glfwGetCurrentContext();
+        if(!window) assert(0);
+        glfwSwapInterval(1);
+        glfwMakeContextCurrent(window);
+        if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) assert(0);
+        glfwSetWindowShouldClose(window, false);
+
+        // Setup Dear ImGui context
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO(); (void)io;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+        // Setup Dear ImGui style
+        ImGui::StyleColorsDark();
+        //ImGui::StyleColorsLight();
+        // Setup Platform/Renderer backends
+        ImGui_ImplGlfw_InitForOpenGL(window, true);
+        #ifdef __EMSCRIPTEN__
+            ImGui_ImplGlfw_InstallEmscriptenCallbacks(window, "#canvas");
+        #endif
+            ImGui_ImplOpenGL3_Init((const char*)"#version 330");
+        // Our state
+        bool show_demo_window = false;
+        bool show_another_window = false;
+        glm::vec4 clear_color(0.45f, 0.55f, 0.60f, 1.00f);
+        bool m_pressed = false;
+
+        int width = 1080, height = 1080;
+        glViewport(0, 0, width, height);
+        glDisable(GL_CULL_FACE); // can also see the back face
+        Show_State show_state;
+
+        glfwSetWindowUserPointer(window, &show_state);
+        // register the scroll and mouse move callback function
+        glfwSetScrollCallback(window, scroll_callback);
+        glfwSetMouseButtonCallback(window, mouse_button_callback);
+        glfwSetCursorPosCallback(window, cursor_position_callback);
+        glUseProgram(shaderProgram);
+        GLcall(glUniform1i(glGetUniformLocation(shaderProgram, "texArray"), 0));
+        glm::mat4 model_not_flipped = glm::scale( // 控制显示大小
+            glm::mat4(1.0f), 
+            glm::vec3(
+                1.0f/(f32)num_textures_1d, 
+                -1.0f/(f32)num_textures_1d, // flipped on y axis 
+                1.0f));
+        glm::mat4 model_flipped = glm::scale( // 控制显示大小
+            glm::rotate(model_not_flipped, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f)), 
+            glm::vec3(1.0f, -1.0f, 1.0f));
+        while (!glfwWindowShouldClose(window))
+        {   
+            int viewport[4];
+            glGetIntegerv(GL_VIEWPORT, viewport);
+            f32 ratio_w_h = (f32)viewport[2] / (f32)viewport[3];
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
+            glClear(GL_COLOR_BUFFER_BIT);
+            glActiveTexture(GL_TEXTURE0);
+            glBindBuffer(GL_TEXTURE_2D_ARRAY, tmp_texture2d_array);
+
+            glBindVertexArray(vao);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+            glm::mat4 projection = glm::ortho( // 控制镜头远近
+                -1.0f * ratio_w_h * show_state.zoomlevel, 1.0f * ratio_w_h * show_state.zoomlevel, 
+                -1.0f * show_state.zoomlevel, 1.0f * show_state.zoomlevel, 
+                -1.0f, 1.0f);
+            
+            glm::mat4 model_tmp;
+            for (int row = 0; row < num_textures_1d; row++ )// 显示所有的 tile
+            {
+                for (int column = 0; column < num_textures_1d; column ++ )
+                {   
+                    // if (row > column) continue;
+                    u32 layer = texture_id_cal((u32)row, (u32)column, num_textures_1d);
+                    GLcall(glUniform1i(glGetUniformLocation(shaderProgram, "layer"), (int)layer));
+                    model_tmp =  glm::translate( // 控制显示位置
+                        glm::mat4(1.0f), 
+                        glm::vec3( 
+                            -1.0f + ((f32)column + 0.5f) * 2.0f / (f32)num_textures_1d + show_state.translationOffset.x,
+                                1.0f - ((f32)row + 0.5f) * 2.0f / (f32)num_textures_1d + show_state.translationOffset.y,
+                                0.0f)
+                        ) * (row>column?model_flipped:model_not_flipped);
+                    model_tmp = projection * model_tmp;
+                    GLcall(glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model_tmp)));
+                    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+                }
             }
+
+            if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)  glfwSetWindowShouldClose(window, true);
+            if (glfwGetKey(window, GLFW_KEY_U) == GLFW_PRESS) 
+            {
+                if (!m_pressed) show_state.show_menu_window = !show_state.show_menu_window;
+                m_pressed = true;
+            }
+            if (glfwGetKey(window, GLFW_KEY_U) == GLFW_RELEASE) m_pressed = false;
+            
+            // Start the Dear ImGui frame
+            ImGui_ImplOpenGL3_NewFrame();
+            ImGui_ImplGlfw_NewFrame();
+            ImGui::NewFrame();
+
+            // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
+            if (show_demo_window) ImGui::ShowDemoWindow(&show_demo_window);
+            // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
+            if (show_state.show_menu_window )
+            {
+                ImGui::Begin("Main menu");                          // Create a window called "Hello, world!" and append into it.
+                ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+
+                ImGui::ColorEdit3("clear color", (f32*)&clear_color[0]); // Edit 3 floats representing a color
+                ImGui::Text("Zoom level: %.4f", show_state.zoomlevel);
+                ImGui::Text("Translation Offset: (%.2f, %.2f)", show_state.translationOffset.x, show_state.translationOffset.y);
+                // ImGui::SameLine();
+                ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+                ImGui::End();
+            }
+
+            // 3. Show another simple window.
+            if (show_another_window)
+            {
+                ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+                ImGui::Text("Hello from another window!");
+                if (ImGui::Button("Close Me"))
+                    show_another_window = false;
+                ImGui::End();
+            }
+
+            // Rendering
+            ImGui::Render();
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+            
+            glfwSwapBuffers(window);
+            glfwPollEvents();
         }
 
-        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)  glfwSetWindowShouldClose(window, true);
-        if (glfwGetKey(window, GLFW_KEY_U) == GLFW_PRESS) 
-        {
-            if (!m_pressed) show_state.show_menu_window = !show_state.show_menu_window;
-            m_pressed = true;
-        }
-        if (glfwGetKey(window, GLFW_KEY_U) == GLFW_RELEASE) m_pressed = false;
-        
-        // Start the Dear ImGui frame
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-        // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-        if (show_demo_window) ImGui::ShowDemoWindow(&show_demo_window);
-        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
-        if (show_state.show_menu_window )
-        {
-            ImGui::Begin("Main menu");                          // Create a window called "Hello, world!" and append into it.
-            ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-
-            ImGui::ColorEdit3("clear color", (f32*)&clear_color[0]); // Edit 3 floats representing a color
-            ImGui::Text("Zoom level: %.4f", show_state.zoomlevel);
-            ImGui::Text("Translation Offset: (%.2f, %.2f)", show_state.translationOffset.x, show_state.translationOffset.y);
-            // ImGui::SameLine();
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-            ImGui::End();
-        }
-
-        // 3. Show another simple window.
-        if (show_another_window)
-        {
-            ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-            ImGui::Text("Hello from another window!");
-            if (ImGui::Button("Close Me"))
-                show_another_window = false;
-            ImGui::End();
-        }
-
-        // Rendering
-        ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-    }
-
-    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
-    glDeleteTextures(1, &tmp_texture2d_array);
-    return ;
-}
+        glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+        glDeleteTextures(1, &tmp_texture2d_array);
+        return ;
+    } 
+#else 
+    void TexturesArray4AI::show_collected_textures(){return ;}
+#endif // DEBUG
 
 
 
@@ -885,27 +885,37 @@ void TexturesArray4AI::cal_compressed_hic(
     bool is_extension_required,
     bool is_massCenter_required,
     const SelectArea* select_area,
+    const AutoCurationState* auto_curation_state,
     f32 D_hic_ratio, 
     u32 maximum_D, 
     f32 min_hic_density) 
 {   
     check_copied_from_buffer();
 
-    u08 using_select_area = (select_area != nullptr && select_area->select_flag)?1:0;
-    // clean the memory of compressed_hic_mx
-    frags->re_allocate_mem(Contigs, select_area);
-    if (frags->total_length != (using_select_area ? select_area->get_selected_len(Contigs) : num_pixels_1d))
+    u08 using_select_area = (select_area && select_area->select_flag)?1:0;
+    
+    u08 cluster_flag = (auto_curation_state && auto_curation_state->num_clusters > 1)?1:0;
+
+    // re-calculate the frags selected within this area
+    frags->re_allocate_mem(
+        Contigs,
+        select_area, 
+        false,  // used for cut
+        cluster_flag);
+    if (frags->total_length != (using_select_area ? select_area->get_selected_len(Contigs, cluster_flag) : num_pixels_1d))
     {   
         fmt::print(
-            "\n[Compress Hic] warning: frags->total_length({}) != num_pixels_1d ({}) ({}). file:{}, line:{}\n\n",
+            "\n[Compress Hic] warning: frags->total_length({}) != num_pixels_1d ({}) ({}) ({}). file:{}, line:{}\n\n",
             frags->total_length,
-            (using_select_area? (select_area->end_pixel - select_area->start_pixel + 1): num_pixels_1d),
+            using_select_area ? select_area->get_selected_len(Contigs, cluster_flag) : num_pixels_1d,
             (using_select_area?"selected area":"full area"),
+            cluster_flag?"clustering":"not clustering",
             __FILE__,
             __LINE__    
         );
         assert(0);
     }
+    // clean the memory of compressed_hic_mx
     if (compressed_hic)
     {
         compressed_hic->re_allocate_mem(

@@ -74,7 +74,7 @@ public:
         SelectArea& select_area,
         const f32 threshold=-0.001, 
         const Frag4compress* frags=nullptr, 
-        bool sort_according_len_flag=true) const;
+        const bool sort_according_len_flag=true) const;
 
     void sort_according_likelihood_unionFind_doFuse(
         const LikelihoodTable& likelihood_table, 
@@ -84,7 +84,7 @@ public:
         const Frag4compress* frags=nullptr,
         const bool doStageOne=true,
         const bool doStageTwo=false, 
-        bool sort_according_len_flag=true) const;
+        const bool sort_according_len_flag=true) const;
 
     void sort_according_yahs(
         const LikelihoodTable& likelihood_table,
@@ -92,6 +92,61 @@ public:
         SelectArea& select_area,
         const f32 threshold=-0.001,
         const Frag4compress* frags=nullptr) const;
+
+
+    void sort_method_mask(
+        const LikelihoodTable& likelihood_table, 
+        FragsOrder& frags_order,
+        SelectArea& selected_area,
+        const AutoCurationState& auto_curation_state,
+        const Frag4compress* frags=nullptr, 
+        const bool sort_according_len_flag=true
+    ) const
+    {   
+        if (auto_curation_state.sort_mode == 0 || !selected_area.select_flag) // sort with union find if sorting the whole genome
+        {
+            this->sort_according_likelihood_unionFind( 
+                likelihood_table, 
+                frags_order, 
+                selected_area,
+                auto_curation_state.link_score_threshold, 
+                frags);
+        }
+        else if (auto_curation_state.sort_mode == 1)
+        {
+            this->sort_according_likelihood_unionFind_doFuse( 
+                likelihood_table, 
+                frags_order, 
+                selected_area,
+                auto_curation_state.link_score_threshold, 
+                frags, true, true);
+        }
+        else if (auto_curation_state.sort_mode == 2)
+        {
+            this->sort_according_likelihood_unionFind_doFuse( 
+                likelihood_table, 
+                frags_order, 
+                selected_area,
+                auto_curation_state.link_score_threshold, 
+                frags, false, true);
+        }
+        else if (auto_curation_state.sort_mode == 3) // not finished yet
+        {
+            this->sort_according_yahs(
+                likelihood_table,
+                frags_order,
+                selected_area,
+                auto_curation_state.link_score_threshold,
+                frags
+            );
+        }
+        else 
+        {
+            fprintf(stderr, "[Pixel Sort] Error: Unknown sort mode (%d)\n", auto_curation_state.sort_mode);
+            assert(0);
+        }
+    }
+    
 };
 
 

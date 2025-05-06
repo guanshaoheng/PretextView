@@ -211,7 +211,6 @@ public:
         
         #ifdef DEBUG_OUTPUT_PIXEL_CUT_FILE // output the hic_pixel_density to text file
             std::string filename = fmt::format("{}/current_id_{}.txt", this->file_save_dir, frag_id);
-            fmt::print("[Pixel Cut]: output hic_pixel_density to {}\n", filename);
             std::ofstream out(filename);
             if (!out)
             {
@@ -223,6 +222,7 @@ public:
                 out << hic_pixel_density_tmp[i] << std::endl;
             }
             out.close();
+            fmt::print("[Pixel Cut]: output hic_pixel_density to {}\n", filename);
         #endif // DEBUG_OUTPUT_PIXEL_CUT_FILE
 
         std::vector<u32> break_points(0);

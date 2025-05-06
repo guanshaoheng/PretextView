@@ -18,3 +18,9 @@
 [submodule "subprojects/fmt"]
 	path = subprojects/fmt
 	url = https://github.com/fmtlib/fmt.git
+[submodule "subprojects/pybind11"]
+	path = subprojects/pybind11
+	url = https://github.com/pybind/pybind11.git
+[submodule "subprojects/eigen"]
+	path = subprojects/eigen
+	url = https://gitlab.com/libeigen/eigen.git

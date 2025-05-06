@@ -15,7 +15,7 @@ public:
     u32 end_pixel = 0;
     s32 source_frag_id = -1;
     s32 sink_frag_id = -1;
-    std::vector<u32> selected_frag_ids;
+    std::vector<s32> selected_frag_ids;
 
 
     void clearup()
@@ -29,20 +29,15 @@ public:
     }
 
     /*
-    first frag id, including the source fragment
-    */
-    u32 get_first_frag_id()
-    {
-        return this->source_frag_id >=0? this->source_frag_id : this->selected_frag_ids[0];
-    }
-
-    /*
     len in pixel, including the source and sink fragments
     */
-    u32 get_selected_len(const contigs* Contigs) const
+    u32 get_selected_len(
+        const contigs* Contigs,
+        const bool used_for_cluster_flag=false
+    ) const
     {
         u32 len = 0;
-        if (this->source_frag_id>=0)
+        if (this->source_frag_id>=0 && !used_for_cluster_flag)
         {
             len += Contigs->contigs_arr[this->source_frag_id].length;
         }
@@ -50,7 +45,7 @@ public:
         {
             len += Contigs->contigs_arr[frag_id].length;
         }
-        if (this->sink_frag_id>=0)
+        if (this->sink_frag_id>=0 && !used_for_cluster_flag)
         {
             len += Contigs->contigs_arr[this->sink_frag_id].length;
         }
@@ -62,7 +57,7 @@ public:
     */
     u32 get_to_sort_frags_num()
     {
-        return this->selected_frag_ids.size() + (this->source_frag_id>=0) + (this->sink_frag_id>=0);
+        return (this->source_frag_id>=0) + this->selected_frag_ids.size() +  (this->sink_frag_id>=0); 
     }
 
     /*
@@ -71,7 +66,7 @@ public:
     std::vector<u32> get_to_sort_frags_id(const contigs* Contigs)
     {
         std::vector<u32> to_sort_frags;
-        if (this->source_frag_id>=0)
+        if (this->source_frag_id>=0 )
         {
             to_sort_frags.push_back(this->source_frag_id);
         }
@@ -79,7 +74,7 @@ public:
         {
             to_sort_frags.push_back(frag_id);
         }
-        if (this->sink_frag_id>=0)
+        if (this->sink_frag_id>=0 )
         {
             to_sort_frags.push_back(this->sink_frag_id);
         }
@@ -108,6 +103,13 @@ public:
     u32 auto_cut_diag_window_for_pixel_mean= 8;
     u32 auto_cut_smallest_frag_size_in_pixel = 8;
 
+    // cluster according to the hap name
+    u08 hap_cluster_flag = 0; 
+
+    // kmeans cluster
+    u32 num_clusters = 1;
+    const s32 min_frag_num_for_cluster = 4;
+
     // Variables for the editing UI state
     bool show_autoSort_erase_confirm_popup = false;
     bool show_autoSort_redo_confirm_popup = false;
@@ -115,14 +117,16 @@ public:
     u32 sort_mode = 1; // 0: union find, 1: fuse union find, 2 deep fuse, 3 yahs
     std::vector<std::string> sort_mode_names = {"Union Find", "Fuse", "Deep Fuse"};
     
-    // auto sort
+    // pixel sort
     char frag_size_buf[16];
     char score_threshold_buf[16];
 
-    // auto cut
+    // pixel cut
     char auto_cut_threshold_buf[16];
     char auto_cut_diag_window_for_pixel_mean_buf[16];
     char auto_cut_smallest_frag_size_in_pixel_buf[16];
+    bool auto_cut_with_extension = true;  // considering the gap extension while cutting
+    s32 auto_cut_gap_loc_threshold = 3;   // if the distance between the calculated cut loc and the gap is less than this value, the cut will be made at the gap
 
     AutoCurationState()
     {
@@ -282,13 +286,14 @@ public:
         map_state* Map_State, 
         u32 number_of_pixels_1D, 
         contigs* Contigs,
-        u08 exclude_flag=false)
+        u08 exclude_flag=false
+    ) // return cluster_flag
     {   
         if (this->start_pixel > number_of_pixels_1D || this->end_pixel > number_of_pixels_1D || this->start_pixel < 0 || this->end_pixel < 0)
         {   
-            // char buff[128];
-            // snprintf((char*)buff, 128, "start_pixel(%d) and end_pixel(%d) should be within [0, Number_of_Pixels_1D(%d)-1]", this->start_pixel, this->end_pixel, number_of_pixels_1D);
-            // MY_CHECK((const char*) buff);
+            // fmt::println(stderr, 
+            //     "[AutoCurationState::get_selected_fragments]: start_pixel({}) should smaller than end_pixel({}), and they should be within [0, Number_of_Pixels_1D({})-1], file:{}, line:{}\n",
+            //     this->start_pixel, this->end_pixel, number_of_pixels_1D, __FILE__, __LINE__);
             return ;
         }
         if (this->start_pixel > this->end_pixel)
@@ -300,22 +305,7 @@ public:
         {
             select_area.clearup();
         }
-        
-        // define source frag
-        if (this->start_pixel>0)
-        {   
-            u32 frag_id = Map_State->contigIds[this->start_pixel-1];
-            if (Contigs->contigs_arr[frag_id].length >= this->smallest_frag_size_in_pixel)
-            {
-                select_area.source_frag_id = frag_id;
-            }
-            else
-            {   
-                select_area.source_frag_id = -1;
-                fmt::print("The source_frag_len ({}) < smallest_length ({}), not set the source frag.\n", Contigs->contigs_arr[frag_id].length, this->smallest_frag_size_in_pixel);
-            }
-        }
-        
+
         // push the selected frag id into select_area
         select_area.start_pixel = this->start_pixel;
         select_area.end_pixel = this->end_pixel;
@@ -331,6 +321,21 @@ public:
             }
         }
 
+        // define source frag
+        if (this->start_pixel>0 ) // if selected frags <= 5, still sort them together without clustering first.
+        {   
+            u32 frag_id = Map_State->contigIds[this->start_pixel-1];
+            if (Contigs->contigs_arr[frag_id].length >= this->smallest_frag_size_in_pixel)
+            {
+                select_area.source_frag_id = frag_id;
+            }
+            else
+            {   
+                select_area.source_frag_id = -1;
+                fmt::print("The source_frag_len ({}) < smallest_length ({}), not set the source frag.\n", Contigs->contigs_arr[frag_id].length, this->smallest_frag_size_in_pixel);
+            }
+        }
+        
         // define sink frag
         if (this->end_pixel + 1 <= number_of_pixels_1D - 1)
         {   
@@ -347,6 +352,8 @@ public:
         }
         // set the select_area to valid
         if (!select_area.selected_frag_ids.empty()) select_area.select_flag = 1;
+
+        return;
     }
 
     void update_sort_area(

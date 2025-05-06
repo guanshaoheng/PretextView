@@ -35,8 +35,8 @@ python/classic_cut/show_hic_density.py
 python/colormap_colorblind/*
 python/greedy_topo_sort_test/*
 python/linear_weight_test/*
+python/frag_cluster/kmeans_main_test.cpp
 
-subprojects/eigen
 subprojects/glfw
 subprojects/glm
 subprojects/imgui

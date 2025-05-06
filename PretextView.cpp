@@ -30,6 +30,10 @@ SOFTWARE.
 
 
 #include <frag_sort.h>  // place this before add Header.h to avoid macro conflict
+
+#ifdef PYTHON_SCOPED_INTERPRETER
+    #include "kmeans_pybind.h" 
+#endif // PYTHON_SCOPED_INTERPRETER
 #include <Header.h>
 
 #ifdef DEBUG
@@ -84,7 +88,7 @@ SOFTWARE.
 
 #define STBI_ONLY_PNG
 #ifndef DEBUG
-#define STBI_ASSERT(x)
+    #define STBI_ASSERT(x)
 #endif // debug
 #ifndef STB_IMAGE_IMPLEMENTATION
     #define STB_IMAGE_IMPLEMENTATION
@@ -573,6 +577,7 @@ meta_mode_data *
 Extension_Mode_Data;
 
 
+
 /*
 用于显示在input sequences中点击后选中的片段的名字，
 显示label持续 5 秒钟
@@ -639,7 +644,7 @@ Global_Mode = mode_normal;
 #define Scaff_Edit_Mode (Global_Mode == mode_scaff_edit)
 #define MetaData_Edit_Mode (Global_Mode == mode_meta_edit)
 #define Extension_Mode (Global_Mode == mode_extension)
-#define Select_Sort_Area_Mode (Global_Mode == mode_selectExclude_sort_area)
+#define Select_Sort_Area_Mode (Global_Mode == mode_select_sort_area)
 
 global_variable
 s32
@@ -679,7 +684,7 @@ auto_sort_state = 0;
 
 global_variable
 u32 
-auto_cut_state = 0;
+auto_cut_state = 0; // 0: not auto cut, 1: cut, 2: glue the cutted contigs
 
 global_variable s32 auto_cut_button = 0; 
 global_variable s32 auto_sort_button = 0;
@@ -813,6 +818,11 @@ Map_State;
 FragSortTool* frag_sort_method = new FragSortTool();
 global_variable auto auto_curation_state = AutoCurationState();
 
+#ifdef PYTHON_SCOPED_INTERPRETER
+    global_variable KmeansClusters* kmeans_cluster = nullptr;
+#endif // PYTHON_SCOPED_INTERPRETER
+
+#include "spectral_cluster.h"
 
 global_function
 void
@@ -820,7 +830,7 @@ UpdateContigsFromMapState()  //  reading 从map的状态更新contigs
 {
     u32 lastScaffID = Map_State->scaffIds[0];       // 第一个scaff的编号
     u32 scaffId = lastScaffID ? 1 : 0;              // 
-    u32 lastId = Map_State->originalContigIds[0];   // 第一个像素点对应的id
+    u32 lastId_original_contig = Map_State->originalContigIds[0];   // 第一个像素点对应的id
     u32 lastCoord = Map_State->contigRelCoords[0];  // 第一个像素点的局部坐标
     u32 contigPtr = 0;
     u32 length = 0;
@@ -833,26 +843,26 @@ UpdateContigsFromMapState()  //  reading 从map的状态更新contigs
     ForLoop(Number_of_Pixels_1D - 1)    // 遍历每一个像素点 更新 Original_Contigs， Contigs 
     // 遍历完之后，contigPtr为214，但是Number_of_Original_Contigs = 218 
     {
-        if (contigPtr == Max_Number_of_Contigs) break;  // 确保 contigPtr 不超出最大contig的数值
+        if (contigPtr >= Max_Number_of_Contigs) break;  // 确保 contigPtr 不超出最大contig的数值
 
         ++length; // current fragment length
 
         pixelIdx = index + 1;   // 像素点编号， 加一因为第一个已经用来初始化了
-        u32 id = Map_State->originalContigIds[pixelIdx];  // 像素点的 original contig id, 这里 不使用 % Max_Number_of_Contigs的值是为了区分后面cut之后的片段
+        u32 original_contig_id = Map_State->originalContigIds[pixelIdx];  // 像素点的 original contig id, 这里 不使用 % Max_Number_of_Contigs的值是为了区分后面cut之后的片段
         u32 coord = Map_State->contigRelCoords[pixelIdx]; // 像素点的局部坐标
         
         if (
-            id != lastId || 
+            original_contig_id != lastId_original_contig || 
             (inverted && coord != (lastCoord - 1)) || 
             (!inverted && coord != (lastCoord + 1)) 
-        ) // 如果不是一个连续片段
+        ) // not a continuous fragment
         {   
-            Original_Contigs[lastId % Max_Number_of_Contigs].contigMapPixels[Original_Contigs[lastId%Max_Number_of_Contigs].nContigs] = pixelIdx - 1 - (length >> 1);   // update Original_Contigs: contigMapPixels
-            Original_Contigs[lastId % Max_Number_of_Contigs].nContigs++; // update Original_Contigs: nContigs, contigMapPixels
+            Original_Contigs[lastId_original_contig % Max_Number_of_Contigs].contigMapPixels[Original_Contigs[lastId_original_contig % Max_Number_of_Contigs].nContigs] = pixelIdx - 1 - (length >> 1);   // update Original_Contigs: contigMapPixels
+            Original_Contigs[lastId_original_contig % Max_Number_of_Contigs].nContigs++; // update Original_Contigs: nContigs, contigMapPixels
 
             contig *last_cont = Contigs->contigs_arr + contigPtr; // 获取上一个contig的指针， 并且给contigPtr + 1
             contigPtr++;
-            last_cont->originalContigId = lastId; // 更新这个片段的id
+            last_cont->originalContigId = lastId_original_contig; // 更新这个片段的id
             last_cont->length = length;           // 更新长度
             last_cont->startCoord = startCoord;   // 更新开头为当前片段在该contig上的局部坐标 endCoord = startCoord + length - 1
             last_cont->metaDataFlags = Map_State->metaDataFlags + pixelIdx - 1; // Finished (shaoheng): memory problem: assign the pointer to the cont->metaDataFlags, the original is nullptr, the let this ptr point to the last pixel of the contig
@@ -879,18 +889,18 @@ UpdateContigsFromMapState()  //  reading 从map的状态更新contigs
         }
         // 更新上一个id和局部坐标
         Map_State->contigIds[pixelIdx] = (u32)contigPtr; // 像素点对应的 片段id 修改为当前的统计得到片段id
-        lastId = id;       // 更新上一个像素点的id
+        lastId_original_contig = original_contig_id;     // 更新上一个像素点的id
         lastCoord = coord; // 更新上一个像素点的局部坐标
     }
 
     if (contigPtr < Max_Number_of_Contigs) //  contigptr 小于 Number_of_Original_Contigs
     // 更新最后一个contig的最后一个片段信息
     {
-        (Original_Contigs + lastId % Max_Number_of_Contigs)->contigMapPixels[(Original_Contigs + lastId % Max_Number_of_Contigs)->nContigs++] = pixelIdx - 1 - (length >> 1); 
+        (Original_Contigs + lastId_original_contig % Max_Number_of_Contigs)->contigMapPixels[(Original_Contigs + lastId_original_contig % Max_Number_of_Contigs)->nContigs++] = pixelIdx - 1 - (length >> 1); 
 
         ++length;
         contig *cont = Contigs->contigs_arr + contigPtr++;
-        cont->originalContigId = lastId;
+        cont->originalContigId = lastId_original_contig;
         cont->length = length;
         cont->startCoord = startCoord;
         cont->metaDataFlags = Map_State->metaDataFlags + pixelIdx - 1;
@@ -3550,9 +3560,6 @@ Render() {
             f32 start_fraction = (f32)auto_curation_state.get_start()/(f32)Number_of_Pixels_1D;
             f32 end_fraction   = (f32)auto_curation_state.get_end()  /(f32)Number_of_Pixels_1D;
 
-            // selected frags into a string
-            SelectArea select_area;
-            auto_curation_state.get_selected_fragments(select_area, Map_State, Number_of_Pixels_1D, Contigs);
 
             { // draw the help text in the bottom right corner
                 fonsSetFont(FontStash_Context, Font_Bold);
@@ -3568,10 +3575,11 @@ Render() {
                     "Q/W: quit / redo edit",
                     "Space: Pixel sort",
                     "Left Click: un/select the fragment",
-                    fmt::format("Up/Down: inc/dec Cut threshold: {:.4f}", auto_curation_state.auto_cut_threshold).c_str(),
+                    fmt::format("Up/Down: inc/dec Cut threshold: {:.4f}", auto_curation_state.auto_cut_threshold),
                     fmt::format("Left/Right: change Sort Mode ({})", auto_curation_state.sort_mode_names[auto_curation_state.sort_mode]),
-                    // fmt::format("Selected fragments number: {}", select_area.selected_frag_ids.size()),
-                    // fmt::format("Select pixel range: {} - {}", auto_curation_state.get_start(), auto_curation_state.get_end())
+                    fmt::format("Left/Right Shift: Number of Clusters: {}", auto_curation_state.num_clusters),
+                    fmt::format("H: Hap_Name_Clustering: {}", auto_curation_state.hap_cluster_flag ? "ON" : "OFF"),
+                    fmt::format("K: Cut with gap: {}", auto_curation_state.auto_cut_with_extension? "ON" : "OFF"),
                 };
 
                 f32 textBoxHeight = (f32)helpTexts.size() * (lh + 1.0f) - 1.0f;
@@ -3658,11 +3666,21 @@ Render() {
                         glUseProgram(UI_Shader->shaderProgram);
                         fonsSetColor(FontStash_Context, colour);
                         
+                        // selected frags into a string
+                        s32 selected_fragment_size = 1, last_contig = Map_State->contigIds[auto_curation_state.get_start()];
+                        for (s32 i = auto_curation_state.get_start()+1; i < auto_curation_state.get_end(); i++)
+                        {
+                            if (last_contig!=Map_State->contigIds[i]) 
+                            {
+                                selected_fragment_size ++ ;
+                                last_contig = Map_State->contigIds[i];
+                            }
+                        }
                         std::string buff = fmt::format(
                             "{}: ({}) pixels, ({}) fragments", 
                             auto_curation_state.selected_or_exclude==0?"Selected" :"Excluded", 
                             std::abs(auto_curation_state.get_end() - auto_curation_state.get_start()), 
-                            select_area.selected_frag_ids.size());
+                            selected_fragment_size);
 
                         f32 lh = 0.0f;
                         f32 textWidth = fonsTextBounds(FontStash_Context, 0, 0, buff.c_str(), 0, NULL);
@@ -5000,7 +5018,6 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
             // contig name赋值
             ForLoop2(16)
             {
-                // ？？ 一个contig 的name为什么是一个长度为u32的数组
                 Original_Contigs[index].name[index2] = name[index2];   // 将 u32 name[16] 给到每一个contig  的name
             }
             
@@ -5490,7 +5507,7 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
         prepare_before_copy(original_color_control_points);
         textures_array_ptr->copy_buffer_to_textures(
             Contact_Matrix, 
-            false
+            false // show_flag
         ); 
         restore_settings_after_copy(original_color_control_points);
 
@@ -6198,7 +6215,7 @@ RearrangeMap(       // NOTE: VERY IMPORTANT
     {
         fmt::print(
             stderr,
-            "RearrangeMap: Invalid parameters: delta = {}, pixelFrom = {}, pixelTo = {},  nPixels = {}, file: {}, line: {}\n",
+            "RearrangeMap: Invalid parameters: delta = {}, pixelFrom = {}, pixelTo = {},  nPixels = {}, file {} line {}\n",
             delta, pixelFrom, pixelTo, nPixels, 
             __FILE__, __LINE__
         );
@@ -6384,14 +6401,20 @@ RearrangeMap(       // NOTE: VERY IMPORTANT
 }
 
 
-
+/*
+    BreakMap: cut the contig at loc, and update the original contig ids
+        loc: the location to cut
+        ignore_len: the length of the contig to be ignored
+        extension_flag: if true, consider the extension signal
+        
+*/
 global_function
 void 
 BreakMap(
     const u32& loc, 
-    const u32 ignore_len // cut点到开头或者结尾的长度不足ignore_len的contig不会被切断
+    const u32& ignore_len       // cut点到开头或者结尾的长度不足ignore_len的contig不会被切断
 )
-{  
+{   
     if (loc >= Number_of_Pixels_1D)
     {
         char buff[512];
@@ -6417,7 +6440,7 @@ BreakMap(
     if ((loc - ptr_left) < ignore_len || (ptr_right - loc) < ignore_len )  
     {   
         fmt::print(
-            "[Pixel Cut] Warning: original_contig_id {} current_contig_id {}, pixel range: [{}, cut({}), {}], left({}), right({}), smaller than ignore_len ({}), cut at loc: ({}) is ignored\n", 
+            "[Pixel Cut::warning] original_contig_id {} current_contig_id {}, pixel range: [{}, cut({}), {}], left({}), right({}), smaller than ignore_len ({}), cut at loc: ({}) is ignored\n", 
             original_contig_id%Max_Number_of_Contigs, 
             contig_id, 
             ptr_left, 
@@ -6436,7 +6459,7 @@ BreakMap(
     {   
         if (Map_State->originalContigIds[tmp] > (std::numeric_limits<u32>::max() - Max_Number_of_Contigs))
         {
-            fmt::print("[Pixel Cut] originalContigIds[{}] + {} = {} is greater than the max number of contigs ({}), file: {}, line: {}\n", tmp, 
+            fmt::print("[Pixel Cut] originalContigIds[{}] + {} = {} is greater than the max number of contigs ({}), file {}, line {}\n", tmp, 
             Max_Number_of_Contigs, 
             (u64)Map_State->originalContigIds[tmp] + Max_Number_of_Contigs, 
             std::numeric_limits<u32>::max(), 
@@ -6515,11 +6538,45 @@ void run_ai_detection()
 }
 
 void cut_frags(const std::vector<u32>& problem_locs)
-{
-    for (auto & i : problem_locs)
-    {
+{   
+    const u32* gap_data_ptr = auto_curation_state.auto_cut_with_extension ? Extensions.get_graph_data_ptr("gap"):nullptr; 
+
+    for (auto & loc_orig : problem_locs)
+    {   
+        u32 loc = loc_orig;
+        if (gap_data_ptr) // correct loc with considering the gap extension
+        {   
+            u32 distance_tmp = 1;
+            while (distance_tmp < auto_curation_state.auto_cut_gap_loc_threshold)
+            {
+                if (loc_orig + distance_tmp < Number_of_Pixels_1D && gap_data_ptr[loc_orig + distance_tmp] > 0 )
+                {   
+                    fmt::println(
+                        "[Pixel Cut] gap[{}+{}] = {}, correct cut from ({}) to ({})", 
+                        loc_orig, distance_tmp, gap_data_ptr[loc_orig + distance_tmp], loc_orig, loc_orig + distance_tmp
+                    );
+                    loc = loc_orig + distance_tmp;
+                    break;
+                }
+                else if (loc_orig-distance_tmp >= 0 && gap_data_ptr[loc_orig - distance_tmp] > 0)
+                {   
+                    fmt::println(
+                        "[Pixel Cut] gap[{}-{}] = {}, correct cut from ({}) to ({})", 
+                        loc_orig, distance_tmp, gap_data_ptr[loc_orig - distance_tmp], loc_orig, loc_orig - distance_tmp
+                    );
+                    loc = loc_orig - distance_tmp;
+                    break;
+                }
+                else
+                {
+                    distance_tmp++;
+                }
+            }
+        }
         // cut the fragment
-        BreakMap(i, auto_curation_state.auto_cut_smallest_frag_size_in_pixel);
+        BreakMap(
+            loc,   // cut loc
+            auto_curation_state.auto_cut_smallest_frag_size_in_pixel); // ignore length
         UpdateContigsFromMapState();
     }
     Redisplay = 1;
@@ -6530,15 +6587,15 @@ void AutoCurationFromFragsOrder(
     const FragsOrder* frags_order_,
     contigs* contigs_,
     map_state* map_state_, 
-    SelectArea* select_area=nullptr) 
+    SelectArea* select_area) 
 {   
     u08 using_select_area = (select_area && select_area->select_flag)? 1 : 0;
     u32 num_frags = contigs_->numberOfContigs;
-    if (!using_select_area ) 
+    if (!using_select_area )
     {   
         if ( num_frags != frags_order_->get_num_frags())
         {
-            fprintf(stderr, "Number of contigs(%d) and fragsOrder.num_frags(%d) do not match.\n", num_frags, frags_order_->get_num_frags());
+            fprintf(stderr, "[AutoCurationFromFragsOrder::error]: Number of contigs(%d) and fragsOrder.num_frags(%d) does not match.\n", num_frags, frags_order_->get_num_frags());
             assert(0);
         }
     }
@@ -6548,7 +6605,7 @@ void AutoCurationFromFragsOrder(
         {
             fmt::print(
                 stderr, 
-                "num_to_sort_contigs({}) != fragsOrder.num_frags({}), file:{}, line:{}\n", select_area->get_to_sort_frags_num(), 
+                "num_to_sort_contigs({}) != fragsOrder.num_frags({}), file {}, line {}\n", select_area->get_to_sort_frags_num(), 
                 frags_order_->get_num_frags(), 
                 __FILE__, __LINE__);
             assert(0);
@@ -6565,9 +6622,9 @@ void AutoCurationFromFragsOrder(
     {
         std::vector<s32> full_predicted_order(num_frags);
         std::iota(full_predicted_order.begin(), full_predicted_order.end(), 1);
-        auto frags_id_to_sort = select_area->get_to_sort_frags_id(Contigs);
-        for (u32 i=0; i< select_area->get_to_sort_frags_num(); i++) 
-            full_predicted_order[frags_id_to_sort[i]] = (predicted_order[i]>0?1:-1) * (select_area->get_first_frag_id() + std::abs(predicted_order[i]));
+        std::vector<u32> frags_id_to_sort = select_area->get_to_sort_frags_id(Contigs);
+        for (u32 i=0; i < frags_id_to_sort.size(); i++) 
+            full_predicted_order[frags_id_to_sort[i]] = (predicted_order[i]>0?1:-1) * (frags_id_to_sort.front() + std::abs(predicted_order[i]));
         predicted_order = full_predicted_order;
     }
     for (s32 i = 0; i < num_frags; ++i) current_order[i] = {i+1, contigs_->contigs_arr[i].length}; // start from 1
@@ -6726,6 +6783,7 @@ auto_cut_func(
         cut_frags(cut_locs_pixel);
     }
 
+    // AI cutting
     // generate figures
     if (0)
     {
@@ -6742,14 +6800,53 @@ auto_cut_func(
         // restore the error info via reading the error json
         HIC_Problems hic_problems("/auto_curation_tmp/auto_cut_output/infer_result/infer_result.json", (f32) Total_Genome_Length / (f32)Number_of_Pixels_1D ); 
         std::vector<std::vector<u32>> problem_loc = hic_problems.get_problem_loci();
-        }
 
-
-    // cut the contigs 
-    // cut_frags();
+        // cut the contigs 
+        // cut_frags();
+    }
 
     return ;
 }
+
+
+global_function
+std::unordered_map<s32, std::vector<s32>> collect_hap_cluster(
+    AutoCurationState& auto_curation_state, 
+    const SelectArea& selected_area
+)
+{
+    std::unordered_map<s32, std::vector<s32>> hap_cluster;
+    if (!auto_curation_state.hap_cluster_flag) return hap_cluster;
+
+    for (const auto& i : selected_area.selected_frag_ids)
+    {
+        std::string original_contig_name = std::string((char*)(Original_Contigs+((Contigs->contigs_arr+i)->get_original_contig_id()))->name);
+        std::transform(original_contig_name.begin(), original_contig_name.end(), original_contig_name.begin(), 
+            [](unsigned char c) { return std::tolower(c); });
+        if (original_contig_name.find("hap") != std::string::npos)
+        {
+            s32 hap_loc = original_contig_name.find("hap");
+            s32 hap_id = std::stoi(
+                original_contig_name.substr(
+                    hap_loc + 3, original_contig_name.find_first_of("_", hap_loc + 3) - hap_loc - 3));
+            if (hap_cluster.find(hap_id) == hap_cluster.end())
+            {
+                hap_cluster[hap_id] = std::vector<s32>();
+            }
+            hap_cluster[hap_id].push_back(i - selected_area.selected_frag_ids[0]);
+        }else
+        {
+            fmt::print(
+                stdout, 
+                "[Pixel Sort::Warning]: haplotig cluster is selected but the original contig name does not contain 'hap'.\n");
+            auto_curation_state.hap_cluster_flag = false;
+            break;
+        }
+    }
+    return hap_cluster;
+}
+
+
 
 
 global_function
@@ -6763,28 +6860,52 @@ auto_sort_func(char* currFileName)
     fprintf(stdout, "[Pixel Sort] smallest_frag_size_in_pixel: %d\n", auto_curation_state.smallest_frag_size_in_pixel);
     fprintf(stdout, "[Pixel Sort] link_score_threshold:        %.3f\n", auto_curation_state.link_score_threshold);
     fprintf(stdout, "[Pixel Sort] Sort mode:                   %s\n", auto_curation_state.get_sort_mode_name().c_str());
+    fmt::print(stdout, "[Pixel Sort] num_clusters:                {}\n", auto_curation_state.num_clusters);
 
     // compress the HiC data
     // prepare before reading textures
     f32 original_color_control_points[3];
     prepare_before_copy(original_color_control_points);
-    textures_array_ptr->copy_buffer_to_textures_dynamic(Contact_Matrix, false); 
+    textures_array_ptr->copy_buffer_to_textures_dynamic(
+        Contact_Matrix, 
+        false  // show_flag
+    ); 
     restore_settings_after_copy(original_color_control_points);
+
     // check if select the area for sorting
     SelectArea selected_area;
-    auto_curation_state.get_selected_fragments(
+    auto_curation_state.get_selected_fragments( // consider wheather include the sink and source while calculating the selected area
         selected_area, 
         Map_State, 
         Number_of_Pixels_1D, 
         Contigs
     );
+
+    std::unordered_map<s32, std::vector<s32>> hap_cluster = collect_hap_cluster(auto_curation_state, selected_area);
+
+    bool hap_cluster_flag = (hap_cluster.size() > 1 && auto_curation_state.hap_cluster_flag);
+    // NOTE: if hap_cluster is selected, then the kmeans cluster is not needed
+    if (hap_cluster_flag) auto_curation_state.num_clusters = 1;
+    else auto_curation_state.hap_cluster_flag = false;
+    bool kmeans_cluster_flag = selected_area.selected_frag_ids.size() > std::max(auto_curation_state.min_frag_num_for_cluster, (s32)auto_curation_state.num_clusters)
+        && auto_curation_state.num_clusters > 1   
+        && !hap_cluster_flag;
+
+    // correct the selected_area, wheather use or not use the source and sink
+    if (  hap_cluster_flag || kmeans_cluster_flag )
+    {
+        selected_area.source_frag_id = -1;
+        selected_area.sink_frag_id = -1;
+    }
+
     if (auto_curation_state.get_start() >=0 && auto_curation_state.get_end() >= 0 && selected_area.selected_frag_ids.size() > 0)
     {   
-        fprintf(stdout, "[Pixel Sort] Using selected area for sorting:\n");
+        fprintf(stdout, "[Pixel Sort] local sort within selected area\n");
         fprintf(stdout, "[Pixel Sort] Selected pixel range: %d ~ %d\n", auto_curation_state.get_start(), auto_curation_state.get_end());
         std::stringstream ss; 
         ss << selected_area.selected_frag_ids[0];
-        for (u32 i = 1; i < selected_area.selected_frag_ids.size(); ++i) ss << ", " << selected_area.selected_frag_ids[i];
+        for (u32 i = 1; i < selected_area.selected_frag_ids.size(); ++i) 
+            ss << ", " << selected_area.selected_frag_ids[i];
         fmt::print(stdout, "[Pixel Sort] Selected fragments ({}): {}\n\n", selected_area.selected_frag_ids.size(), ss.str().c_str());
         selected_area.select_flag = true;
         selected_area.start_pixel = auto_curation_state.get_start();
@@ -6794,80 +6915,174 @@ auto_sort_func(char* currFileName)
     textures_array_ptr->cal_compressed_hic(
         Contigs, 
         Extensions, 
-        false, 
-        false, 
+        false,           // is_extension_required
+        false,           // is_mass_center_required
         &selected_area
     );
-    FragsOrder frags_order(textures_array_ptr->get_num_frags()); // intilize the frags_order with the number of fragments including the filtered out ones
-    // exclude the fragments with first two tags during the auto curation 
     std::vector<std::string> exclude_tags = {"haplotig", "unloc"};
     std::vector<s32> exclude_meta_tag_idx = get_exclude_metaData_idx(exclude_tags);
-    LikelihoodTable likelihood_table(
-        textures_array_ptr->get_frags(),
-        textures_array_ptr->get_compressed_hic(),
-        (f32)auto_curation_state.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), 
-        exclude_meta_tag_idx, 
-        Number_of_Pixels_1D);
-    
-    #ifdef DEBUG_OUTPUT_LIKELIHOOD_TABLE
-        likelihood_table.output_fragsInfo_likelihoodTable("frags_info_likelihood_table.txt", textures_array_ptr->get_compressed_hic());
-    #endif // DEBUG_OUTPUT_LIKELIHOOD_TABLE
-    
-    // clear mem for textures and compressed hic
-    textures_array_ptr->clear_textures(); 
-    textures_array_ptr->clear_compressed_hic();
 
-    // use the compressed_hic to calculate the frags_order directly
-    if (auto_curation_state.sort_mode == 0 || !selected_area.select_flag) // sort with union find if sorting the whole genome
-    {
-        frag_sort_method->sort_according_likelihood_unionFind( 
-            likelihood_table, 
-            frags_order, 
-            selected_area,
-            auto_curation_state.link_score_threshold, 
-            textures_array_ptr->get_frags());
+    // cluster and sort
+    // 1. clustering
+    if (hap_cluster_flag || kmeans_cluster_flag )
+    {   
+        std::vector<std::vector<int>> clusters;
+        if (kmeans_cluster_flag) // kmeans cluster
+        {
+            fmt::print(stdout, 
+                "[Pixel Sort] kmeans: num of clusters: {}, num of selected fragments: {}\n", auto_curation_state.num_clusters, 
+                selected_area.selected_frag_ids.size());
+            #ifdef PYTHON_SCOPED_INTERPRETER
+                if (kmeans_cluster && kmeans_cluster->is_init)
+                {   
+                    fmt::print(stdout, "[Pixel Sort] cluster with Python module.\n");
+                    clusters = kmeans_cluster->kmeans_func(
+                        auto_curation_state.num_clusters, 
+                        textures_array_ptr->get_compressed_hic());
+                } else
+                {   
+                    fmt::print(stdout, "[Pixel Sort::warning] Python clustering module initializing failed. Clustering with Eigen-based algorithm.\n");
+                    clusters = spectral_clustering(*(textures_array_ptr->get_compressed_hic()), auto_curation_state.num_clusters);
+                }
+            #else 
+                fmt::print(stdout, "[Pixel Sort::warning] Python clustering module initializing failed. Clustering with Eigen-based algorithm.\n");
+                    clusters = spectral_clustering(*(textures_array_ptr->get_compressed_hic()), auto_curation_state.num_clusters);
+            #endif // PYTHON_SCOPED_INTERPRETER
+        } else // hap cluster
+        {
+            fmt::print(stdout, 
+                "[Pixel Sort] haplotig cluster: num of haps: {}, num of selected fragments: {}\n", 
+                hap_cluster.size(), selected_area.selected_frag_ids.size());
+            clusters.clear();
+            for (const auto& i : hap_cluster)
+            {
+                clusters.push_back(i.second);
+            }
+        }
+
+        // create the frag4compress object for sorting within the clusters
+        std::vector<Frag4compress> clusters_frags(clusters.size());
+        for (u32 i = 0; i < clusters.size(); ++i)
+        {   
+            std::sort(clusters[i].begin(), clusters[i].end());
+            clusters_frags[i].re_allocate_mem(
+                Contigs,
+                clusters[i]);
+        }
+
+        #ifdef DEBUG
+            fmt::print(stdout, "[Pixel Sort]: Kmeans clusters size: {} \n", clusters.size());
+            for (u32 i = 0; i < clusters.size(); ++i)
+            {
+                auto& tmp = clusters[i];
+                fmt::print(stdout, "\t[{} ({})]: ", i, clusters[i].size());
+                if (tmp.size() > 0)
+                {
+                    for (auto& tmp1 : tmp) fmt::print(stdout, "{}, ", tmp1);
+                }
+                fmt::print(stdout, "\n");
+            }
+            fmt::print(stdout, "\n");
+        #endif // DEBUG
+
+        // 3. sort within the clusters
+        std::vector<FragsOrder> frags_order_list;
+        for (u32 i = 0; i < clusters.size(); ++i)
+        {
+            frags_order_list.push_back(FragsOrder(clusters[i].size()));
+        }
+        for (u32 i = 0; i < clusters.size(); ++i)
+        {   
+            // every cluster forms a likelihood table
+            if (clusters[i].size() < 2)
+                continue;
+            auto tmp_likelihood_table = LikelihoodTable(
+                &clusters_frags[i],
+                textures_array_ptr->get_compressed_hic(),
+                (f32)auto_curation_state.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), 
+                exclude_meta_tag_idx, 
+                Number_of_Pixels_1D, 
+                &clusters[i]
+            );
+            frag_sort_method->sort_method_mask(
+                tmp_likelihood_table,
+                frags_order_list[i],
+                selected_area,
+                auto_curation_state,
+                &clusters_frags[i],
+                true
+            );
+        }
+        // merge all clusters 
+        FragsOrder merged_frags_order(frags_order_list, clusters);
+
+        #ifdef DEBUG
+        merged_frags_order.print_order() ; 
+        #endif // DEBUG
+
+        AutoCurationFromFragsOrder(
+            &merged_frags_order, 
+            Contigs,
+            Map_State, 
+            &selected_area);
+
+        // evaluate the compressed hic between all of the clusters 
+
+        // 4. sort the clusters
     }
-    else if (auto_curation_state.sort_mode == 1)
-    {
-        frag_sort_method->sort_according_likelihood_unionFind_doFuse( 
-            likelihood_table, 
-            frags_order, 
-            selected_area,
-            auto_curation_state.link_score_threshold, 
-            textures_array_ptr->get_frags(), true, true);
-    }
-    else if (auto_curation_state.sort_mode == 2)
-    {
-        frag_sort_method->sort_according_likelihood_unionFind_doFuse( 
-            likelihood_table, 
-            frags_order, 
-            selected_area,
-            auto_curation_state.link_score_threshold, 
-            textures_array_ptr->get_frags(), false, true);
-    }
-    else if (auto_curation_state.sort_mode == 3) // not finished yet
-    {
-        frag_sort_method->sort_according_yahs(
+    else //  sort without clustering
+    {   
+        if (auto_curation_state.num_clusters == 1)
+        {
+            fmt::print(stdout, "[Pixel Sort] sort without clustering.\n");
+        } else  // (selected_area.selected_frag_ids.size() <= std::max(auto_curation_state.min_frag_num_for_cluster, (s32)auto_curation_state.num_clusters) ) 
+        {
+            fmt::print(
+                stdout, 
+                "[Pixel Sort] num_cluster({})>1 but selected fragments({}) <= max(min_num_frags_for_cluster {}, num_cluster {})\n", 
+                auto_curation_state.num_clusters,
+                selected_area.selected_frag_ids.size(),
+                auto_curation_state.min_frag_num_for_cluster, 
+                auto_curation_state.num_clusters);
+        } 
+         
+        FragsOrder frags_order(textures_array_ptr->get_num_frags()); // intilize the frags_order with the number of fragments including the filtered out ones
+        // exclude the fragments with first two tags during the auto curation 
+        LikelihoodTable likelihood_table(
+            textures_array_ptr->get_frags(),
+            textures_array_ptr->get_compressed_hic(),
+            (f32)auto_curation_state.smallest_frag_size_in_pixel / ((f32)Number_of_Pixels_1D + 1.f), 
+            exclude_meta_tag_idx, 
+            Number_of_Pixels_1D);
+        
+        #ifdef DEBUG_OUTPUT_LIKELIHOOD_TABLE
+            likelihood_table.output_fragsInfo_likelihoodTable("frags_info_likelihood_table.txt", textures_array_ptr->get_compressed_hic());
+        #endif // DEBUG_OUTPUT_LIKELIHOOD_TABLE
+
+        // use the compressed_hic to calculate the frags_order directly
+        frag_sort_method->sort_method_mask(
             likelihood_table,
             frags_order,
             selected_area,
-            auto_curation_state.link_score_threshold,
-            textures_array_ptr->get_frags()
+            auto_curation_state,
+            textures_array_ptr->get_frags(),
+            true // sort chromosomes according length
+        );
+
+        AutoCurationFromFragsOrder(
+            &frags_order, 
+            Contigs,
+            Map_State,
+            &selected_area
         );
     }
-    else 
-    {
-        fprintf(stderr, "[Pixel Sort] Error: Unknown sort mode (%d)\n", auto_curation_state.sort_mode);
-        assert(0);
-    }
-    AutoCurationFromFragsOrder(
-        &frags_order, 
-        Contigs,
-        Map_State, 
-        &selected_area);
+
     std::cout << std::endl;
     auto_sort_state = 0;
 
+    // clear mem for textures and compressed hic
+    textures_array_ptr->clear_textures(); 
+    textures_array_ptr->clear_compressed_hic();
     return;
 }
 
@@ -7216,7 +7431,7 @@ ToggleSelectSortAreaMode(GLFWwindow* window)
     }
     else if (Normal_Mode || (Edit_Mode && !Edit_Pixels.editing) || MetaData_Edit_Mode)
     {
-        Global_Mode = mode_selectExclude_sort_area;
+        Global_Mode = mode_select_sort_area;
         f64 mousex, mousey;
         glfwGetCursorPos(window, &mousex, &mousey);
         MouseMove(window, mousex, mousey);
@@ -7500,6 +7715,11 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                     break;
 
                 case GLFW_KEY_H:
+                    if (Select_Sort_Area_Mode)
+                    {
+                        auto_curation_state.hap_cluster_flag = !auto_curation_state.hap_cluster_flag;
+                    }
+                    else keyPressed = 0;
                     break;
 
                 case GLFW_KEY_I:
@@ -7511,6 +7731,9 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                     break;
 
                 case GLFW_KEY_K:
+                    if (Select_Sort_Area_Mode) 
+                        auto_curation_state.auto_cut_with_extension = !auto_curation_state.auto_cut_with_extension;
+                    else keyPressed = 0;
                     break;
 
                 case GLFW_KEY_L:
@@ -7724,6 +7947,10 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                         else Scaff_FF_Flag &= ~2;
                     }
                     else if (Edit_Mode) Edit_Pixels.scaffSelecting = action != GLFW_RELEASE;
+                    else if (Select_Sort_Area_Mode && action == GLFW_PRESS)  // num_cluster descrease
+                    {
+                        auto_curation_state.num_clusters = auto_curation_state.num_clusters >= 2 ? auto_curation_state.num_clusters - 1 : 1;
+                    }
                     else keyPressed = 0;
                     break;
 
@@ -7747,6 +7974,14 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                         auto_curation_state.change_sort_mode(-1);
                     }
                     else AdjustColorMap(-1);
+                    break;
+
+                case GLFW_KEY_RIGHT_SHIFT:     // num_cluster increase
+                    if (Select_Sort_Area_Mode)
+                    {
+                        auto_curation_state.num_clusters = my_Min(auto_curation_state.num_clusters + 1, 200) ;
+                    }
+                    else keyPressed = 0;
                     break;
 
                 case GLFW_KEY_RIGHT:
@@ -10915,7 +11150,14 @@ void SortMapByMetaTags(u64 tagMask)
 
 
 MainArgs 
-{
+{   
+
+    #ifdef PYTHON_SCOPED_INTERPRETER
+        // START Python interpreter
+        py::scoped_interpreter guard{};
+        kmeans_cluster = new KmeansClusters();  // import the kmeans module
+    #endif // PYTHON_SCOPED_INTERPRETER
+
     u32 initWithFile = 0;   // initialization with .map file or not 
     u08 currFile[256];      // save the name of file inputed 
     u08 *currFileName = 0;
@@ -11585,8 +11827,8 @@ MainArgs
 
                         nk_contextual_end(NK_Context);
                     }
-                    if ((nk_option_label(NK_Context, "Select sort area", Global_Mode == mode_selectExclude_sort_area) ? 1 : 0) != (Global_Mode == mode_selectExclude_sort_area ? 1 : 0))
-                        Global_Mode = (Global_Mode == mode_selectExclude_sort_area ? mode_normal : mode_selectExclude_sort_area);
+                    if ((nk_option_label(NK_Context, "Select sort area", Global_Mode == mode_select_sort_area) ? 1 : 0) != (Global_Mode == mode_select_sort_area ? 1 : 0))
+                        Global_Mode = (Global_Mode == mode_select_sort_area ? mode_normal : mode_select_sort_area);
 
                     nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
                     Waypoints_Always_Visible = nk_check_label(NK_Context, "Waypoints Always Visible", (s32)Waypoints_Always_Visible) ? 1 : 0;
@@ -12445,6 +12687,12 @@ MainArgs
     {
         delete frag_sort_method; frag_sort_method = nullptr;
     }
+    #ifdef PYTHON_SCOPED_INTERPRETER
+        if (kmeans_cluster)
+        {
+            delete kmeans_cluster; kmeans_cluster = nullptr;
+        }
+    #endif // PYTHON_SCOPED_INTERPRETER
 
     ResetMemoryArenaP(Loading_Arena);
     fprintf(stdout, "Memory freed for the arena.\n");
