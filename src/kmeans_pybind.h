@@ -44,9 +44,9 @@ class KmeansClusters
             #else // NDEBUG
                 #ifdef __APPLE__
                     sys.attr("path").attr("append")("./PretextViewAI.app/Contents/Resources");
-                #elif def __linux__
+                #elif defined(__linux__) 
                     sys.attr("path").attr("append")(".");
-                #else // _WIN32
+                #else // _WIN32 _WIN64
                     sys.attr("path").attr("append")(".");
                 #endif 
             #endif // DEBUG

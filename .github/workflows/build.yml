@@ -18,8 +18,15 @@ jobs:
             target_arch: arm64
           - os: ubuntu-latest
             target_arch: arm64
+        include:
+          - os: macos-latest
+            target_arch: x86_64
+            runs-on: macos-12
+          - os: macos-latest
+            target_arch: arm64
+            runs-on: macos-latest
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runs-on || matrix.os }}
     steps:
       - name: Check runner OS
         run: echo "Runner OS is ${{ runner.os }}"

@@ -8,7 +8,7 @@ option(WITH_TORCH "Find and link torch lib" OFF)
 option(DEBUG_OUTPUT_LIKELIHOOD_TABLE "Output likelihood table to file" OFF)
 option(DEBUG_OUTPUT_PIXEL_CUT_FILE "Output the pixel cut files" OFF)
 option(PYTHON_SCOPED_INTERPRETER "Use Python scoped interpreter" ON)
-option(AI_ERROR_PIC_DETECTION "Enable AI error pattern detection " OFF)
+option(AI_PIC_DETECTION "Enable AI error pattern detection " OFF)
 
 set(CMAKE_C_STANDARD 17)   
 set(CMAKE_CXX_STANDARD 17)   
@@ -170,11 +170,11 @@ if (DEBUG_OUTPUT_LIKELIHOOD_TABLE)
 else()
     message(STATUS "DEBUG_OUTPUT_LIKELIHOOD_TABLE: not defined")
 endif()
-if (AI_ERROR_PIC_DETECTION)
-    message(STATUS "AI_ERROR_PIC_DETECTION: defined")
-    target_compile_definitions(${target_name} PRIVATE AI_ERROR_PIC_DETECTION)
+if (AI_PIC_DETECTION)
+    message(STATUS "AI_PIC_DETECTION: defined")
+    target_compile_definitions(${target_name} PRIVATE AI_PIC_DETECTION)
 else()
-    message(STATUS "AI_ERROR_PIC_DETECTION: not defined")
+    message(STATUS "AI_PIC_DETECTION: not defined")
 endif()
 
 
@@ -255,7 +255,7 @@ endforeach()
 
 find_package(Python COMPONENTS Development Interpreter)
 if (PYTHON_SCOPED_INTERPRETER AND Python_FOUND)
-    message(STATUS "Python found: ${Python_VERSION} PYTHON_lib: ${Python_LIBRARIES}")
+    message(STATUS "Build with PYTHON_SCOPED_INTERPRETER. Python version: ${Python_VERSION} Python_lib: ${Python_LIBRARIES}")
     add_subdirectory(subprojects/pybind11)
 
     # 链接 pybind11 和 Python 库
