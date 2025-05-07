@@ -251,6 +251,7 @@ find_package(Python COMPONENTS Development Interpreter)
 if (PYTHON_SCOPED_INTERPRETER AND Python_FOUND)
 
     # 拷贝python lib文件到编译目录下
+    get_filename_component(Python_LIBRARIES "${Python_LIBRARIES}" REALPATH)
     file(COPY ${Python_LIBRARIES} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
     message(STATUS "Python lib (originally): ${Python_LIBRARIES}")
     # 获取拷贝后文件的路径
