@@ -117,7 +117,7 @@ else()
     message(STATUS "lib_deflate_static found: ${lib_deflate_static}")
 endif()
 
-add_library(lib_yahs STATIC 
+add_library(yahs STATIC 
     src/yahs_sort.cpp
 )
 
@@ -136,11 +136,11 @@ if (WITH_TORCH)
         sortlib PUBLIC 
         ${TORCH_LIBRARIES} 
         ${torchscatter} 
-        lib_yahs)
+        yahs)
 else()
     message(STATUS "Libtorch: Build without libtorch")
     add_library(sortlib STATIC src/frag_sort.cpp )
-    target_link_libraries(sortlib PRIVATE lib_yahs)
+    target_link_libraries(sortlib PRIVATE yahs)
 endif()
 
 
@@ -188,7 +188,7 @@ target_link_libraries(
     utilsPretextView 
     copy_texture 
     glfw 
-    lib_yahs
+    yahs
 )   
 
 # link libraries only for debug version
@@ -271,12 +271,18 @@ if (PYTHON_SCOPED_INTERPRETER AND Python_FOUND)
 
     # 链接 pybind11 和 Python 库
     target_link_libraries(${target_name} PRIVATE 
-        pybind11::embed
         ${PYTHON_LIB_PATH}
+        pybind11::embed  # 链接pybind11的时候把python的库弄坏了?
     )
 
     message(STATUS "Using Python scoped interpreter for Kmeans")
     target_compile_definitions(${target_name} PRIVATE PYTHON_SCOPED_INTERPRETER)
+    # 修改 install_name 和 rpath，确保在构建后正确链接
+    add_custom_command(TARGET ${target_name} POST_BUILD
+        COMMAND install_name_tool -id @rpath/${Python_lib_name} ${PYTHON_LIB_PATH}
+        COMMAND install_name_tool -change "${Python_LIBRARIES}" @rpath/${Python_lib_name} $<TARGET_FILE:${target_name}>
+        COMMENT "Fixing install_name and rpath for Python dylib"
+    )
 endif()
 
 
