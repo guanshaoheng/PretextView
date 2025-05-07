@@ -249,6 +249,7 @@ endforeach()
 
 find_package(Python COMPONENTS Development Interpreter)
 if (PYTHON_SCOPED_INTERPRETER AND Python_FOUND)
+    add_subdirectory(subprojects/pybind11)
     # 拷贝python lib文件到编译目录下
     get_filename_component(Python_LIBRARIES "${Python_LIBRARIES}" REALPATH)
     get_filename_component(Python_lib_name "${Python_LIBRARIES}" NAME)
@@ -259,7 +260,7 @@ if (PYTHON_SCOPED_INTERPRETER AND Python_FOUND)
     elseif (UNIX AND NOT APPLE)
         set(new_python_lib_name "${CMAKE_CURRENT_BINARY_DIR}/libpython${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}.so")
     elseif (WIN32)
-        set(new_python_lib_name "${CMAKE_CURRENT_BINARY_DIR}/python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}.dll")
+        set(new_python_lib_name "${CMAKE_CURRENT_BINARY_DIR}/python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}.lib")
     else()
         message(FATAL_ERROR "Unsupported platform")
     endif()
@@ -270,13 +271,13 @@ if (PYTHON_SCOPED_INTERPRETER AND Python_FOUND)
     message(STATUS "Python lib (originally): ${Python_LIBRARIES}")
     # 获取拷贝后文件的路径
     find_library(PYTHON_LIB_PATH 
-    NAMES "python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}" "libpython${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}" 
-    PATHS ${CMAKE_CURRENT_BINARY_DIR} 
-    REQUIRED)
+        NAMES "python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}" 
+              "libpython${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}" 
+        PATHS ${CMAKE_CURRENT_BINARY_DIR} 
+        REQUIRED)
     message(STATUS "Python lib (after copy): ${PYTHON_LIB_PATH}")
 
     message(STATUS "Build with PYTHON_SCOPED_INTERPRETER. Python version: ${Python_VERSION} Python_lib: ${PYTHON_LIB_PATH}")
-    add_subdirectory(subprojects/pybind11)
 
     # 将 Python 脚本复制到构建目录
     configure_file(
@@ -326,9 +327,9 @@ if(APPLE)
         ${target_name} 
         PROPERTIES 
         INSTALL_RPATH "@executable_path/../Frameworks"
-        # BUILD_WITH_INSTALL_RPATH TRUE
-        # MACOSX_RPATH TRUE
-        # BUNDLE TRUE
+        BUILD_WITH_INSTALL_RPATH TRUE
+        MACOSX_RPATH TRUE
+        BUNDLE TRUE
         )
     install(TARGETS ${target_name}
             BUNDLE DESTINATION .
@@ -351,7 +352,7 @@ if(APPLE)
             FILES ${CMAKE_CURRENT_SOURCE_DIR}/python/frag_cluster/kmeans_utils.py
             DESTINATION "${target_name}.app/Contents/Resources" )
     endif ()
-elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux") 
+elseif(UNIX AND NOT APPLE) # Linux
     message(STATUS "[Cmake Install]: Linux")
     set_target_properties(
         ${target_name}
