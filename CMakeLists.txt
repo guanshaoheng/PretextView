@@ -246,29 +246,25 @@ endforeach()
 
 
 # ============ Kmeans for Clustering ==============
-# find_package(Python REQUIRED COMPONENTS Development)
-
-# add_executable(kmeans_test python/frag_cluster/kmeans_main.cpp)
-# target_include_directories(kmeans_test PRIVATE ${Python_INCLUDE_DIRS})
-# target_link_libraries(kmeans_test PRIVATE ${Python_LIBRARIES})
-# 查找 Python 开发环境
 
 find_package(Python COMPONENTS Development Interpreter)
 if (PYTHON_SCOPED_INTERPRETER AND Python_FOUND)
     message(STATUS "Build with PYTHON_SCOPED_INTERPRETER. Python version: ${Python_VERSION} Python_lib: ${Python_LIBRARIES}")
     add_subdirectory(subprojects/pybind11)
 
-    # 链接 pybind11 和 Python 库
-    target_link_libraries(${target_name} PRIVATE 
-        pybind11::embed
-        ${Python_LIBRARIES}
-    )
-
     # 将 Python 脚本复制到构建目录
     configure_file(
         ${CMAKE_CURRENT_SOURCE_DIR}/python/frag_cluster/kmeans_utils.py
         ${CMAKE_CURRENT_BINARY_DIR}/kmeans_utils.py
         COPYONLY )
+
+    set(PYTHON_LIB_PATH "${Python_LIBRARIES}")
+
+    # 链接 pybind11 和 Python 库
+    target_link_libraries(${target_name} PRIVATE 
+        pybind11::embed
+        ${PYTHON_LIB_PATH}
+    )
 
     message(STATUS "Using Python scoped interpreter for Kmeans")
     target_compile_definitions(${target_name} PRIVATE PYTHON_SCOPED_INTERPRETER)
@@ -326,7 +322,7 @@ if(APPLE)
     endif()
     if (PYTHON_SCOPED_INTERPRETER)
         install(
-            FILES ${Python_LIBRARIES}
+            FILES ${PYTHON_LIB_PATH}
             DESTINATION "${target_name}.app/Contents/Frameworks" )
         install(
             FILES ${CMAKE_CURRENT_SOURCE_DIR}/python/frag_cluster/kmeans_utils.py
@@ -352,7 +348,7 @@ elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     endif()
     if (PYTHON_SCOPED_INTERPRETER)
         install(
-            FILES ${Python_LIBRARIES}
+            FILES ${PYTHON_LIB_PATH}
             DESTINATION "lib" )
         install(
             FILES ${CMAKE_CURRENT_SOURCE_DIR}/python/frag_cluster/kmeans_utils.py
@@ -375,7 +371,7 @@ else () # windows
     endif()
     if (PYTHON_SCOPED_INTERPRETER)
         install(
-            FILES ${Python_LIBRARIES}
+            FILES ${PYTHON_LIB_PATH}
             DESTINATION . )
         install(
             FILES ${CMAKE_CURRENT_SOURCE_DIR}/python/frag_cluster/kmeans_utils.py
