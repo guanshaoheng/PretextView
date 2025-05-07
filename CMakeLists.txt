@@ -257,10 +257,10 @@ if (PYTHON_SCOPED_INTERPRETER AND Python_FOUND)
     message(STATUS "Python lib realpath: ${Python_LIBRARIES}, name: ${Python_lib_name}")
     # 获取拷贝后文件的路径
     find_library(PYTHON_LIB_PATH 
-        NAMES ${Python_lib_name}  # "python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}" "python${Python_VERSION_MAJOR}${Python_VERSION_MINOR}"
+        NAMES ${Python_lib_name}  
         PATHS ${CMAKE_CURRENT_BINARY_DIR} 
         REQUIRED)
-    message(STATUS "Build with PYTHON_SCOPED_INTERPRETER. Python version: ${Python_VERSION} Python_lib: ${PYTHON_LIB_PATH}")
+    message(STATUS "Build with PYTHON_SCOPED_INTERPRETER. Python search path: ${CMAKE_CURRENT_BINARY_DIR}, Python version: ${Python_VERSION}, Python_lib: ${PYTHON_LIB_PATH}")
 
     # 将 Python 脚本复制到构建目录
     configure_file(
