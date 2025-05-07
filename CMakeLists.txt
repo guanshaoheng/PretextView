@@ -308,12 +308,14 @@ if(APPLE)
         INSTALL_RPATH "@executable_path/../Frameworks"
         BUILD_WITH_INSTALL_RPATH TRUE
         MACOSX_RPATH TRUE
+        BUNDLE TRUE
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
         )
     install(TARGETS ${target_name}
             BUNDLE DESTINATION .
-            COMPONENT Runtime)   
-    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
-            DESTINATION "${target_name}.app/Contents")
+            COMPONENT Runtime)  
+    # install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
+    #         DESTINATION "${target_name}.app/Contents")
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/icon.icns"
             DESTINATION "${target_name}.app/Contents/Resources" )
     if (WITH_TORCH)
