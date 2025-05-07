@@ -254,7 +254,10 @@ if (PYTHON_SCOPED_INTERPRETER AND Python_FOUND)
     file(COPY ${Python_LIBRARIES} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
     message(STATUS "Python lib (originally): ${Python_LIBRARIES}")
     # 获取拷贝后文件的路径
-    find_library(PYTHON_LIB_PATH NAMES python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR} PATHS ${CMAKE_CURRENT_BINARY_DIR} REQUIRED)
+    find_library(PYTHON_LIB_PATH 
+    NAMES "python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}" "libpython${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}" 
+    PATHS ${CMAKE_CURRENT_BINARY_DIR} 
+    REQUIRED)
     message(STATUS "Python lib (after copy): ${PYTHON_LIB_PATH}")
 
     message(STATUS "Build with PYTHON_SCOPED_INTERPRETER. Python version: ${Python_VERSION} Python_lib: ${PYTHON_LIB_PATH}")
