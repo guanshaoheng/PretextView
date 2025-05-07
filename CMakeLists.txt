@@ -249,21 +249,26 @@ endforeach()
 
 find_package(Python COMPONENTS Development Interpreter)
 if (PYTHON_SCOPED_INTERPRETER AND Python_FOUND)
-    message(STATUS "Build with PYTHON_SCOPED_INTERPRETER. Python version: ${Python_VERSION} Python_lib: ${Python_LIBRARIES}")
-    add_subdirectory(subprojects/pybind11)
 
     # 拷贝python lib文件到编译目录下
     file(COPY ${Python_LIBRARIES} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+    message(STATUS "Python lib (originally): ${Python_LIBRARIES}")
     # 获取拷贝后文件的路径
     if (APPLE)
         set(PYTHON_LIB_PATH "${CMAKE_CURRENT_BINARY_DIR}/libpython${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}.dylib")
+        message(STATUS "Python lib (after copy): ${PYTHON_LIB_PATH}")
     elseif (UNIX AND NOT APPLE)
         set(PYTHON_LIB_PATH "${CMAKE_CURRENT_BINARY_DIR}/libpython${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}.so")
+        message(STATUS "Python lib (after copy): ${PYTHON_LIB_PATH}")
     elseif (WIN32)
         set(PYTHON_LIB_PATH "${CMAKE_CURRENT_BINARY_DIR}/python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}.dll")
+        message(STATUS "Python lib (after copy): ${PYTHON_LIB_PATH}")
     else ()
         message(FATAL_ERROR "Unsupported platform")
     endif()
+
+    message(STATUS "Build with PYTHON_SCOPED_INTERPRETER. Python version: ${Python_VERSION} Python_lib: ${PYTHON_LIB_PATH}")
+    add_subdirectory(subprojects/pybind11)
 
     # 将 Python 脚本复制到构建目录
     configure_file(
@@ -313,10 +318,9 @@ if(APPLE)
         ${target_name} 
         PROPERTIES 
         INSTALL_RPATH "@executable_path/../Frameworks"
-        BUILD_WITH_INSTALL_RPATH TRUE
-        MACOSX_RPATH TRUE
-        BUNDLE TRUE
-        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
+        # BUILD_WITH_INSTALL_RPATH TRUE
+        # MACOSX_RPATH TRUE
+        # BUNDLE TRUE
         )
     install(TARGETS ${target_name}
             BUNDLE DESTINATION .
