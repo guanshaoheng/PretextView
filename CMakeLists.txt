@@ -278,11 +278,14 @@ if (PYTHON_SCOPED_INTERPRETER AND Python_FOUND)
     message(STATUS "Using Python scoped interpreter for Kmeans")
     target_compile_definitions(${target_name} PRIVATE PYTHON_SCOPED_INTERPRETER)
     # 修改 install_name 和 rpath，确保在构建后正确链接
-    add_custom_command(TARGET ${target_name} POST_BUILD
-        COMMAND install_name_tool -id @rpath/${Python_lib_name} ${PYTHON_LIB_PATH}
-        COMMAND install_name_tool -change "${Python_LIBRARIES}" @rpath/${Python_lib_name} $<TARGET_FILE:${target_name}>
-        COMMENT "Fixing install_name and rpath for Python dylib"
-    )
+    if (APPLE)
+        add_custom_command(TARGET ${target_name} POST_BUILD
+            COMMAND install_name_tool -id @rpath/${Python_lib_name} ${PYTHON_LIB_PATH}
+            COMMAND install_name_tool -change "${Python_LIBRARIES}" @rpath/${Python_lib_name} $<TARGET_FILE:${target_name}>
+            COMMAND install_name_tool -add_rpath "@executable_path/../Frameworks" $<TARGET_FILE:${target_name}>
+            COMMENT "Fixing install_name and rpath for Python dylib"
+        )
+    endif() # APPLE
 endif()
 
 
