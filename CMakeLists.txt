@@ -305,10 +305,13 @@ if(APPLE)
     set_target_properties(
         ${target_name} 
         PROPERTIES 
-        INSTALL_RPATH "@executable_path/../Frameworks")
+        INSTALL_RPATH "@executable_path/../Frameworks"
+        BUILD_WITH_INSTALL_RPATH TRUE
+        MACOSX_RPATH TRUE
+        )
     install(TARGETS ${target_name}
             BUNDLE DESTINATION .
-            COMPONENT Runtime)   # generate the ${target_name}.app package under ${cmake_install_prefix}
+            COMPONENT Runtime)   
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
             DESTINATION "${target_name}.app/Contents")
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/icon.icns"
