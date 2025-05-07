@@ -253,30 +253,13 @@ if (PYTHON_SCOPED_INTERPRETER AND Python_FOUND)
     # 拷贝python lib文件到编译目录下
     get_filename_component(Python_LIBRARIES "${Python_LIBRARIES}" REALPATH)
     get_filename_component(Python_lib_name "${Python_LIBRARIES}" NAME)
-    message(STATUS "Python lib realpath: ${Python_LIBRARIES}, name: ${Python_lib_name}")
     file(COPY ${Python_LIBRARIES} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-    if (APPLE)
-        set(new_python_lib_name "${CMAKE_CURRENT_BINARY_DIR}/libpython${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}.dylib")
-    elseif (UNIX AND NOT APPLE)
-        set(new_python_lib_name "${CMAKE_CURRENT_BINARY_DIR}/libpython${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}.so")
-    elseif (WIN32)
-        set(new_python_lib_name "${CMAKE_CURRENT_BINARY_DIR}/python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}.lib")
-    else()
-        message(FATAL_ERROR "Unsupported platform")
-    endif()
-    file(
-        RENAME 
-        ${CMAKE_CURRENT_BINARY_DIR}/${Python_lib_name}
-        ${new_python_lib_name})
-    message(STATUS "Python lib (originally): ${Python_LIBRARIES}")
+    message(STATUS "Python lib realpath: ${Python_LIBRARIES}, name: ${Python_lib_name}")
     # 获取拷贝后文件的路径
     find_library(PYTHON_LIB_PATH 
-        NAMES "python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}" 
-              "libpython${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}" 
+        NAMES ${Python_lib_name}  # "python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}" "python${Python_VERSION_MAJOR}${Python_VERSION_MINOR}"
         PATHS ${CMAKE_CURRENT_BINARY_DIR} 
         REQUIRED)
-    message(STATUS "Python lib (after copy): ${PYTHON_LIB_PATH}")
-
     message(STATUS "Build with PYTHON_SCOPED_INTERPRETER. Python version: ${Python_VERSION} Python_lib: ${PYTHON_LIB_PATH}")
 
     # 将 Python 脚本复制到构建目录
