@@ -256,22 +256,20 @@ if (PYTHON_SCOPED_INTERPRETER AND Python_FOUND)
     file(COPY ${Python_LIBRARIES} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
     # 获取拷贝后文件的路径
     if (APPLE)
-        set(PYTHON_LIB_PATH "${Python_LIBRARIES}/libpython${Python_VERSION_MAJOR}${Python_VERSION_MINOR}.dylib")
+        set(PYTHON_LIB_PATH "${CMAKE_CURRENT_BINARY_DIR}/libpython${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}.dylib")
     elseif (UNIX AND NOT APPLE)
-        set(PYTHON_LIB_PATH "${Python_LIBRARIES}/libpython${Python_VERSION_MAJOR}${Python_VERSION_MINOR}.so")
+        set(PYTHON_LIB_PATH "${CMAKE_CURRENT_BINARY_DIR}/libpython${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}.so")
     elseif (WIN32)
-        set(PYTHON_LIB_PATH "${Python_LIBRARIES}/python${Python_VERSION_MAJOR}${Python_VERSION_MINOR}.dll")
+        set(PYTHON_LIB_PATH "${CMAKE_CURRENT_BINARY_DIR}/python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}.dll")
     else ()
         message(FATAL_ERROR "Unsupported platform")
     endif()
-
 
     # 将 Python 脚本复制到构建目录
     configure_file(
         ${CMAKE_CURRENT_SOURCE_DIR}/python/frag_cluster/kmeans_utils.py
         ${CMAKE_CURRENT_BINARY_DIR}/kmeans_utils.py
         COPYONLY )
-
 
     # 链接 pybind11 和 Python 库
     target_link_libraries(${target_name} PRIVATE 
