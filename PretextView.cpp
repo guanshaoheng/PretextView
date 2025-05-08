@@ -6547,7 +6547,7 @@ void cut_frags(const std::vector<u32>& problem_locs)
         if (gap_data_ptr) // correct loc with considering the gap extension
         {   
             u32 distance_tmp = 1;
-            while (distance_tmp < auto_curation_state.auto_cut_gap_loc_threshold)
+            while (distance_tmp <= auto_curation_state.auto_cut_gap_loc_threshold)
             {
                 if (loc_orig + distance_tmp < Number_of_Pixels_1D && gap_data_ptr[loc_orig + distance_tmp] > 0 )
                 {   
