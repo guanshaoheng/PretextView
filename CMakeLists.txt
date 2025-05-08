@@ -7,7 +7,7 @@ option(BUILD_UNIVERSAL "Build macOS universal binary" OFF)
 option(WITH_TORCH "Find and link torch lib" OFF)
 option(DEBUG_OUTPUT_LIKELIHOOD_TABLE "Output likelihood table to file" OFF)
 option(DEBUG_OUTPUT_PIXEL_CUT_FILE "Output the pixel cut files" OFF)
-option(PYTHON_SCOPED_INTERPRETER "Use Python scoped interpreter" ON)
+option(PYTHON_SCOPED_INTERPRETER "Use Python scoped interpreter" OFF)
 option(AI_PIC_DETECTION "Enable AI error pattern detection " OFF)
 
 set(CMAKE_C_STANDARD 17)   
@@ -247,8 +247,14 @@ endforeach()
 
 # ============ Kmeans for Clustering ==============
 
-find_package(Python COMPONENTS Development Interpreter)
+if (PYTHON_SCOPED_INTERPRETER)
+    find_package(Python COMPONENTS Development Interpreter)
+else()
+    message(STATUS "PYTHON_SCOPED_INTERPRETER defined, but Python not found, build without PYTHON_SCOPED_INTERPRETER")
+endif()
+
 if (PYTHON_SCOPED_INTERPRETER AND Python_FOUND)
+    message(STATUS "PYTHON_SCOPED_INTERPRETER defined, build with PYTHON_SCOPED_INTERPRETER")
     add_subdirectory(subprojects/pybind11)
     # 拷贝python lib文件到编译目录下
     get_filename_component(Python_LIBRARIES "${Python_LIBRARIES}" REALPATH)
