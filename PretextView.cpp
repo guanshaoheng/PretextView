@@ -12340,7 +12340,7 @@ MainArgs
 
                         // Input Sequences
                         {   
-                            std::string input_sequence_name = fmt::format("Input Sequences ({})", Number_of_Original_Contigs);
+                            std::string input_sequence_name = fmt::format("Input Sequences ({} / Max:{})", Number_of_Original_Contigs, Max_Number_of_Contigs);
                             nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
                             if (nk_tree_push(NK_Context, NK_TREE_TAB, input_sequence_name.c_str(), NK_MINIMIZED))
                             {   
