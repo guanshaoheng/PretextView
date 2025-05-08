@@ -272,19 +272,18 @@ if (PYTHON_SCOPED_INTERPRETER AND Python_FOUND)
     # 链接 pybind11 和 Python 库
     target_link_libraries(${target_name} PRIVATE 
         ${PYTHON_LIB_PATH}
-        pybind11::embed  # 链接pybind11的时候把python的库弄坏了?
+        pybind11::embed 
     )
-
     message(STATUS "Using Python scoped interpreter for Kmeans")
     target_compile_definitions(${target_name} PRIVATE PYTHON_SCOPED_INTERPRETER)
     # 修改 install_name 和 rpath，确保在构建后正确链接
     if (APPLE)
-        add_custom_command(TARGET ${target_name} POST_BUILD
-            COMMAND install_name_tool -id @rpath/${Python_lib_name} ${PYTHON_LIB_PATH}
-            COMMAND install_name_tool -change "${Python_LIBRARIES}" @rpath/${Python_lib_name} $<TARGET_FILE:${target_name}>
-            COMMAND install_name_tool -add_rpath "@executable_path/../Frameworks" $<TARGET_FILE:${target_name}>
-            COMMENT "Fixing install_name and rpath for Python dylib"
-        )
+        # add_custom_command(TARGET ${target_name} POST_BUILD
+        #     COMMAND install_name_tool -id @rpath/${Python_lib_name} ${PYTHON_LIB_PATH}
+        #     COMMAND install_name_tool -change "${Python_LIBRARIES}" @rpath/${Python_lib_name} $<TARGET_FILE:${target_name}>
+        #     COMMAND install_name_tool -add_rpath "@executable_path/../Frameworks" $<TARGET_FILE:${target_name}>
+        #     COMMENT "Fixing install_name and rpath for Python dylib"
+        # )
     endif() # APPLE
 endif()
 
@@ -331,6 +330,9 @@ if(APPLE)
     #         DESTINATION "${target_name}.app/Contents")
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/icon.icns"
             DESTINATION "${target_name}.app/Contents/Resources" )
+    install(
+        FILES ${lib_deflate_static}
+        DESTINATION "${target_name}.app/Contents/Frameworks")
     if (WITH_TORCH)
         install(FILES ${torch_copy_libs}
                 DESTINATION "${target_name}.app/Contents/Frameworks" )
@@ -355,6 +357,9 @@ elseif(UNIX AND NOT APPLE) # Linux
         TARGETS ${target_name}
         RUNTIME DESTINATION "bin"
         COMPONENT Runtime)
+    install(
+        FILES ${lib_deflate_static}
+        DESTINATION "lib")
     if (WITH_TORCH)
         install(
             FILES ${torch_copy_libs} 
@@ -378,6 +383,9 @@ else () # windows
         TARGETS ${target_name}
         RUNTIME DESTINATION .
         COMPONENT Runtime)
+    install(
+        FILES ${lib_deflate_static}
+        DESTINATION .)
     if (WITH_TORCH)
         install(
             FILES ${torch_copy_libs} 
