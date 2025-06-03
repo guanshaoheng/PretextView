@@ -71,6 +71,7 @@ include/GLFW/glfw3native.h
 include/libdeflate.h
 src/aisort_cz.cpp
 src/aisort_cz.h
+src/parse_agp_test.cpp
 PretextViewAI.zip
 
 test_data/

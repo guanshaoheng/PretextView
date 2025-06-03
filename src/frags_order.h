@@ -32,6 +32,30 @@ public:
         return ;
     }
 
+    FragsOrder(std::vector<int> order) // order start from 1, +/- represents the direction of the fragment
+    {
+        cleanup();
+        num_frags = order.size();
+        this->order.push_back(std::vector<s32>(num_frags));
+        for (s32 i = 0; i < num_frags; i++) this->order[0][i] = order[i];
+        return ;
+    }
+
+    FragsOrder( // merge to build new fragsOrder
+        const std::vector<FragsOrder>& frags_order_list, 
+        const std::vector<std::vector<s32>>& clusters)
+    {   
+        cleanup();
+        for (u32 i = 0; i < frags_order_list.size(); i++) // 遍历所有的cluster
+        {   
+            this->num_frags += clusters[i].size();
+            auto tmp_order = frags_order_list[i].get_order_without_chromosomeInfor();
+            for (auto& tmp:tmp_order)
+                tmp = (clusters[i][std::abs(tmp)-1] + 1) * (tmp>0?1:-1); 
+            this->order.push_back(std::move(tmp_order));
+        }
+    }
+
     ~FragsOrder()
     {   
         cleanup();
@@ -81,22 +105,6 @@ public:
         }
         std::cout << std::endl;
         return ;
-    }
-
-
-    FragsOrder(
-        const std::vector<FragsOrder>& frags_order_list, 
-        const std::vector<std::vector<s32>>& clusters)
-    {   
-        cleanup();
-        for (u32 i = 0; i < frags_order_list.size(); i++) // 遍历所有的cluster
-        {   
-            this->num_frags += clusters[i].size();
-            auto tmp_order = frags_order_list[i].get_order_without_chromosomeInfor();
-            for (auto& tmp:tmp_order)
-                tmp = (clusters[i][std::abs(tmp)-1] + 1) * (tmp>0?1:-1); 
-            this->order.push_back(std::move(tmp_order));
-        }
     }
 };
 

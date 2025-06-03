@@ -35,7 +35,7 @@ SOFTWARE.
 #include <unordered_set>
 #include <queue>
 #include <fmt/core.h>
-
+#include <set>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>

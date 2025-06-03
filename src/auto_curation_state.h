@@ -100,7 +100,7 @@ public:
     f32 link_score_threshold = 0.4f;
 
     f32 auto_cut_threshold = 0.05f;
-    u32 auto_cut_diag_window_for_pixel_mean= 8;
+    u32 auto_cut_diag_window_for_pixel_mean = 8;
     u32 auto_cut_smallest_frag_size_in_pixel = 8;
 
     // cluster according to the hap name

@@ -17,6 +17,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(target_name PretextViewAI)
 
+
+
 if (APPLE)
     if(FORCE_MAC_X86) 
         message(STATUS "Forcing x86_64 architecture build")
@@ -100,6 +102,14 @@ if(NOT lib_fmt)
     message(FATAL_ERROR "lib_fmt not found")
 else()
     message(STATUS "lib_fmt found: ${lib_fmt}")
+endif()
+
+
+# test the parse_agp
+add_executable(parse_agp_test src/parse_agp_test.cpp)
+target_link_libraries(parse_agp_test PRIVATE ${lib_fmt})
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_definitions(parse_agp_test PRIVATE DEBUG)
 endif()
 
 

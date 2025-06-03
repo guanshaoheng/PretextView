@@ -114,7 +114,7 @@ public:
         }
     }
 
-    std::vector<u32> get_cut_locs_pixel(
+    std::vector<int> get_cut_locs_pixel(
         const AutoCurationState& auto_curation_state,
         const u32* pixel_rearrange_index_, 
         const contigs* Contigs,
@@ -129,7 +129,7 @@ public:
 
         // 在 select_area 中进行cut 
         this->frags->re_allocate_mem(Contigs, select_area, 1);
-        std::vector<u32> cut_locs_pixel;
+        std::vector<int> cut_locs_pixel;
         for (u32 i = 0; i < this->frags->num; i++)
         {
             this->get_single_fragment_cut_locs(i, cut_locs_pixel); 
@@ -141,7 +141,7 @@ public:
     void find_break_points(
         const u32 start_pixel,
         const std::vector<f32>& arr,
-        std::vector<u32>& break_points)
+        std::vector<int>& break_points)
     {   
         const auto& windows_size = this->smallest_frag_size_in_pixel;
         const auto& threshold = this->cut_threshold;
@@ -185,7 +185,7 @@ public:
                             min_i = i;
                         }
                     }
-                    break_points.push_back(min_i + start_pixel);
+                    break_points.push_back((int)(min_i + start_pixel));
                     i += windows_size ;
                 }
             }
@@ -196,7 +196,7 @@ public:
 
     void get_single_fragment_cut_locs(
         const u32& frag_id, 
-        std::vector<u32>& cut_locs)
+        std::vector<int>& cut_locs)
     {   
         // copy orginal to local
         std::vector<f32> hic_pixel_density_tmp(this->hic_pixel_density.begin() + this->frags->startCoord[frag_id], 
@@ -225,7 +225,7 @@ public:
             fmt::print("[Pixel Cut]: output hic_pixel_density to {}\n", filename);
         #endif // DEBUG_OUTPUT_PIXEL_CUT_FILE
 
-        std::vector<u32> break_points(0);
+        std::vector<int> break_points(0);
         this->find_break_points(
             this->frags->startCoord[frag_id],
             hic_pixel_density_tmp,

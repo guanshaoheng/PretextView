@@ -112,6 +112,7 @@ SOFTWARE.
 #include "frag_cut_calculation.h"
 #include "grey_out_settings.h"
 #include "user_profile_settings.h"
+#include "parse_agp.h"
 
 #include "shaderSource.h"
 /*
@@ -398,6 +399,29 @@ global_variable
 s32
 useCustomOrder = 0;
 
+
+#define text_box_font_size_default 20.0f
+struct TextBoxSize
+{
+    f32 font_size = text_box_font_size_default;
+
+    TextBoxSize(): font_size(text_box_font_size_default) {}
+
+    void increase_size(){
+        font_size += 2.0f;
+        font_size = my_Min(font_size, 36.0f);
+    }
+
+    void decrease_size(){
+        font_size -= 2.0f;
+        font_size = my_Max(font_size, 8.0f);
+    }
+
+    void defult_size(){
+        font_size = text_box_font_size_default;
+    }
+};
+global_variable TextBoxSize text_box_size;
 
 global_variable
 quad_data *
@@ -804,9 +828,14 @@ Default_Tags[] =
     "B2",
     "B3", 
     "FalseDuplicate",
-    "Primary"
+    "Primary",
+    "vertPaint",   // paint vertically
+    "horzPaint",   // paint horizontally
 };
 
+
+char searchbuf[256] = {0};
+s32 caseSensitive_search_sequences = 0;
 
 global_variable
 map_state *
@@ -823,6 +852,836 @@ global_variable auto auto_curation_state = AutoCurationState();
 #endif // PYTHON_SCOPED_INTERPRETER
 
 #include "spectral_cluster.h"
+
+
+global_function void
+UserSaveState(const char *headerHash = "userprofile", u08 overwrite = 1, char *path = 0);
+
+
+global_variable
+u08
+Grey_Haplotigs = 1;
+
+global_variable
+GreyOutSettings* Grey_Out_Settings = nullptr;
+
+global_variable
+UserProfileSettings* user_profile_settings_ptr = nullptr;
+
+global_variable
+u08
+Deferred_Close_UI = 0;
+
+
+// File Browser
+// from nuklear file browser example
+/* ===============================================================
+ *
+ *                          GUI
+ *
+ * ===============================================================*/
+struct
+icons
+{
+    struct nk_image home;
+    struct nk_image computer;
+    struct nk_image directory;
+
+    struct nk_image default_file;
+    struct nk_image img_file;
+};
+
+enum
+file_groups
+{
+    FILE_GROUP_DEFAULT,
+    FILE_GROUP_PRETEXT,
+    FILE_GROUP_MAX
+};
+
+enum
+file_types
+{
+    FILE_DEFAULT,
+    FILE_PRETEXT,
+    FILE_PSTM,
+    FILE_MAX
+};
+
+struct
+file_group
+{
+    enum file_groups group;
+    u32 pad;
+    const char *name;
+    struct nk_image *icon;
+};
+
+struct
+file
+{
+    enum file_types type;
+    enum file_groups group;
+    const char *suffix;
+};
+
+struct
+media
+{
+    int font;
+    int icon_sheet;
+    struct icons icons;
+    struct file_group group[FILE_GROUP_MAX];
+    struct file files[FILE_MAX];
+};
+
+#define MAX_PATH_LEN 512
+struct
+file_browser
+{
+    /* path */
+    char file[MAX_PATH_LEN];
+    char home[MAX_PATH_LEN];
+    char directory[MAX_PATH_LEN];
+
+    /* directory content */
+    char **files;
+    char **directories;
+    size_t file_count;
+    size_t dir_count;
+    struct media *media;
+};
+
+
+// file browser
+struct file_browser browser;
+struct file_browser saveBrowser;
+struct file_browser loadBrowser;
+struct file_browser saveAGPBrowser;
+struct file_browser loadAGPBrowser;
+
+
+#if defined __unix__ || defined __APPLE__
+#include <dirent.h>
+#include <unistd.h>
+#endif
+
+#ifndef _WIN32
+#include <pwd.h>
+#endif
+
+global_function
+char*
+StrDuplicate(const char *src)
+{
+    char *ret;
+    size_t len = strlen(src);
+    if (!len) return 0;
+    ret = (char*)malloc(len+1);
+    if (!ret) return 0;
+    memcpy(ret, src, len);
+    ret[len] = '\0';
+    return ret;
+}
+
+global_function
+void
+DirFreeList(char **list, size_t size)
+{
+    size_t i;
+    for (i = 0; i < size; ++i)
+        free(list[i]);
+    free(list);
+}
+
+global_function
+u32
+StringIsLexBigger(char *string, char *toCompareTo)
+{
+    u32 result;
+    u32 equal;
+
+    do
+    {
+        equal = *string == *toCompareTo;
+        result = *string > *(toCompareTo++);
+    } while (equal && (*(string++) != '\0'));
+
+    return(result);
+}
+
+global_function
+void
+CharArrayBubbleSort(char **list, u32 size)
+{
+    while (size > 1)
+    {
+        u32 newSize = 0;
+        ForLoop(size - 1)
+        {    
+            if (StringIsLexBigger(list[index], list[index + 1]))
+            {
+                char *tmp = list[index];
+                list[index] = list[index + 1];
+                list[index + 1] = tmp;
+                newSize = index + 1;
+            }
+        }
+        size = newSize;
+    }
+}
+
+global_function
+char**
+DirList(const char *dir, u32 return_subdirs, size_t *count)
+{
+    size_t n = 0;
+    char buffer[MAX_PATH_LEN];
+    char **results = NULL;
+#ifndef _WIN32
+    const DIR *none = NULL;
+    DIR *z;
+#else
+    WIN32_FIND_DATA ffd;
+    HANDLE hFind = INVALID_HANDLE_VALUE;
+    char dirBuff[MAX_PATH_LEN];
+#endif
+    size_t capacity = 32;
+    size_t size;
+
+    Assert(dir);
+    Assert(count);
+    strncpy(buffer, dir, MAX_PATH_LEN);
+    n = strlen(buffer);
+
+#ifndef _WIN32
+    if (n > 0 && (buffer[n-1] != '/'))
+        buffer[n++] = '/';
+#else
+    if (n > 0 && (buffer[n-1] != '\\'))
+        buffer[n++] = '\\';
+#endif
+
+    size = 0;
+
+#ifndef _WIN32
+    z = opendir(dir);
+#else
+    strncpy(dirBuff, buffer, MAX_PATH_LEN);
+    dirBuff[n] = '*';
+    hFind = FindFirstFile(dirBuff, &ffd);
+#endif
+    
+#ifndef _WIN32
+    if (z != none)
+#else
+    if (hFind != INVALID_HANDLE_VALUE)
+#endif
+    {
+#ifndef _WIN32
+        u32 nonempty = 1;
+        struct dirent *data = readdir(z);
+        nonempty = (data != NULL);
+        if (!nonempty) return NULL;
+#endif
+        do
+        {
+#ifndef _WIN32
+            DIR *y;
+#endif
+            char *p;
+            u32 is_subdir;
+#ifndef _WIN32
+            if (data->d_name[0] == '.')
+#else
+            if (ffd.cFileName[0] == '.') 
+#endif
+                continue;
+
+#ifndef _WIN32
+            strncpy(buffer + n, data->d_name, MAX_PATH_LEN-n);
+            y = opendir(buffer);
+            is_subdir = (y != NULL);
+            if (y != NULL) closedir(y);
+#else
+            strncpy(buffer + n, ffd.cFileName, MAX_PATH_LEN-n);
+            is_subdir = ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
+#endif
+
+            if ((return_subdirs && is_subdir) || (!is_subdir && !return_subdirs))
+            {
+                if (!size)
+                {
+                    results = (char**)calloc(sizeof(char*), capacity);
+                } 
+                else if (size >= capacity)
+                {
+                    void *old = results;
+                    capacity = capacity * 2;
+                    results = (char**)realloc(results, capacity * sizeof(char*));
+                    Assert(results);
+                    if (!results) free(old);
+                }
+#ifndef _WIN32
+                p = StrDuplicate(data->d_name);
+#else
+                p = StrDuplicate(ffd.cFileName);
+#endif  
+                results[size++] = p;
+            }
+#ifndef _WIN32    
+        } while ((data = readdir(z)) != NULL);
+#else
+        } while (FindNextFile(hFind, &ffd) != 0);
+#endif
+    }
+
+#ifndef _WIN32
+    if (z) closedir(z);
+#else
+    FindClose(hFind);
+#endif
+    *count = size;
+    
+    CharArrayBubbleSort(results, (u32)size);
+    
+    return results;
+}
+
+global_function
+struct file_group
+FILE_GROUP(enum file_groups group, const char *name, struct nk_image *icon)
+{
+    struct file_group fg;
+    fg.group = group;
+    fg.name = name;
+    fg.icon = icon;
+    return fg;
+}
+
+global_function
+struct file
+FILE_DEF(enum file_types type, const char *suffix, enum file_groups group)
+{
+    struct file fd;
+    fd.type = type;
+    fd.suffix = suffix;
+    fd.group = group;
+    return fd;
+}
+
+global_function
+struct nk_image*
+MediaIconForFile(struct media *media, const char *file)
+{
+    u32 i = 0;
+    const char *s = file;
+    char suffix[16];
+    u32 found = 0;
+    memset(suffix, 0, sizeof(suffix));
+
+    /* extract suffix .xxx from file */
+    while (*s++ != '\0')
+    {
+        if (found && i < (sizeof(suffix)-1))
+            suffix[i++] = *s;
+
+        if (*s == '.')
+        {
+            if (found)
+            {
+                found = 0;
+                break;
+            }
+            found = 1;
+        }
+    }
+
+    /* check for all file definition of all groups for fitting suffix*/
+    for (   i = 0;
+            i < FILE_MAX && found;
+            ++i)
+    {
+        struct file *d = &media->files[i];
+        {
+            const char *f = d->suffix;
+            s = suffix;
+            while (f && *f && *s && *s == *f)
+            {
+                s++; f++;
+            }
+
+            /* found correct file definition so */
+            if (f && *s == '\0' && *f == '\0')
+                return media->group[d->group].icon;
+        }
+    }
+    return &media->icons.default_file;
+}
+
+global_function
+void
+MediaInit(struct media *media)
+{
+    /* file groups */
+    struct icons *icons = &media->icons;
+    media->group[FILE_GROUP_DEFAULT] = FILE_GROUP(FILE_GROUP_DEFAULT,"default",&icons->default_file);
+    media->group[FILE_GROUP_PRETEXT] = FILE_GROUP(FILE_GROUP_PRETEXT, "pretext", &icons->img_file);
+
+    /* files */
+    media->files[FILE_DEFAULT] = FILE_DEF(FILE_DEFAULT, NULL, FILE_GROUP_DEFAULT);
+    media->files[FILE_PRETEXT] = FILE_DEF(FILE_PRETEXT, "pretext", FILE_GROUP_PRETEXT);
+    media->files[FILE_PSTM] = FILE_DEF(FILE_PSTM, "pstm", FILE_GROUP_PRETEXT);
+}
+
+global_function
+void
+FileBrowserReloadDirectoryContent(struct file_browser *browser, const char *path)
+{
+    // check if the path is valid, yes: run the load, no: set the path to the home directory
+    if (path && std::filesystem::exists(path) && std::filesystem::is_directory(path))
+        strncpy(browser->directory, path, MAX_PATH_LEN); // copy the path to the browser directory
+    else{
+        fmt::println("[FileBrowserReloadDirectoryContent::Warning]: Invalid path: {}, setting to home directory {}.", path, browser->home);
+        strncpy(browser->directory, browser->home, MAX_PATH_LEN); // if not valid, set the path to the home directory
+    }
+    DirFreeList(browser->files, browser->file_count);
+    DirFreeList(browser->directories, browser->dir_count);
+    browser->files = DirList(path, 0, &browser->file_count);
+    browser->directories = DirList(path, 1, &browser->dir_count);
+    UserSaveState(); // save the current directory to the user profile cache
+}
+
+global_function
+void
+FileBrowserInit(struct file_browser *browser, struct media *media)
+{
+    memset(browser, 0, sizeof(*browser));
+    browser->media = media;
+    {
+        /* load files and sub-directory list */
+        const char *home = getenv("HOME");
+#ifdef _WIN32
+        if (!home) home = getenv("USERPROFILE");
+#else
+        if (!home) home = getpwuid(getuid())->pw_dir;
+#endif
+        {
+            size_t l;
+            strncpy(browser->home, home, MAX_PATH_LEN);
+            l = strlen(browser->home);
+#ifdef _WIN32
+      char *sep = (char *)"\\";
+#else
+      char *sep = (char *)"/";
+#endif
+            strcpy(browser->home + l, sep);
+            strcpy(browser->directory, browser->home);
+        }
+        
+        browser->files = DirList(browser->directory, 0, &browser->file_count);
+        browser->directories = DirList(browser->directory, 1, &browser->dir_count);
+    }
+}
+
+global_variable
+char
+Save_State_Name_Buffer[1024] = {0};
+
+global_variable
+char
+AGP_Name_Buffer[1024] = {0};
+
+global_function
+void
+SetSaveStateNameBuffer(char *name)
+{
+    u32 ptr = 0;
+    while (*name) 
+    {
+        AGP_Name_Buffer[ptr] = *name;
+        Save_State_Name_Buffer[ptr++] = *name++;
+    }
+    
+    u32 ptr1 = ptr;
+    name = (char *)".savestate_1";
+    while (*name) Save_State_Name_Buffer[ptr++] = *name++;
+    Save_State_Name_Buffer[ptr] = 0;
+
+    ptr = ptr1;
+    name = (char *)".agp_1";
+    while (*name) AGP_Name_Buffer[ptr++] = *name++;
+    AGP_Name_Buffer[ptr] = 0;
+}
+
+
+/* 
+@params: 
+    - save  0 file open
+            1 save state
+            2 agp state
+*/
+global_function
+u08
+FileBrowserRun(const char *name, struct file_browser *browser, struct nk_context *ctx, u32 show, u08 save = 0)
+{
+#ifndef _WIN32
+    char pathSep = '/';
+#else
+    char pathSep = '\\';
+#endif
+   
+    struct nk_window *window = nk_window_find(ctx, name);
+    u32 doesExist = window != 0;
+
+    if (!show && !doesExist)
+    {
+        return(0);
+    }
+
+    if (show && doesExist && (window->flags & NK_WINDOW_HIDDEN))
+    {
+        window->flags &= ~(nk_flags)NK_WINDOW_HIDDEN;
+        FileBrowserReloadDirectoryContent(browser, browser->directory);
+    }
+
+    u08 ret = 0;
+    struct media *media = browser->media;
+    struct nk_rect total_space;
+
+    if (nk_begin(ctx, name, nk_rect(Screen_Scale.x * 50, Screen_Scale.y * 50, Screen_Scale.x * 800, Screen_Scale.y * 700),
+                NK_WINDOW_BORDER|NK_WINDOW_NO_SCROLLBAR|NK_WINDOW_MOVABLE|NK_WINDOW_TITLE|NK_WINDOW_CLOSABLE))
+    {
+        static f32 ratio[] = {0.25f, NK_UNDEFINED};
+        f32 spacing_x = ctx->style.window.spacing.x;
+        nk_style_set_font(ctx, &NK_Font_Browser->handle);
+
+        /* output path directory selector in the menubar */
+        ctx->style.window.spacing.x = 0;
+        nk_menubar_begin(ctx);
+        {
+            char *d = browser->directory;
+            char *begin = d + 1;
+            nk_layout_row_dynamic(ctx, Screen_Scale.y * 25.0f, 6);
+            while (*d++)
+            {
+                if (*d == pathSep)
+                {
+                    *d = '\0';
+                    if (nk_button_label(ctx, begin))
+                    {
+                        *d++ = pathSep; *d = '\0';
+                        FileBrowserReloadDirectoryContent(browser, browser->directory);
+                        break;
+                    }
+                    *d = pathSep;
+                    begin = d + 1;
+                }
+            }
+        }
+        nk_menubar_end(ctx);
+        ctx->style.window.spacing.x = spacing_x;
+
+        /* window layout */
+        f32 endSpace = save ? 100.0f : 0; // Resolved: end space is clipped as the space is not enough
+        total_space = nk_window_get_content_region(ctx);
+        nk_layout_row(ctx, NK_DYNAMIC, total_space.h - endSpace, 2, ratio);
+        nk_group_begin(ctx, "Special", NK_WINDOW_NO_SCROLLBAR);
+        {
+            struct nk_image home = media->icons.home;
+            struct nk_image computer = media->icons.computer;
+
+            nk_layout_row_dynamic(ctx, Screen_Scale.y * 40.0f, 1);
+            if (nk_button_image_label(ctx, home, "home", NK_TEXT_CENTERED))
+                FileBrowserReloadDirectoryContent(browser, browser->home);
+            if (nk_button_image_label(ctx,computer,"computer",NK_TEXT_CENTERED))
+#ifndef _WIN32
+                FileBrowserReloadDirectoryContent(browser, "/");
+#else
+                FileBrowserReloadDirectoryContent(browser, "C:\\");
+#endif
+            nk_group_end(ctx);
+        }
+
+        /* output directory content window */
+        nk_group_begin(ctx, "Content", 0);
+        {   
+            /* define a string here for filtering */
+            std::string searchbuf_str="";
+            if (!save){ // only need this while loading something
+                nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 25.0f, 3);
+                nk_label(NK_Context, "Search: ", NK_TEXT_LEFT);
+                nk_edit_string_zero_terminated(NK_Context, NK_EDIT_FIELD, searchbuf, sizeof(searchbuf) - 1, nk_filter_default);
+                caseSensitive_search_sequences = nk_check_label(NK_Context, "Case Sensitive", caseSensitive_search_sequences) ? 1 : 0;
+                searchbuf_str = std::string(searchbuf);
+                if (!caseSensitive_search_sequences) std::transform(searchbuf_str.begin(), searchbuf_str.end(), searchbuf_str.begin(), ::tolower);
+            }
+            
+            s32 index = -1;
+            size_t i = 0, j = 0;//, k = 0;
+            size_t rows = 0, cols = 0;
+            size_t count = browser->dir_count + browser->file_count;
+            f32 iconRatio[] = {0.05f, NK_UNDEFINED};
+
+            cols = 1;
+            rows = count / cols;
+            for (   i = 0;
+                    i <= rows;
+                    i += 1)
+            {   
+                size_t n = j + cols;
+                // nk_layout_row(ctx, NK_DYNAMIC, Screen_Scale.y * 25.0f, 2, iconRatio);
+                for (   ; 
+                        j < count && j < n;
+                        ++j)
+                {   
+                    /* draw one row of icons */
+                    if (j < browser->dir_count)
+                    {
+                        if (!searchbuf_str.empty()){
+                            std::string dir_str = browser->directories[j];
+                            if (!caseSensitive_search_sequences) std::transform(dir_str.begin(), dir_str.end(), dir_str.begin(), ::tolower);
+                            if (dir_str.find(searchbuf_str) == std::string::npos) continue; // not found
+                        }
+                        /* draw and execute directory buttons */
+                        if (j == n - cols) nk_layout_row(ctx, NK_DYNAMIC, Screen_Scale.y * 25.0f, 2, iconRatio);
+                        if (nk_button_image(ctx,media->icons.directory)) index = (s32)j;
+                        nk_label(ctx, browser->directories[j], NK_TEXT_LEFT);
+                    } 
+                    else 
+                    {
+                        /* draw and execute files buttons */
+                        struct nk_image *icon;
+                        size_t fileIndex = ((size_t)j - browser->dir_count);
+                        if (!searchbuf_str.empty()){
+                            std::string dir_str = browser->files[fileIndex];
+                            if (!caseSensitive_search_sequences) std::transform(dir_str.begin(), dir_str.end(), dir_str.begin(), ::tolower);
+                            if (dir_str.find(searchbuf_str) == std::string::npos) continue; // not found
+                        }
+                        if (j == n - cols) nk_layout_row(ctx, NK_DYNAMIC, Screen_Scale.y * 25.0f, 2, iconRatio);
+                        icon = MediaIconForFile(media,browser->files[fileIndex]);
+                        if (nk_button_image(ctx, *icon))
+                        {
+                            if (save)
+                            {
+                                strncpy(save == 2 ? AGP_Name_Buffer : Save_State_Name_Buffer, browser->files[fileIndex], sizeof(save == 2 ? AGP_Name_Buffer : Save_State_Name_Buffer));
+                            }
+                            else
+                            {
+                                strncpy(browser->file, browser->directory, MAX_PATH_LEN);
+                                n = strlen(browser->file);
+                                strncpy(browser->file + n, browser->files[fileIndex], MAX_PATH_LEN - n);
+                                ret = 1;
+                            }
+                        }
+                        nk_label(ctx,browser->files[fileIndex],NK_TEXT_LEFT);
+                    }
+                }
+            }
+
+            if (index != -1)
+            {
+                size_t n = strlen(browser->directory);
+                strncpy(browser->directory + n, browser->directories[index], MAX_PATH_LEN - n);
+                n = strlen(browser->directory);
+                if (n < MAX_PATH_LEN - 1)
+                {
+                    browser->directory[n] = pathSep;
+                    browser->directory[n+1] = '\0';
+                }
+                FileBrowserReloadDirectoryContent(browser, browser->directory);
+            }
+            
+            nk_group_end(ctx);
+        }
+
+        if (save)
+        {
+            Deferred_Close_UI = 0;
+
+            nk_layout_row(ctx, NK_DYNAMIC, endSpace - 5.0f, 1, ratio + 1);
+            nk_group_begin(ctx, "File", NK_WINDOW_NO_SCROLLBAR);
+            {
+                f32 fileRatio[] = {0.8f, 0.1f, NK_UNDEFINED};
+                f32 fileRatio2[] = {0.45f, 0.1f, 0.18f, 0.17f, NK_UNDEFINED};
+                nk_layout_row(ctx, NK_DYNAMIC, Screen_Scale.y * 35.0f, save == 2 ? 5 : 3, save == 2 ? fileRatio2 : fileRatio);
+
+                u08 saveViaEnter = (nk_edit_string_zero_terminated(ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER, save == 2 ? AGP_Name_Buffer : Save_State_Name_Buffer, sizeof(save == 2 ? AGP_Name_Buffer : Save_State_Name_Buffer), 0) & NK_EDIT_COMMITED) ? 1 : 0;
+                
+                static u08 overwrite = 0;
+                overwrite = (u08)nk_check_label(ctx, "Override", overwrite);
+                
+                static u08 singletons = 0;
+                if (save == 2) singletons = (u08)nk_check_label(ctx, "Format Singletons", singletons);
+                static u08 preserveOrder = 0;
+                if (save == 2) preserveOrder = (u08)nk_check_label(ctx, "Preserve Order", preserveOrder);
+
+                if (nk_button_label(ctx, "Save") || saveViaEnter)
+                {
+                    strncpy(browser->file, browser->directory, MAX_PATH_LEN);
+                    size_t n = strlen(browser->file);
+                    strncpy(browser->file + n, save == 2 ? AGP_Name_Buffer : Save_State_Name_Buffer, MAX_PATH_LEN - n);
+                    ret = 1 | (overwrite ? 2 : 0) | (singletons ? 4 : 0) | (preserveOrder ? 8 : 0);
+                }
+
+                nk_group_end(ctx);
+            }
+        }
+        
+        nk_style_set_font(ctx, &NK_Font->handle);
+    }
+    nk_end(ctx);
+    
+    return(ret);
+}
+
+global_function
+void
+MetaTagsEditorRun(struct nk_context *ctx, u08 show)
+{
+    const char *name = "Meta Data Tag Editor";
+    struct nk_window *window = nk_window_find(ctx, name);
+
+    u08 doesExist = window != 0;
+    if (!show && !doesExist) return;
+    if (show && doesExist && (window->flags & NK_WINDOW_HIDDEN)) window->flags &= ~(nk_flags)NK_WINDOW_HIDDEN;
+
+    if (nk_begin(ctx, name, nk_rect(Screen_Scale.x * 50, Screen_Scale.y * 50, Screen_Scale.x * 800, Screen_Scale.y * 600),
+                NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_CLOSABLE|NK_WINDOW_NO_SCROLLBAR))
+    {
+        Deferred_Close_UI = 0;
+
+        struct nk_rect total_space = nk_window_get_content_region(ctx);
+        f32 ratio[] = {0.05f, NK_UNDEFINED};
+        nk_layout_row(ctx, NK_DYNAMIC, total_space.h, 1, ratio + 1);
+
+        nk_group_begin(ctx, "Content", 0);
+        {
+            nk_layout_row(ctx, NK_DYNAMIC, Screen_Scale.y * 35.0f, 2, ratio);
+
+            ForLoop(ArrayCount(Meta_Data->tags))
+            {
+                char buff[4];
+                stbsp_snprintf(buff, sizeof(buff), "%u:", index + 1);
+                nk_label(ctx, buff, NK_TEXT_LEFT);
+                if (nk_edit_string_zero_terminated(ctx, NK_EDIT_FIELD, (char *)Meta_Data->tags[index], sizeof(Meta_Data->tags[index]), 0) & NK_EDIT_ACTIVE)
+                {
+                    if (!strlen((const char *)Meta_Data->tags[index]))
+                    {
+                        ForLoop2(Number_of_Pixels_1D) Map_State->metaDataFlags[index2] &= ~(1 << index);
+                        u32 nextActive = index;
+                        ForLoop2((ArrayCount(Meta_Data->tags) - 1))
+                        {
+                            if (++nextActive == ArrayCount(Meta_Data->tags)) nextActive = 0;
+                            if (strlen((const char *)Meta_Data->tags[nextActive]))
+                            {
+                                MetaData_Active_Tag = nextActive;
+                                break;
+                            }
+                        }
+                    }
+                    else if (!strlen((const char *)Meta_Data->tags[MetaData_Active_Tag])) MetaData_Active_Tag = index;
+                }
+            }
+            
+            nk_group_end(ctx);
+        }
+    }
+    nk_end(ctx);
+}
+
+global_function
+void
+AboutWindowRun(struct nk_context *ctx, u32 show)
+{
+    struct nk_window *window = nk_window_find(ctx, "About");
+    u32 doesExist = window != 0;
+
+    if (!show && !doesExist)
+    {
+        return;
+    }
+
+    if (show && doesExist && (window->flags & NK_WINDOW_HIDDEN))
+    {
+        window->flags &= ~(nk_flags)NK_WINDOW_HIDDEN;
+    }
+
+    enum windowMode {showAcknowledgements, showLicence, showThirdParty};
+
+    static windowMode mode = showAcknowledgements;
+
+    if (nk_begin_titled(ctx, "About", PretextView_Version, nk_rect(Screen_Scale.x * 50, Screen_Scale.y * 50, Screen_Scale.x * 870, Screen_Scale.y * 610),
+                NK_WINDOW_BORDER|NK_WINDOW_NO_SCROLLBAR|NK_WINDOW_MOVABLE|NK_WINDOW_TITLE|NK_WINDOW_CLOSABLE))
+    {
+        nk_menubar_begin(ctx);
+        {
+            nk_layout_row_dynamic(ctx, Screen_Scale.y * 35.0f, 3);
+            if (nk_button_label(ctx, "Acknowledgements"))
+            {
+                mode = showAcknowledgements;
+            }
+            if (nk_button_label(ctx, "Licence"))
+            {
+                mode = showLicence;
+            }
+            if (nk_button_label(ctx, "Third Party Software"))
+            {
+                mode = showThirdParty;
+            }
+        }
+        nk_menubar_end(ctx);
+
+        struct nk_rect total_space = nk_window_get_content_region(ctx);
+        f32 one = NK_UNDEFINED;
+        nk_layout_row(ctx, NK_DYNAMIC, total_space.h, 1, &one);
+
+        nk_group_begin(ctx, "About_Content", 0);
+        {
+            if (mode == showThirdParty)
+            {
+                u08 text[] = R"text(PretextView was made possible thanks to the following third party libraries and
+resources, click each entry to view its licence.)text";
+
+                nk_layout_row_static(ctx, Screen_Scale.y * 60, (s32)(Screen_Scale.x * 820), 1);
+                s32 len = sizeof(text);
+                nk_edit_string(ctx, NK_EDIT_READ_ONLY | NK_EDIT_NO_CURSOR | NK_EDIT_SELECTABLE | NK_EDIT_MULTILINE, (char *)text, &len, len, 0);
+
+                ForLoop(Number_of_ThirdParties)
+                {
+                    u32 nameIndex = 2 * index;
+                    u32 licenceIndex = nameIndex + 1;
+                    s32 *sizes = ThirdParty_Licence_Sizes[index];
+
+                    if (nk_tree_push_id(NK_Context, NK_TREE_TAB, (const char *)ThirdParty[nameIndex], NK_MINIMIZED, (s32)index))
+                    {
+                        nk_layout_row_static(ctx, Screen_Scale.y * (f32)sizes[0], (s32)(Screen_Scale.x * (f32)sizes[1]), 1);
+                        len = (s32)StringLength(ThirdParty[licenceIndex]);
+                        nk_edit_string(ctx, NK_EDIT_READ_ONLY | NK_EDIT_NO_CURSOR | NK_EDIT_SELECTABLE | NK_EDIT_MULTILINE, (char *)ThirdParty[licenceIndex], &len, len, 0);
+                        nk_tree_pop(NK_Context);
+                    }
+                }
+            }
+            else if (mode == showAcknowledgements)
+            {
+                nk_layout_row_static(ctx, Screen_Scale.y * 500, (s32)(Screen_Scale.x * 820), 1);
+                s32 len = sizeof(Acknowledgements);
+                nk_edit_string(ctx, NK_EDIT_READ_ONLY | NK_EDIT_NO_CURSOR | NK_EDIT_SELECTABLE | NK_EDIT_MULTILINE, (char *)Acknowledgements, &len, len, 0);
+            }
+            else
+            {
+                nk_layout_row_static(ctx, Screen_Scale.y * 500, (s32)(Screen_Scale.x * 820), 1);
+                s32 len = sizeof(Licence);
+                nk_edit_string(ctx, NK_EDIT_READ_ONLY | NK_EDIT_NO_CURSOR | NK_EDIT_SELECTABLE | NK_EDIT_MULTILINE, (char *)Licence, &len, len, 0);
+            }
+            
+            nk_group_end(ctx);
+        }
+    }
+
+    nk_end(ctx);
+}
+
 
 global_function
 void
@@ -1039,6 +1898,14 @@ map_edit
     u32 finalPix1;
     u32 finalPix2;
     s32 delta;
+
+    map_edit() {finalPix1 = 0; finalPix2 = 0; delta = 0;}
+    map_edit(u32 fp1, u32 fp2, s32 d)
+    {
+        finalPix1 = fp1;
+        finalPix2 = fp2;
+        delta = d;
+    }
 };
 
 struct
@@ -1993,19 +2860,6 @@ MouseMove(GLFWwindow* window, f64 x, f64 y)
 }
 
 
-global_variable
-u08
-Grey_Haplotigs = 1;
-
-global_variable
-GreyOutSettings* Grey_Out_Settings = nullptr;
-
-global_variable
-UserProfileSettings* user_profile_settings_ptr = nullptr;
-
-global_variable
-u08
-Deferred_Close_UI = 0;
 
 global_function
 void
@@ -3222,7 +4076,7 @@ Render() {
 
             if (Waypoint_Edit_Mode && !UI_On)
             {
-                fonsSetSize(FontStash_Context, 24.0f * Screen_Scale.x);
+                fonsSetSize(FontStash_Context, text_box_size.font_size * Screen_Scale.x);
                 fonsVertMetrics(FontStash_Context, 0, 0, &lh);
                 fonsSetColor(FontStash_Context, FourFloatColorToU32(Waypoint_Mode_Data->text));
 
@@ -3298,7 +4152,7 @@ Render() {
             // f32 lineWidth = Waypoint_Mode_Data->size / DefaultWaypointSize * 0.7f * Screen_Scale.x;
             // f32 lineHeight = Waypoint_Mode_Data->size / DefaultWaypointSize * 8.0f * Screen_Scale.x;
 
-            fonsSetSize(FontStash_Context, 24.0f * Screen_Scale.x);
+            fonsSetSize(FontStash_Context, text_box_size.font_size * Screen_Scale.x);
             fonsVertMetrics(FontStash_Context, 0, 0, &lh);
             fonsSetColor(FontStash_Context, FourFloatColorToU32(Extension_Mode_Data->text));
 
@@ -3504,7 +4358,7 @@ Render() {
 
             if (Scaff_Edit_Mode && !UI_On)
             {
-                fonsSetSize(FontStash_Context, 24.0f * Screen_Scale.x);
+                fonsSetSize(FontStash_Context, text_box_size.font_size * Screen_Scale.x);
                 fonsVertMetrics(FontStash_Context, 0, 0, &lh);
                 fonsSetColor(FontStash_Context, FourFloatColorToU32(Scaff_Mode_Data->text));
 
@@ -3563,7 +4417,7 @@ Render() {
 
             { // draw the help text in the bottom right corner
                 fonsSetFont(FontStash_Context, Font_Bold);
-                fonsSetSize(FontStash_Context, 24.0f * Screen_Scale.x);
+                fonsSetSize(FontStash_Context, text_box_size.font_size * Screen_Scale.x);
                 fonsVertMetrics(FontStash_Context, 0, 0, &lh);
                 fonsSetColor(FontStash_Context, FourFloatColorToU32(Scaff_Mode_Data->text));
 
@@ -3579,7 +4433,7 @@ Render() {
                     fmt::format("Left/Right: change Sort Mode ({})", auto_curation_state.sort_mode_names[auto_curation_state.sort_mode]),
                     fmt::format("Left/Right Shift: Number of Clusters: {}", auto_curation_state.num_clusters),
                     fmt::format("H: Hap_Name_Clustering: {}", auto_curation_state.hap_cluster_flag ? "ON" : "OFF"),
-                    fmt::format("K: Cut with gap: {}", auto_curation_state.auto_cut_with_extension? "ON" : "OFF"),
+                    fmt::format("O: Cut with gap: {}", auto_curation_state.auto_cut_with_extension? "ON" : "OFF"),
                 };
 
                 f32 textBoxHeight = (f32)helpTexts.size() * (lh + 1.0f) - 1.0f;
@@ -3784,6 +4638,44 @@ Render() {
                         glUseProgram(UI_Shader->shaderProgram);
                         fonsSetColor(FontStash_Context, colour);
                     }
+                    else{
+                        int is_vert_horiz_grey_out = Grey_Out_Settings->is_vert_horiz_grey_out(cont->metaDataFlags, Meta_Data);
+                        if (is_vert_horiz_grey_out == 0) continue;
+                        // draw the vertical or horizontal grey out mask
+                        vert[0].x = ModelXToScreen(start_contig - 0.5f);  vert[0].y = ModelYToScreen(0.5f - start_contig);
+                        vert[1].x = ModelXToScreen(start_contig - 0.5f);  vert[1].y = ModelYToScreen(0.5f - end_contig);
+                        vert[2].x = ModelXToScreen(end_contig - 0.5f);    vert[2].y = ModelYToScreen(0.5f - end_contig);
+                        vert[3].x = ModelXToScreen(end_contig - 0.5f);    vert[3].y = ModelYToScreen(0.5f - start_contig);
+
+                        if (is_vert_horiz_grey_out == 1) { // vertical
+                            vert[0].y = ModelYToScreen( 0.5f);
+                            vert[1].y = ModelYToScreen(-0.5f);
+                            vert[2].y = ModelYToScreen(-0.5f);
+                            vert[3].y = ModelYToScreen( 0.5f);
+                        }
+                        else { // horizontal
+                            vert[0].x = ModelXToScreen(-0.5f);
+                            vert[1].x = ModelXToScreen(-0.5f);
+                            vert[2].x = ModelXToScreen( 0.5f);
+                            vert[3].x = ModelXToScreen( 0.5f);
+                        }
+
+                        ColourGenerator((u32)scaffId, (f32 *)barColour);
+                        u32 colour = FourFloatColorToU32(*((nk_colorf *)barColour));
+
+                        glUseProgram(Flat_Shader->shaderProgram);
+                        glUniform4fv(Flat_Shader->colorLocation, 1, (GLfloat *)&barColour);
+
+                        glBindBuffer(GL_ARRAY_BUFFER, Scaff_Bar_Data->vbos[ptr]);
+                        glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
+                        glBindVertexArray(Scaff_Bar_Data->vaos[ptr++]);
+                        glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
+
+                        glUseProgram(UI_Shader->shaderProgram);
+                        fonsSetColor(FontStash_Context, colour);
+
+                    }
+
                 }
                 start_contig = end_contig;
                 scaffId = cont->scaffId;
@@ -3794,7 +4686,7 @@ Render() {
                 u32 ptr = 0;
                 vertex vert[4];
 
-                fonsSetSize(FontStash_Context, 24.0f * Screen_Scale.x);
+                fonsSetSize(FontStash_Context, text_box_size.font_size * Screen_Scale.x);
                 fonsVertMetrics(FontStash_Context, 0, 0, &lh);
                 fonsSetColor(FontStash_Context, FourFloatColorToU32(MetaData_Mode_Data->text));
 
@@ -4250,7 +5142,7 @@ Render() {
 
                 { // draw the help text in the bottom right corner
                     fonsSetFont(FontStash_Context, Font_Bold);
-                    fonsSetSize(FontStash_Context, 24.0f * Screen_Scale.x);
+                    fonsSetSize(FontStash_Context, text_box_size.font_size * Screen_Scale.x);
                     fonsVertMetrics(FontStash_Context, 0, 0, &lh);
 
                     std::vector<char*> helpTexts = {
@@ -5034,6 +5926,9 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
         Number_of_MipMaps = mipMapLevels;
 
         Number_of_Pixels_1D = Number_of_Textures_1D * Texture_Resolution; // 更新一维数据的长度
+
+        // update the pixel_cut consider range if high resolution
+        if (Number_of_Pixels_1D > 32768) auto_curation_state.auto_cut_diag_window_for_pixel_mean = 16;
 
         Map_State = PushStructP(arena, map_state);                                   // 从内存池中分配一个包含 map_state 结构的内存块，并返回指向该结构的指针， 存储contigs map到图像中的数据
         Map_State->contigIds = PushArrayP(arena, u32, Number_of_Pixels_1D);          // 从内存池中分配存储 contigIds 的数组，数组长度为 Number_of_Pixels_1D
@@ -6411,7 +7306,7 @@ RearrangeMap(       // NOTE: VERY IMPORTANT
 global_function
 void 
 BreakMap(
-    const u32& loc, 
+    const int& loc, 
     const u32& ignore_len       // cut点到开头或者结尾的长度不足ignore_len的contig不会被切断
 )
 {   
@@ -6428,34 +7323,33 @@ BreakMap(
 
     s32 ptr_left = (s32)loc, ptr_right = (s32)loc;
     u08 inversed = IsContigInverted(contig_id);
-    while ( // 从loc向左遍历，找到第一个不满足条件的像素点索引
-        --ptr_left >= 0 && 
+    while ( // 从loc向左遍历，找到最后一个满足条件的像素点索引
+        ptr_left > 0 && 
         Map_State->contigIds[ptr_left] == contig_id && 
-        (Map_State->contigRelCoords[ptr_left] ==  Map_State->contigRelCoords[ptr_left+1]+ (inversed ? +1 : -1)) ) {};
-    while ( // 从loc向右遍历，找到第一个不满足条件的像素点索引
-        ++ptr_right < Number_of_Pixels_1D && 
+        (Map_State->contigRelCoords[ptr_left-1] ==  Map_State->contigRelCoords[ptr_left]+ (inversed ? +1 : -1)) ) { --ptr_left; };
+    while ( // 从loc向右遍历，找到最后一个满足条件的像素点索引
+        ptr_right < Number_of_Pixels_1D-1 && 
         Map_State->contigIds[ptr_right] == contig_id && 
-        (Map_State->contigRelCoords[ptr_right - 1] ==  Map_State->contigRelCoords[ptr_right]+ (inversed ? +1 : -1)) ) {};
+        (Map_State->contigRelCoords[ptr_right] ==  Map_State->contigRelCoords[ptr_right+1]+ (inversed ? +1 : -1)) ) {++ptr_right;};
     
-    if ((loc - ptr_left) < ignore_len || (ptr_right - loc) < ignore_len )  
+    int l_len = loc - ptr_left + 1, r_len = ptr_right - loc ; // treat the loc as the right side
+    if (l_len <= (ignore_len) || r_len <= (ignore_len-1) )  
     {   
         fmt::print(
-            "[Pixel Cut::warning] original_contig_id {} current_contig_id {}, pixel range: [{}, cut({}), {}], left({}), right({}), smaller than ignore_len ({}), cut at loc: ({}) is ignored\n", 
-            original_contig_id%Max_Number_of_Contigs, 
+            "[Pixel Cut::warning] original_contig_id {} current_contig_id {}, pixel range: [{}, cut({}), {}], left_len({})<=ignore_len({}) or right_len({})<=ignore_len({}-1), cut at loc: ({}) is ignored\n", 
+            original_contig_id % Max_Number_of_Contigs, 
             contig_id, 
             ptr_left, 
             loc, 
             ptr_right, 
-            loc - ptr_left, 
-            ptr_right - loc, 
-            ignore_len, loc);
+            l_len,  ignore_len,
+            r_len,  ignore_len, 
+            loc);
         return;
     } 
 
-    ptr_left++; ptr_right--;
-
     // cut the contig by amending the original Contig Ids.
-    for (u32 tmp = loc; tmp <= ptr_right; tmp++) // left side
+    for (u32 tmp = loc + 1; tmp <= ptr_right; tmp++) // cut_loc is included as left
     {   
         if (Map_State->originalContigIds[tmp] > (std::numeric_limits<u32>::max() - Max_Number_of_Contigs))
         {
@@ -6537,16 +7431,16 @@ void run_ai_detection()
     }
 }
 
-void cut_frags(const std::vector<u32>& problem_locs)
+void cut_frags(const std::vector<int>& problem_locs, bool consider_gap_extension_flag=true, bool consider_min_len_flag=true)
 {   
-    const u32* gap_data_ptr = auto_curation_state.auto_cut_with_extension ? Extensions.get_graph_data_ptr("gap"):nullptr; 
+    const u32* gap_data_ptr = (auto_curation_state.auto_cut_with_extension && consider_gap_extension_flag) ? Extensions.get_graph_data_ptr("gap"):nullptr; 
 
     for (auto & loc_orig : problem_locs)
     {   
-        u32 loc = loc_orig;
+        int loc = loc_orig;
         if (gap_data_ptr) // correct loc with considering the gap extension
         {   
-            u32 distance_tmp = 1;
+            int distance_tmp = 0;
             while (distance_tmp <= auto_curation_state.auto_cut_gap_loc_threshold)
             {
                 if (loc_orig + distance_tmp < Number_of_Pixels_1D && gap_data_ptr[loc_orig + distance_tmp] > 0 )
@@ -6576,7 +7470,7 @@ void cut_frags(const std::vector<u32>& problem_locs)
         // cut the fragment
         BreakMap(
             loc,   // cut loc
-            auto_curation_state.auto_cut_smallest_frag_size_in_pixel); // ignore length
+            consider_min_len_flag ? auto_curation_state.auto_cut_smallest_frag_size_in_pixel:1); // ignore length
         UpdateContigsFromMapState();
     }
     Redisplay = 1;
@@ -6767,7 +7661,7 @@ auto_cut_func(
             Contigs);
         glBindBuffer(GL_TEXTURE_BUFFER, Contact_Matrix->pixelRearrangmentLookupBuffer);
         const u32 *pixel_rearrange_index = (const u32 *)glMapBufferRange(GL_TEXTURE_BUFFER, 0, Number_of_Pixels_1D * sizeof(u32), GL_MAP_READ_BIT);
-        std::vector<u32> cut_locs_pixel = frag_cut_cal_ptr->get_cut_locs_pixel(
+        std::vector<int> cut_locs_pixel = frag_cut_cal_ptr->get_cut_locs_pixel(
             auto_curation_state, 
             pixel_rearrange_index, // pixel_rearrangement_buffer
             Contigs,
@@ -7254,12 +8148,33 @@ restore_settings_after_copy(const f32 *original_color_control_points)
 }
 
 
+static f32 camera_pos_before_jump[] = {-1000.f, -1000.f};
+
+
 global_function void
 JumpToDiagonal(GLFWwindow *window)
-{
+{   
+    // save the current camera position before jumping
+    camera_pos_before_jump[0] = Camera_Position.x;
+    camera_pos_before_jump[1] = Camera_Position.y;
+    // jump to the diagonal position
     Camera_Position.x = -Camera_Position.y;
     ClampCamera();
     Redisplay = 1;
+}
+
+global_function void 
+jump_back_pos_before_jump(GLFWwindow *window)
+{
+    if (camera_pos_before_jump[0] > -999.f && camera_pos_before_jump[1] > -999.f) {
+        Camera_Position.x = camera_pos_before_jump[0];
+        Camera_Position.y = camera_pos_before_jump[1];
+        ClampCamera();
+        Redisplay = 1;
+    }
+    else {
+        fmt::print(stderr, "[Jump::warning] No saved position to jump back.\n");
+    }
 }
 
 
@@ -7731,9 +8646,7 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                     break;
 
                 case GLFW_KEY_K:
-                    if (Select_Sort_Area_Mode) 
-                        auto_curation_state.auto_cut_with_extension = !auto_curation_state.auto_cut_with_extension;
-                    else keyPressed = 0;
+                    jump_back_pos_before_jump(window);
                     break;
 
                 case GLFW_KEY_L:
@@ -7756,6 +8669,9 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                     break;
 
                 case GLFW_KEY_O:
+                    if (Select_Sort_Area_Mode) 
+                        auto_curation_state.auto_cut_with_extension = !auto_curation_state.auto_cut_with_extension;
+                    else keyPressed = 0;
                     break;
                 
                 case GLFW_KEY_P:
@@ -8055,6 +8971,28 @@ KeyBoard(GLFWwindow* window, s32 key, s32 scancode, s32 action, s32 mods)
                         keyPressed = 0;
                     }
                     break;
+                
+                case GLFW_KEY_EQUAL:
+                    if (mods == GLFW_MOD_CONTROL && action == GLFW_PRESS){
+                        text_box_size.increase_size();
+                        Redisplay = 1;
+                    }
+                    else keyPressed = 0;
+                    break;
+                case GLFW_KEY_MINUS:
+                    if (mods == GLFW_MOD_CONTROL && action == GLFW_PRESS){
+                        text_box_size.decrease_size();
+                        Redisplay = 1;
+                    }
+                    else keyPressed = 0;
+                    break;
+                case GLFW_KEY_0:
+                    if (mods == GLFW_MOD_CONTROL && action == GLFW_PRESS){
+                        text_box_size.defult_size();
+                        Redisplay = 1;
+                    }
+                    else keyPressed = 0;
+                    break;
 
                 default:
                     keyPressed = 0;
@@ -8076,776 +9014,7 @@ ErrorCallback(s32 error, const char *desc)
     fprintf(stderr, "Error: %s\n", desc);
 }
 
-// File Browser
-// from nuklear file browser example
-/* ===============================================================
- *
- *                          GUI
- *
- * ===============================================================*/
-struct
-icons
-{
-    struct nk_image home;
-    struct nk_image computer;
-    struct nk_image directory;
 
-    struct nk_image default_file;
-    struct nk_image img_file;
-};
-
-enum
-file_groups
-{
-    FILE_GROUP_DEFAULT,
-    FILE_GROUP_PRETEXT,
-    FILE_GROUP_MAX
-};
-
-enum
-file_types
-{
-    FILE_DEFAULT,
-    FILE_PRETEXT,
-    FILE_PSTM,
-    FILE_MAX
-};
-
-struct
-file_group
-{
-    enum file_groups group;
-    u32 pad;
-    const char *name;
-    struct nk_image *icon;
-};
-
-struct
-file
-{
-    enum file_types type;
-    enum file_groups group;
-    const char *suffix;
-};
-
-struct
-media
-{
-    int font;
-    int icon_sheet;
-    struct icons icons;
-    struct file_group group[FILE_GROUP_MAX];
-    struct file files[FILE_MAX];
-};
-
-#define MAX_PATH_LEN 512
-struct
-file_browser
-{
-    /* path */
-    char file[MAX_PATH_LEN];
-    char home[MAX_PATH_LEN];
-    char directory[MAX_PATH_LEN];
-
-    /* directory content */
-    char **files;
-    char **directories;
-    size_t file_count;
-    size_t dir_count;
-    struct media *media;
-};
-
-#if defined __unix__ || defined __APPLE__
-#include <dirent.h>
-#include <unistd.h>
-#endif
-
-#ifndef _WIN32
-#include <pwd.h>
-#endif
-
-global_function
-char*
-StrDuplicate(const char *src)
-{
-    char *ret;
-    size_t len = strlen(src);
-    if (!len) return 0;
-    ret = (char*)malloc(len+1);
-    if (!ret) return 0;
-    memcpy(ret, src, len);
-    ret[len] = '\0';
-    return ret;
-}
-
-global_function
-void
-DirFreeList(char **list, size_t size)
-{
-    size_t i;
-    for (i = 0; i < size; ++i)
-        free(list[i]);
-    free(list);
-}
-
-global_function
-u32
-StringIsLexBigger(char *string, char *toCompareTo)
-{
-    u32 result;
-    u32 equal;
-
-    do
-    {
-        equal = *string == *toCompareTo;
-        result = *string > *(toCompareTo++);
-    } while (equal && (*(string++) != '\0'));
-
-    return(result);
-}
-
-global_function
-void
-CharArrayBubbleSort(char **list, u32 size)
-{
-    while (size > 1)
-    {
-        u32 newSize = 0;
-        ForLoop(size - 1)
-        {    
-            if (StringIsLexBigger(list[index], list[index + 1]))
-            {
-                char *tmp = list[index];
-                list[index] = list[index + 1];
-                list[index + 1] = tmp;
-                newSize = index + 1;
-            }
-        }
-        size = newSize;
-    }
-}
-
-global_function
-char**
-DirList(const char *dir, u32 return_subdirs, size_t *count)
-{
-    size_t n = 0;
-    char buffer[MAX_PATH_LEN];
-    char **results = NULL;
-#ifndef _WIN32
-    const DIR *none = NULL;
-    DIR *z;
-#else
-    WIN32_FIND_DATA ffd;
-    HANDLE hFind = INVALID_HANDLE_VALUE;
-    char dirBuff[MAX_PATH_LEN];
-#endif
-    size_t capacity = 32;
-    size_t size;
-
-    Assert(dir);
-    Assert(count);
-    strncpy(buffer, dir, MAX_PATH_LEN);
-    n = strlen(buffer);
-
-#ifndef _WIN32
-    if (n > 0 && (buffer[n-1] != '/'))
-        buffer[n++] = '/';
-#else
-    if (n > 0 && (buffer[n-1] != '\\'))
-        buffer[n++] = '\\';
-#endif
-
-    size = 0;
-
-#ifndef _WIN32
-    z = opendir(dir);
-#else
-    strncpy(dirBuff, buffer, MAX_PATH_LEN);
-    dirBuff[n] = '*';
-    hFind = FindFirstFile(dirBuff, &ffd);
-#endif
-    
-#ifndef _WIN32
-    if (z != none)
-#else
-    if (hFind != INVALID_HANDLE_VALUE)
-#endif
-    {
-#ifndef _WIN32
-        u32 nonempty = 1;
-        struct dirent *data = readdir(z);
-        nonempty = (data != NULL);
-        if (!nonempty) return NULL;
-#endif
-        do
-        {
-#ifndef _WIN32
-            DIR *y;
-#endif
-            char *p;
-            u32 is_subdir;
-#ifndef _WIN32
-            if (data->d_name[0] == '.')
-#else
-            if (ffd.cFileName[0] == '.') 
-#endif
-                continue;
-
-#ifndef _WIN32
-            strncpy(buffer + n, data->d_name, MAX_PATH_LEN-n);
-            y = opendir(buffer);
-            is_subdir = (y != NULL);
-            if (y != NULL) closedir(y);
-#else
-            strncpy(buffer + n, ffd.cFileName, MAX_PATH_LEN-n);
-            is_subdir = ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
-#endif
-
-            if ((return_subdirs && is_subdir) || (!is_subdir && !return_subdirs))
-            {
-                if (!size)
-                {
-                    results = (char**)calloc(sizeof(char*), capacity);
-                } 
-                else if (size >= capacity)
-                {
-                    void *old = results;
-                    capacity = capacity * 2;
-                    results = (char**)realloc(results, capacity * sizeof(char*));
-                    Assert(results);
-                    if (!results) free(old);
-                }
-#ifndef _WIN32
-                p = StrDuplicate(data->d_name);
-#else
-                p = StrDuplicate(ffd.cFileName);
-#endif  
-                results[size++] = p;
-            }
-#ifndef _WIN32    
-        } while ((data = readdir(z)) != NULL);
-#else
-        } while (FindNextFile(hFind, &ffd) != 0);
-#endif
-    }
-
-#ifndef _WIN32
-    if (z) closedir(z);
-#else
-    FindClose(hFind);
-#endif
-    *count = size;
-    
-    CharArrayBubbleSort(results, (u32)size);
-    
-    return results;
-}
-
-global_function
-struct file_group
-FILE_GROUP(enum file_groups group, const char *name, struct nk_image *icon)
-{
-    struct file_group fg;
-    fg.group = group;
-    fg.name = name;
-    fg.icon = icon;
-    return fg;
-}
-
-global_function
-struct file
-FILE_DEF(enum file_types type, const char *suffix, enum file_groups group)
-{
-    struct file fd;
-    fd.type = type;
-    fd.suffix = suffix;
-    fd.group = group;
-    return fd;
-}
-
-global_function
-struct nk_image*
-MediaIconForFile(struct media *media, const char *file)
-{
-    u32 i = 0;
-    const char *s = file;
-    char suffix[16];
-    u32 found = 0;
-    memset(suffix, 0, sizeof(suffix));
-
-    /* extract suffix .xxx from file */
-    while (*s++ != '\0')
-    {
-        if (found && i < (sizeof(suffix)-1))
-            suffix[i++] = *s;
-
-        if (*s == '.')
-        {
-            if (found)
-            {
-                found = 0;
-                break;
-            }
-            found = 1;
-        }
-    }
-
-    /* check for all file definition of all groups for fitting suffix*/
-    for (   i = 0;
-            i < FILE_MAX && found;
-            ++i)
-    {
-        struct file *d = &media->files[i];
-        {
-            const char *f = d->suffix;
-            s = suffix;
-            while (f && *f && *s && *s == *f)
-            {
-                s++; f++;
-            }
-
-            /* found correct file definition so */
-            if (f && *s == '\0' && *f == '\0')
-                return media->group[d->group].icon;
-        }
-    }
-    return &media->icons.default_file;
-}
-
-global_function
-void
-MediaInit(struct media *media)
-{
-    /* file groups */
-    struct icons *icons = &media->icons;
-    media->group[FILE_GROUP_DEFAULT] = FILE_GROUP(FILE_GROUP_DEFAULT,"default",&icons->default_file);
-    media->group[FILE_GROUP_PRETEXT] = FILE_GROUP(FILE_GROUP_PRETEXT, "pretext", &icons->img_file);
-
-    /* files */
-    media->files[FILE_DEFAULT] = FILE_DEF(FILE_DEFAULT, NULL, FILE_GROUP_DEFAULT);
-    media->files[FILE_PRETEXT] = FILE_DEF(FILE_PRETEXT, "pretext", FILE_GROUP_PRETEXT);
-    media->files[FILE_PSTM] = FILE_DEF(FILE_PSTM, "pstm", FILE_GROUP_PRETEXT);
-}
-
-global_function
-void
-FileBrowserReloadDirectoryContent(struct file_browser *browser, const char *path)
-{
-    strncpy(browser->directory, path, MAX_PATH_LEN);
-    DirFreeList(browser->files, browser->file_count);
-    DirFreeList(browser->directories, browser->dir_count);
-    browser->files = DirList(path, 0, &browser->file_count);
-    browser->directories = DirList(path, 1, &browser->dir_count);
-}
-
-global_function
-void
-FileBrowserInit(struct file_browser *browser, struct media *media)
-{
-    memset(browser, 0, sizeof(*browser));
-    browser->media = media;
-    {
-        /* load files and sub-directory list */
-        const char *home = getenv("HOME");
-#ifdef _WIN32
-        if (!home) home = getenv("USERPROFILE");
-#else
-        if (!home) home = getpwuid(getuid())->pw_dir;
-#endif
-        {
-            size_t l;
-            strncpy(browser->home, home, MAX_PATH_LEN);
-            l = strlen(browser->home);
-#ifdef _WIN32
-      char *sep = (char *)"\\";
-#else
-      char *sep = (char *)"/";
-#endif
-            strcpy(browser->home + l, sep);
-            strcpy(browser->directory, browser->home);
-        }
-        
-        browser->files = DirList(browser->directory, 0, &browser->file_count);
-        browser->directories = DirList(browser->directory, 1, &browser->dir_count);
-    }
-}
-
-global_variable
-char
-Save_State_Name_Buffer[1024] = {0};
-
-global_variable
-char
-AGP_Name_Buffer[1024] = {0};
-
-global_function
-void
-SetSaveStateNameBuffer(char *name)
-{
-    u32 ptr = 0;
-    while (*name) 
-    {
-        AGP_Name_Buffer[ptr] = *name;
-        Save_State_Name_Buffer[ptr++] = *name++;
-    }
-    
-    u32 ptr1 = ptr;
-    name = (char *)".savestate_1";
-    while (*name) Save_State_Name_Buffer[ptr++] = *name++;
-    Save_State_Name_Buffer[ptr] = 0;
-
-    ptr = ptr1;
-    name = (char *)".agp_1";
-    while (*name) AGP_Name_Buffer[ptr++] = *name++;
-    AGP_Name_Buffer[ptr] = 0;
-}
-
-global_function
-u08
-FileBrowserRun(const char *name, struct file_browser *browser, struct nk_context *ctx, u32 show, u08 save = 0)
-{
-#ifndef _WIN32
-    char pathSep = '/';
-#else
-    char pathSep = '\\';
-#endif
-   
-    struct nk_window *window = nk_window_find(ctx, name);
-    u32 doesExist = window != 0;
-
-    if (!show && !doesExist)
-    {
-        return(0);
-    }
-
-    if (show && doesExist && (window->flags & NK_WINDOW_HIDDEN))
-    {
-        window->flags &= ~(nk_flags)NK_WINDOW_HIDDEN;
-        FileBrowserReloadDirectoryContent(browser, browser->directory);
-    }
-
-    u08 ret = 0;
-    struct media *media = browser->media;
-    struct nk_rect total_space;
-
-    if (nk_begin(ctx, name, nk_rect(Screen_Scale.x * 50, Screen_Scale.y * 50, Screen_Scale.x * 800, Screen_Scale.y * 700),
-                NK_WINDOW_BORDER|NK_WINDOW_NO_SCROLLBAR|NK_WINDOW_MOVABLE|NK_WINDOW_TITLE|NK_WINDOW_CLOSABLE))
-    {
-        static f32 ratio[] = {0.25f, NK_UNDEFINED};
-        f32 spacing_x = ctx->style.window.spacing.x;
-        nk_style_set_font(ctx, &NK_Font_Browser->handle);
-
-        /* output path directory selector in the menubar */
-        ctx->style.window.spacing.x = 0;
-        nk_menubar_begin(ctx);
-        {
-            char *d = browser->directory;
-            char *begin = d + 1;
-            nk_layout_row_dynamic(ctx, Screen_Scale.y * 25.0f, 6);
-            while (*d++)
-            {
-                if (*d == pathSep)
-                {
-                    *d = '\0';
-                    if (nk_button_label(ctx, begin))
-                    {
-                        *d++ = pathSep; *d = '\0';
-                        FileBrowserReloadDirectoryContent(browser, browser->directory);
-                        break;
-                    }
-                    *d = pathSep;
-                    begin = d + 1;
-                }
-            }
-        }
-        nk_menubar_end(ctx);
-        ctx->style.window.spacing.x = spacing_x;
-
-        /* window layout */
-        f32 endSpace = save ? 100.0f : 0; // Resolved: end space is clipped as the space is not enough
-        total_space = nk_window_get_content_region(ctx);
-        nk_layout_row(ctx, NK_DYNAMIC, total_space.h - endSpace, 2, ratio);
-        nk_group_begin(ctx, "Special", NK_WINDOW_NO_SCROLLBAR);
-        {
-            struct nk_image home = media->icons.home;
-            struct nk_image computer = media->icons.computer;
-
-            nk_layout_row_dynamic(ctx, Screen_Scale.y * 40.0f, 1);
-            if (nk_button_image_label(ctx, home, "home", NK_TEXT_CENTERED))
-                FileBrowserReloadDirectoryContent(browser, browser->home);
-            if (nk_button_image_label(ctx,computer,"computer",NK_TEXT_CENTERED))
-#ifndef _WIN32
-                FileBrowserReloadDirectoryContent(browser, "/");
-#else
-                FileBrowserReloadDirectoryContent(browser, "C:\\");
-#endif
-            nk_group_end(ctx);
-        }
-
-        /* output directory content window */
-        nk_group_begin(ctx, "Content", 0);
-        {
-            s32 index = -1;
-            size_t i = 0, j = 0;//, k = 0;
-            size_t rows = 0, cols = 0;
-            size_t count = browser->dir_count + browser->file_count;
-            f32 iconRatio[] = {0.05f, NK_UNDEFINED};
-
-            cols = 1;
-            rows = count / cols;
-            for (   i = 0;
-                    i <= rows;
-                    i += 1)
-            {
-                {
-                    size_t n = j + cols;
-                    nk_layout_row(ctx, NK_DYNAMIC, Screen_Scale.y * 25.0f, 2, iconRatio);
-                    for (   ; 
-                            j < count && j < n;
-                            ++j)
-                    {
-                        /* draw one row of icons */
-                        if (j < browser->dir_count)
-                        {
-                            /* draw and execute directory buttons */
-                            if (nk_button_image(ctx,media->icons.directory))
-                                index = (s32)j;
-                            nk_label(ctx, browser->directories[j], NK_TEXT_LEFT);
-                        } 
-                        else 
-                        {
-                            /* draw and execute files buttons */
-                            struct nk_image *icon;
-                            size_t fileIndex = ((size_t)j - browser->dir_count);
-                            icon = MediaIconForFile(media,browser->files[fileIndex]);
-                            if (nk_button_image(ctx, *icon))
-                            {
-                                if (save)
-                                {
-                                    strncpy(save == 2 ? AGP_Name_Buffer : Save_State_Name_Buffer, browser->files[fileIndex], sizeof(save == 2 ? AGP_Name_Buffer : Save_State_Name_Buffer));
-                                }
-                                else
-                                {
-                                    strncpy(browser->file, browser->directory, MAX_PATH_LEN);
-                                    n = strlen(browser->file);
-                                    strncpy(browser->file + n, browser->files[fileIndex], MAX_PATH_LEN - n);
-                                    ret = 1;
-                                }
-                            }
-                            nk_label(ctx,browser->files[fileIndex],NK_TEXT_LEFT);
-                        }
-                    }
-                }
-            }
-
-            if (index != -1)
-            {
-                size_t n = strlen(browser->directory);
-                strncpy(browser->directory + n, browser->directories[index], MAX_PATH_LEN - n);
-                n = strlen(browser->directory);
-                if (n < MAX_PATH_LEN - 1)
-                {
-                    browser->directory[n] = pathSep;
-                    browser->directory[n+1] = '\0';
-                }
-                FileBrowserReloadDirectoryContent(browser, browser->directory);
-            }
-            
-            nk_group_end(ctx);
-        }
-
-        if (save)
-        {
-            Deferred_Close_UI = 0;
-
-            nk_layout_row(ctx, NK_DYNAMIC, endSpace - 5.0f, 1, ratio + 1);
-            nk_group_begin(ctx, "File", NK_WINDOW_NO_SCROLLBAR);
-            {
-                f32 fileRatio[] = {0.8f, 0.1f, NK_UNDEFINED};
-                f32 fileRatio2[] = {0.45f, 0.1f, 0.18f, 0.17f, NK_UNDEFINED};
-                nk_layout_row(ctx, NK_DYNAMIC, Screen_Scale.y * 35.0f, save == 2 ? 5 : 3, save == 2 ? fileRatio2 : fileRatio);
-
-                u08 saveViaEnter = (nk_edit_string_zero_terminated(ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER, save == 2 ? AGP_Name_Buffer : Save_State_Name_Buffer, sizeof(save == 2 ? AGP_Name_Buffer : Save_State_Name_Buffer), 0) & NK_EDIT_COMMITED) ? 1 : 0;
-                
-                static u08 overwrite = 0;
-                overwrite = (u08)nk_check_label(ctx, "Override", overwrite);
-                
-                static u08 singletons = 0;
-                if (save == 2) singletons = (u08)nk_check_label(ctx, "Format Singletons", singletons);
-                static u08 preserveOrder = 0;
-                if (save == 2) preserveOrder = (u08)nk_check_label(ctx, "Preserve Order", preserveOrder);
-
-                if (nk_button_label(ctx, "Save") || saveViaEnter)
-                {
-                    strncpy(browser->file, browser->directory, MAX_PATH_LEN);
-                    size_t n = strlen(browser->file);
-                    strncpy(browser->file + n, save == 2 ? AGP_Name_Buffer : Save_State_Name_Buffer, MAX_PATH_LEN - n);
-                    ret = 1 | (overwrite ? 2 : 0) | (singletons ? 4 : 0) | (preserveOrder ? 8 : 0);
-                }
-
-                nk_group_end(ctx);
-            }
-        }
-        
-        nk_style_set_font(ctx, &NK_Font->handle);
-    }
-    nk_end(ctx);
-    
-    return(ret);
-}
-
-global_function
-void
-MetaTagsEditorRun(struct nk_context *ctx, u08 show)
-{
-    const char *name = "Meta Data Tag Editor";
-    struct nk_window *window = nk_window_find(ctx, name);
-
-    u08 doesExist = window != 0;
-    if (!show && !doesExist) return;
-    if (show && doesExist && (window->flags & NK_WINDOW_HIDDEN)) window->flags &= ~(nk_flags)NK_WINDOW_HIDDEN;
-
-    if (nk_begin(ctx, name, nk_rect(Screen_Scale.x * 50, Screen_Scale.y * 50, Screen_Scale.x * 800, Screen_Scale.y * 600),
-                NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_CLOSABLE|NK_WINDOW_NO_SCROLLBAR))
-    {
-        Deferred_Close_UI = 0;
-
-        struct nk_rect total_space = nk_window_get_content_region(ctx);
-        f32 ratio[] = {0.05f, NK_UNDEFINED};
-        nk_layout_row(ctx, NK_DYNAMIC, total_space.h, 1, ratio + 1);
-
-        nk_group_begin(ctx, "Content", 0);
-        {
-            nk_layout_row(ctx, NK_DYNAMIC, Screen_Scale.y * 35.0f, 2, ratio);
-
-            ForLoop(ArrayCount(Meta_Data->tags))
-            {
-                char buff[4];
-                stbsp_snprintf(buff, sizeof(buff), "%u:", index + 1);
-                nk_label(ctx, buff, NK_TEXT_LEFT);
-                if (nk_edit_string_zero_terminated(ctx, NK_EDIT_FIELD, (char *)Meta_Data->tags[index], sizeof(Meta_Data->tags[index]), 0) & NK_EDIT_ACTIVE)
-                {
-                    if (!strlen((const char *)Meta_Data->tags[index]))
-                    {
-                        ForLoop2(Number_of_Pixels_1D) Map_State->metaDataFlags[index2] &= ~(1 << index);
-                        u32 nextActive = index;
-                        ForLoop2((ArrayCount(Meta_Data->tags) - 1))
-                        {
-                            if (++nextActive == ArrayCount(Meta_Data->tags)) nextActive = 0;
-                            if (strlen((const char *)Meta_Data->tags[nextActive]))
-                            {
-                                MetaData_Active_Tag = nextActive;
-                                break;
-                            }
-                        }
-                    }
-                    else if (!strlen((const char *)Meta_Data->tags[MetaData_Active_Tag])) MetaData_Active_Tag = index;
-                }
-            }
-            
-            nk_group_end(ctx);
-        }
-    }
-    nk_end(ctx);
-}
-
-global_function
-void
-AboutWindowRun(struct nk_context *ctx, u32 show)
-{
-    struct nk_window *window = nk_window_find(ctx, "About");
-    u32 doesExist = window != 0;
-
-    if (!show && !doesExist)
-    {
-        return;
-    }
-
-    if (show && doesExist && (window->flags & NK_WINDOW_HIDDEN))
-    {
-        window->flags &= ~(nk_flags)NK_WINDOW_HIDDEN;
-    }
-
-    enum windowMode {showAcknowledgements, showLicence, showThirdParty};
-
-    static windowMode mode = showAcknowledgements;
-
-    if (nk_begin_titled(ctx, "About", PretextView_Version, nk_rect(Screen_Scale.x * 50, Screen_Scale.y * 50, Screen_Scale.x * 870, Screen_Scale.y * 610),
-                NK_WINDOW_BORDER|NK_WINDOW_NO_SCROLLBAR|NK_WINDOW_MOVABLE|NK_WINDOW_TITLE|NK_WINDOW_CLOSABLE))
-    {
-        nk_menubar_begin(ctx);
-        {
-            nk_layout_row_dynamic(ctx, Screen_Scale.y * 35.0f, 3);
-            if (nk_button_label(ctx, "Acknowledgements"))
-            {
-                mode = showAcknowledgements;
-            }
-            if (nk_button_label(ctx, "Licence"))
-            {
-                mode = showLicence;
-            }
-            if (nk_button_label(ctx, "Third Party Software"))
-            {
-                mode = showThirdParty;
-            }
-        }
-        nk_menubar_end(ctx);
-
-        struct nk_rect total_space = nk_window_get_content_region(ctx);
-        f32 one = NK_UNDEFINED;
-        nk_layout_row(ctx, NK_DYNAMIC, total_space.h, 1, &one);
-
-        nk_group_begin(ctx, "About_Content", 0);
-        {
-            if (mode == showThirdParty)
-            {
-                u08 text[] = R"text(PretextView was made possible thanks to the following third party libraries and
-resources, click each entry to view its licence.)text";
-
-                nk_layout_row_static(ctx, Screen_Scale.y * 60, (s32)(Screen_Scale.x * 820), 1);
-                s32 len = sizeof(text);
-                nk_edit_string(ctx, NK_EDIT_READ_ONLY | NK_EDIT_NO_CURSOR | NK_EDIT_SELECTABLE | NK_EDIT_MULTILINE, (char *)text, &len, len, 0);
-
-                ForLoop(Number_of_ThirdParties)
-                {
-                    u32 nameIndex = 2 * index;
-                    u32 licenceIndex = nameIndex + 1;
-                    s32 *sizes = ThirdParty_Licence_Sizes[index];
-
-                    if (nk_tree_push_id(NK_Context, NK_TREE_TAB, (const char *)ThirdParty[nameIndex], NK_MINIMIZED, (s32)index))
-                    {
-                        nk_layout_row_static(ctx, Screen_Scale.y * (f32)sizes[0], (s32)(Screen_Scale.x * (f32)sizes[1]), 1);
-                        len = (s32)StringLength(ThirdParty[licenceIndex]);
-                        nk_edit_string(ctx, NK_EDIT_READ_ONLY | NK_EDIT_NO_CURSOR | NK_EDIT_SELECTABLE | NK_EDIT_MULTILINE, (char *)ThirdParty[licenceIndex], &len, len, 0);
-                        nk_tree_pop(NK_Context);
-                    }
-                }
-            }
-            else if (mode == showAcknowledgements)
-            {
-                nk_layout_row_static(ctx, Screen_Scale.y * 500, (s32)(Screen_Scale.x * 820), 1);
-                s32 len = sizeof(Acknowledgements);
-                nk_edit_string(ctx, NK_EDIT_READ_ONLY | NK_EDIT_NO_CURSOR | NK_EDIT_SELECTABLE | NK_EDIT_MULTILINE, (char *)Acknowledgements, &len, len, 0);
-            }
-            else
-            {
-                nk_layout_row_static(ctx, Screen_Scale.y * 500, (s32)(Screen_Scale.x * 820), 1);
-                s32 len = sizeof(Licence);
-                nk_edit_string(ctx, NK_EDIT_READ_ONLY | NK_EDIT_NO_CURSOR | NK_EDIT_SELECTABLE | NK_EDIT_MULTILINE, (char *)Licence, &len, len, 0);
-            }
-            
-            nk_group_end(ctx);
-        }
-    }
-
-    nk_end(ctx);
-}
-
-
-
-global_function void
-UserSaveState(const char *, u08, char *);
 
 global_function
 void
@@ -10289,6 +10458,98 @@ LoadState(u64 headerHash, char *path)
     return(0);
 }
 
+/*
+    load the .agp file to restore the curated state
+    NOTE: please make sure to clear the cache before loading the agp file. 
+        which means after clearing the cache, all edits will be lost. if you want 
+        to keep the edits, please try to change the file name and reopen that. as 
+        the cache is automatically named as the hash of the file name.
+*/
+void Load_AGP(const std::string& agp_path)
+{
+    fmt::print("Load AGP file: {}\n", agp_path);
+    try
+    {
+        AssemblyAGP assembly_agp(agp_path, Original_Contigs, Number_of_Original_Contigs, Meta_Data);
+        fmt::println("{}", assembly_agp.__str__());
+
+        // do curations to achieve the map_state
+        // 1. split the original contigs according to the curation agp 
+        std::vector<std::set<int>> split_points_frags(Number_of_Original_Contigs);
+        for (int i = 0; i < assembly_agp.frags.size(); i++)
+        {
+            auto& frag = assembly_agp.frags[i];
+            if (frag.start > 1) // skip the start bp of one contig 
+                split_points_frags[frag.orig_contig_id].insert(frag.start);
+        }
+        // merge the split points
+        int ptr_bp = 0;
+        std::vector<int> merged_split_points;
+        std::string contig_name_tmp;
+        for (int i = 0; i < Number_of_Original_Contigs; i ++ )
+        {
+            for (auto it = split_points_frags[i].begin(); it != split_points_frags[i].end(); ++it)
+                merged_split_points.push_back((int)((double)(*it + ptr_bp) / assembly_agp.bp_per_pixel));
+            contig_name_tmp = std::string((char*)Original_Contigs[i].name);
+            if (assembly_agp.original_contigs.find(contig_name_tmp) != assembly_agp.original_contigs.end())
+                ptr_bp += assembly_agp.original_contigs[contig_name_tmp].len;
+            else 
+                fmt::print("[Load AGP::error]: Original_Contig name ({}) not found in the assembly_agp.original_contigs.\n", contig_name_tmp);
+        }
+        // cut the at the split points
+        cut_frags( merged_split_points, false, false);
+        // check if the number of contigs between contigs_agp and contigs are the same
+        // after cutting, this should be the same
+        if (Contigs->numberOfContigs != assembly_agp.frags.size())
+        {
+            fmt::print("[Load AGP::error]: The number of contigs between contigs_agp and contigs are not the same.\n");
+            throw std::runtime_error(fmt::format("[Load AGP::error]: The number of contigs between Contigs({}) and contigs_agp({}) are not the same.\n", Contigs->numberOfContigs, assembly_agp.frags.size()));
+        }
+
+        // vector to save frag's local order within orignal contig
+        std::vector<int> global_frag_start_Contigs(Number_of_Original_Contigs, 0);
+        for (int i = 1;  i < Number_of_Original_Contigs; i++)
+            global_frag_start_Contigs[i] = global_frag_start_Contigs[i-1] + Original_Contigs[i-1].nContigs;
+
+        // 2. reorder them
+        // call the auto_curation func to reorder the contigs globally
+        std::vector<int> contigs_order_agp(assembly_agp.frags.size());              // restore the order in agp
+        for (int i = 0; i < assembly_agp.frags.size(); i++)
+        {
+            auto& frag = assembly_agp.frags[i];
+            contigs_order_agp[i] = ( global_frag_start_Contigs[frag.orig_contig_id] + frag.local_index + 1 ) * (frag.is_reverse?-1:1); 
+        }
+        FragsOrder frags_order_agp(contigs_order_agp);
+        // curation globally 
+        AutoCurationFromFragsOrder( &frags_order_agp, Contigs, Map_State, nullptr );
+
+        // add scaff id to restore the painted scaffID and meta tags
+        int pix_ptr = 0, contig_start_pix_ptr = 0;
+        for (int i =0 ; i < Contigs->numberOfContigs;i++)
+        {   
+            auto& frag = assembly_agp.frags[i];
+            while (pix_ptr < Number_of_Pixels_1D && pix_ptr < contig_start_pix_ptr + Contigs->contigs_arr[i].length) 
+            {
+                Map_State->scaffIds[pix_ptr]        = frag.is_painted? frag.scaff_id + 1 : 0; // scaff_id
+                Map_State->metaDataFlags[pix_ptr++] = frag.meta_data_flag ;                   // meta data flag
+            }
+            contig_start_pix_ptr += Contigs->contigs_arr[i].length;
+        }
+        UpdateContigsFromMapState();
+    }
+    catch (const std::exception& e)
+    {
+        fmt::print("Exception: {}\n", e.what());
+        fmt::print("[Load AGP]: Failed.\n");
+        return;
+    }
+
+
+
+    
+    return ;
+}
+
 
 // restore the state before curation
 global_function
@@ -10616,8 +10877,9 @@ default_user_profile_settings()
 }
 
 
+
 global_function void
-UserSaveState(const char *headerHash = "userprofile", u08 overwrite = 1, char *path = 0)
+UserSaveState(const char *headerHash, u08 overwrite , char *path)
 {
 
     if (!UserSaveState_Path)
@@ -10723,6 +10985,22 @@ UserSaveState(const char *headerHash = "userprofile", u08 overwrite = 1, char *p
         bool invert_mouse_tmp = false;
         fwrite(&invert_mouse_tmp, sizeof(bool), 1, file);
     }
+
+    // TODO (shaoheng) save default file browser directory
+    const char* placeholder = "fdpc"; // placeholder for File Directory Path Cache 
+    for (int i = 0; i < 4; i ++ ) fwrite(&placeholder[i], sizeof(char), 1, file);
+    for (const file_browser& browser_tmp : { browser, saveBrowser, loadBrowser, saveAGPBrowser, loadAGPBrowser }) {
+        if (browser_tmp.directory[0]!='\0') {
+            u32 dir_len = strlen(browser_tmp.directory);
+            fwrite(&dir_len, sizeof(dir_len), 1, file);
+            fwrite(browser_tmp.directory, sizeof(char), dir_len, file);
+        }
+        else {
+            u32 dir_len = 0;
+            fwrite(&dir_len, sizeof(dir_len), 1, file);
+        }
+    }
+
 
     // END of SAVE user profile settings
 
@@ -10868,6 +11146,24 @@ global_function
         }
     }
 
+    // TODO (shaoheng) LOAD default file browser directory
+    char lable[4];
+    if (fread(lable, sizeof(char), 4, file) == 4 && strncmp(lable, "fdpc", 4) == 0)
+    {   
+        std::vector<file_browser*> browsers = { &browser, &saveBrowser, &loadBrowser, &saveAGPBrowser, &loadAGPBrowser };
+        for (file_browser* browser_ptr : browsers) {
+            u32 dir_len;
+            if (fread(&dir_len, sizeof(dir_len), 1, file) == 1 && dir_len > 0)
+            {
+                char *dir = (char *)malloc(dir_len + 1);
+                if (fread(dir, sizeof(char), dir_len, file) == dir_len ) {   
+                    dir[dir_len] = '\0'; // Null-terminate the string
+                    FileBrowserReloadDirectoryContent(browser_ptr, dir);
+                }
+                free(dir);
+            }
+        }
+    }
 
 
     fclose(file);
@@ -10985,16 +11281,23 @@ GenerateAGP(char *path, u08 overwrite, u08 formatSingletons, u08 preserveOrder)
         u32 scaffId_unPainted = 0;
         if (preserveOrder) ForLoop(Contigs->numberOfContigs) scaffId_unPainted = my_Max(scaffId_unPainted, (Contigs->contigs_arr + index)->scaffId);
 
-        for (   u08 type = 0;
-                type < (preserveOrder ? 1 : 2);
-                ++type)
+        for (   u08 type = 0; 
+                type < (preserveOrder ? 1 : 2);  // two round: 1st round for painted scaffs, 2nd round for unpainted
+                ++type) 
         {
             ForLoop(Contigs->numberOfContigs)
             {
                 contig *cont = Contigs->contigs_arr + index;
-                u08 invert = IsContigInverted(index);
+                u08 invert = IsContigInverted( index );
                 u32 startCoord = cont->startCoord - (invert ? (cont->length - 1) : 0);
-
+                
+                /*
+                set invert to 0 if: 
+                    - formatSingletons is False and
+                        - contig is not painted
+                        - contig is just 1 pixel long
+                        - contig is the first or last contig in the genome
+                */ 
                 invert = (!formatSingletons && (!cont->scaffId || (index && (index < (Contigs->numberOfContigs - 1)) && (cont->scaffId != ((cont + 1)->scaffId)) && (cont->scaffId != ((cont - 1)->scaffId))) || (!index && (cont->scaffId != ((cont + 1)->scaffId))) || ((index == (Contigs->numberOfContigs - 1)) && (cont->scaffId != ((cont - 1)->scaffId))))) ? 0 : invert;
                 
                 u64 contRealStartCoord = (u64)((f64)startCoord / (f64)Number_of_Pixels_1D * (f64)Total_Genome_Length) + 1;
@@ -11003,13 +11306,13 @@ GenerateAGP(char *path, u08 overwrite, u08 formatSingletons, u08 preserveOrder)
 
                 char *contName = (char *)((Original_Contigs + cont->get_original_contig_id())->name);
 
-                if (cont->scaffId && !type)
+                if (cont->scaffId && !type) // painted scaff
                 {
                     if (cont->scaffId != scaffId)
                     {
                         scaffId = cont->scaffId;
                         scaffCoord_Start = 1;
-                        scaffPart = 0;
+                        scaffPart = 0; // index within the scaffold
                     }
 
                     u64 scaffCoord_End;
@@ -11030,7 +11333,7 @@ GenerateAGP(char *path, u08 overwrite, u08 formatSingletons, u08 preserveOrder)
                     {
                         ForLoop2(ArrayCount(Meta_Data->tags))
                         {
-                            if (*cont->metaDataFlags & (1 << index2))
+                            if (*cont->metaDataFlags & (1ULL << index2))
                             {
                                 stbsp_snprintf(buffer, sizeof(buffer), "\t%s", (char *)Meta_Data->tags[index2]);
                                 fwrite(buffer, 1, strlen(buffer), file);
@@ -11040,7 +11343,7 @@ GenerateAGP(char *path, u08 overwrite, u08 formatSingletons, u08 preserveOrder)
                     fwrite("\n", 1, 1, file);
                     scaffCoord_Start = scaffCoord_End + 1;
                 }
-                else if (!cont->scaffId && (preserveOrder || type))
+                else if (!cont->scaffId && (preserveOrder || type)) // unpainted
                 {
                     stbsp_snprintf(buffer, sizeof(buffer), "Scaffold_%u\t1\t%" PRIu64 "\t1\tW\t%s\t%" PRIu64 "\t%" PRIu64 "\t%s", (preserveOrder ? ++scaffId_unPainted : ++scaffId), contRealSize, contName, contRealStartCoord, contRealEndCoord, invert ? "-" : "+");
                     fwrite(buffer, 1, strlen(buffer), file);
@@ -11048,7 +11351,7 @@ GenerateAGP(char *path, u08 overwrite, u08 formatSingletons, u08 preserveOrder)
                     {
                         ForLoop2(ArrayCount(Meta_Data->tags))
                         {
-                            if (*cont->metaDataFlags & (1 << index2))
+                            if (*cont->metaDataFlags & (1ULL << index2)) // NOTE: please make sure the 1ULL, or after index2 >= 32 there will be unexpected behaviour
                             {
                                 stbsp_snprintf(buffer, sizeof(buffer), "\t%s", (char *)Meta_Data->tags[index2]);
                                 fwrite(buffer, 1, strlen(buffer), file);
@@ -11184,7 +11487,7 @@ MainArgs
     Edit_Pixels.editing = 0;
     Edit_Pixels.selecting = 0;
     Edit_Pixels.scaffSelecting = 0;
-    Edit_Pixels.snap = 0;
+    Edit_Pixels.snap = 1; // change the default to snap mode on
 
     Camera_Position.x = 0.0f; // 0.0f
     Camera_Position.y = 0.0f; // 0.0f
@@ -11287,11 +11590,6 @@ MainArgs
     //     }
     // }
 
-    // file browser
-    struct file_browser browser;
-    struct file_browser saveBrowser;
-    struct file_browser loadBrowser;
-    struct file_browser saveAGPBrowser;
 
     u32 showClearCacheScreen = 0;
 
@@ -11307,6 +11605,7 @@ MainArgs
         FileBrowserInit(&saveBrowser, &media);
         FileBrowserInit(&loadBrowser, &media);
         FileBrowserInit(&saveAGPBrowser, &media);
+        FileBrowserInit(&loadAGPBrowser, &media);
     }
     
     {
@@ -11319,9 +11618,6 @@ MainArgs
         InitializeColorMapOrder();
 
     Redisplay = 1;
-
-    char searchbuf[256] = {0};
-    s32 caseSensitive_search_sequences = 0;
 
     while (!glfwWindowShouldClose(window)) 
     {
@@ -11423,6 +11719,7 @@ MainArgs
             s32 showSaveStateScreen = 0;
             s32 showLoadStateScreen = 0;
             s32 showSaveAGPScreen = 0;
+            s32 showLoadAGPScreen = 0;
             s32 showMetaDataTagEditor = 0;
             s32 showUserProfileScreen = 0;
             static u32 currGroup1 = 0;
@@ -11460,6 +11757,7 @@ MainArgs
                         showSaveStateScreen = nk_button_label(NK_Context, "Save State");
                         showLoadStateScreen = nk_button_label(NK_Context, "Load State");
                         showSaveAGPScreen = nk_button_label(NK_Context, "Generate AGP");
+                        showLoadAGPScreen = nk_button_label(NK_Context, "Load AGP");
                         if (nk_button_label(NK_Context, "Clear Cache")) showClearCacheScreen = 1; // used to clear cache for current opened sample
                     }
                     showUserProfileScreen = nk_button_label(NK_Context, "User Profile");
@@ -12597,6 +12895,10 @@ MainArgs
                     }
 
                     if (FileBrowserRun("Load State", &loadBrowser, NK_Context, (u32)showLoadStateScreen)) LoadState(headerHash, loadBrowser.file);
+
+                    if (FileBrowserRun("Load AGP", &loadAGPBrowser, NK_Context, (u32)showLoadAGPScreen)) 
+                        Load_AGP(loadAGPBrowser.file);
+
 
                     MetaTagsEditorRun(NK_Context, (u08)showMetaDataTagEditor);
                 }

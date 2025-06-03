@@ -54,8 +54,7 @@ struct contact_matrix
 };
 
 
-// one original contig
-// which may be split into multiple fragments
+// one original contig may be split into multiple fragments
 struct original_contig    
 {
     u32 name[16];         // contig name
@@ -128,6 +127,49 @@ struct map_state
         for (u32 i = start_pixel; i <= end_pixel; i++)
         {
             originalContigIds[i] = originalContigIds[i] % Max_Number_of_Contigs;
+        }
+    }
+
+
+    map_state(int num_pixel_1d)
+    {
+        contigIds = new u32[num_pixel_1d];
+        originalContigIds = new u32[num_pixel_1d];
+        contigRelCoords = new u32[num_pixel_1d];
+        scaffIds = new u32[num_pixel_1d];
+        metaDataFlags = new u64[num_pixel_1d];
+        memset(contigIds, 0, num_pixel_1d * sizeof(u32));
+        memset(originalContigIds, 0, num_pixel_1d * sizeof(u32));
+        memset(contigRelCoords, 0, num_pixel_1d * sizeof(u32));
+        memset(scaffIds, 0, num_pixel_1d * sizeof(u32));
+        memset(metaDataFlags, 0, num_pixel_1d * sizeof(u64));
+    }
+    ~map_state()
+    {
+        if (contigIds)
+        {
+            delete[] contigIds;
+            contigIds = nullptr;
+        }
+        if (originalContigIds)
+        {
+            delete[] originalContigIds;
+            originalContigIds = nullptr;
+        }
+        if (contigRelCoords)
+        {
+            delete[] contigRelCoords;
+            contigRelCoords = nullptr;
+        }
+        if (scaffIds)
+        {
+            delete[] scaffIds;
+            scaffIds = nullptr;
+        }
+        if (metaDataFlags)
+        {
+            delete[] metaDataFlags;
+            metaDataFlags = nullptr;
         }
     }
 };
