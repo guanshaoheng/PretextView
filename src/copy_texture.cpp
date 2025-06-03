@@ -268,10 +268,11 @@ TexturesArray4AI::~TexturesArray4AI()
 
     if (this->hic_shader_initilised)
     {
-        glDeleteShader(this->shaderProgram);
+        // glDeleteShader(this->shaderProgram);
         glDeleteBuffers(1, &this->vbo);
         glDeleteBuffers(1, &this->ebo);
         glDeleteVertexArrays(1, &this->vao);
+        glDeleteProgram(this->shaderProgram);
     }
 }
 

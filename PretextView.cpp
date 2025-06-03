@@ -11006,7 +11006,9 @@ UserSaveState(const char *headerHash, u08 overwrite , char *path)
 
     fclose(file);
 
-    printf("[UserProfile]: Saved to: %s\n", path);
+    #ifdef DEBUG
+        printf("[UserProfile]: Saved to: %s\n", path);
+    #endif // DEBUG
 }
 
 global_function
@@ -12943,18 +12945,6 @@ MainArgs
     }
 
     if (currFileName) SaveState(headerHash);
-
-    ThreadPoolWait(Thread_Pool);
-    ThreadPoolDestroy(Thread_Pool);
-    glfonsDelete(FontStash_Context);
-    nk_font_atlas_clear(NK_Atlas);
-    nk_free(NK_Context);
-    nk_buffer_free(&NK_Device->cmds);
-    glfwDestroyWindow(window);
-    glfwTerminate();
-
-    // free the memory allocated for the shader sources
-    fprintf(stdout, "Memory freed for shader sources.\n");
     
     // do we need to free anything else? 
     // for example the allocated memory arena
@@ -12995,6 +12985,19 @@ MainArgs
             delete kmeans_cluster; kmeans_cluster = nullptr;
         }
     #endif // PYTHON_SCOPED_INTERPRETER
+
+
+    ThreadPoolWait(Thread_Pool);
+    ThreadPoolDestroy(Thread_Pool);
+    glfonsDelete(FontStash_Context);
+    nk_font_atlas_clear(NK_Atlas);
+    nk_free(NK_Context);
+    nk_buffer_free(&NK_Device->cmds);
+    glfwDestroyWindow(window);
+    glfwTerminate();
+
+    // free the memory allocated for the shader sources
+    fprintf(stdout, "Memory freed for shader sources.\n");
 
     ResetMemoryArenaP(Loading_Arena);
     fprintf(stdout, "Memory freed for the arena.\n");

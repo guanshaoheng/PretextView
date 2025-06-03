@@ -3,6 +3,7 @@ app/
 ascii.dSYM/
 build_cmake/
 builddir/
+build/
 *.DS_Store
 __pycache__/
 *.pyc
