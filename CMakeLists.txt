@@ -106,12 +106,13 @@ endif()
 
 
 # test the parse_agp
-add_executable(parse_agp_test src/parse_agp_test.cpp)
-target_link_libraries(parse_agp_test PRIVATE ${lib_fmt})
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-    target_compile_definitions(parse_agp_test PRIVATE DEBUG)
+if (AGP_TEST_FLAG)
+    add_executable(parse_agp_test src/parse_agp_test.cpp)
+    target_link_libraries(parse_agp_test PRIVATE ${lib_fmt})
+    if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+        target_compile_definitions(parse_agp_test PRIVATE DEBUG)
+    endif()
 endif()
-
 
 find_library(
     lib_deflate_static 
