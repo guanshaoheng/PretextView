@@ -11148,7 +11148,6 @@ global_function
         }
     }
 
-    // TODO (shaoheng) LOAD default file browser directory
     char lable[4];
     if (fread(lable, sizeof(char), 4, file) == 4 && strncmp(lable, "fdpc", 4) == 0)
     {   
@@ -11817,81 +11816,84 @@ MainArgs
                     // Pixel Cut
                     {
                         bounds = nk_widget_bounds(NK_Context);
-                        auto_cut_button = nk_button_label(NK_Context, "Pixel Cut");
+                        auto_cut_button = nk_button_label(NK_Context, "Pixel Cut") || auto_cut_button  ; 
 
-                        if (auto_cut_button && currFileName)
-                        {
-                            auto_cut_state = 1;
-                            auto_curation_state.clear(); // if click the button, the sort/cut will be applied globally
-                        }
                         // window to set the parameters for cut
-                        if (nk_contextual_begin(NK_Context, 0, nk_vec2(Screen_Scale.x * 480, Screen_Scale.y * 800), bounds))
+                        if (auto_cut_button)
                         {   
-                            nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
-
-                            nk_label(NK_Context, "Cut threshold (default: 0.05)", NK_TEXT_LEFT);
-                            nk_edit_string_zero_terminated(
-                                NK_Context, 
-                                NK_EDIT_FIELD, 
-                                (char*)auto_curation_state.auto_cut_threshold_buf, 
-                                sizeof(auto_curation_state.auto_cut_threshold_buf), 
-                                nk_filter_float);
-                            
-                            nk_label(NK_Context, "Pixel_mean window size (default: 8)", NK_TEXT_LEFT); //  见鬼了，见鬼了，这个地方，如果我使用 "Pixel_mean windows (default: 8)" 点击弹出的窗口外面程序就会卡死，但是使用"Pixel_mean window size (default: 8)" 就不会卡死
-                            nk_edit_string_zero_terminated(
-                                NK_Context, 
-                                NK_EDIT_FIELD, 
-                                (char*)auto_curation_state.auto_cut_diag_window_for_pixel_mean_buf, 
-                                sizeof(auto_curation_state.auto_cut_diag_window_for_pixel_mean_buf), 
-                                nk_filter_decimal);
-
-                            nk_label(NK_Context, "Smallest frag size (default: 8)", NK_TEXT_LEFT);
-                            nk_edit_string_zero_terminated(
-                                NK_Context, 
-                                NK_EDIT_FIELD, 
-                                (char*)auto_curation_state.auto_cut_smallest_frag_size_in_pixel_buf, 
-                                sizeof(auto_curation_state.auto_cut_smallest_frag_size_in_pixel_buf), 
-                                nk_filter_decimal);
-
-                            nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
-                            if (nk_button_label(NK_Context, "Cancel")) 
-                            {   
-                                printf("[Pixel Cut] Cancel button clicked\n");
-                                auto_curation_state.set_buf();
-                                nk_contextual_close(NK_Context);
-                            }
-                            if (nk_button_label(NK_Context, "Apply")) 
-                            {
-                                // Apply changes
-                                // Convert text to integer and float
-                                auto_curation_state.update_value_from_buf(); // todo 这里还有问题，因为设置了pixel_mean之后 并没有重新计算 pixel_density...
+                            static struct nk_rect popup_rect = nk_rect(Screen_Scale.x * 100, Screen_Scale.y * 100, Screen_Scale.x * 480, Screen_Scale.y * 300);
+                            if (nk_popup_begin(NK_Context, NK_POPUP_STATIC, "Pixel Cut Parameters", 
+                                NK_WINDOW_CLOSABLE|NK_WINDOW_BORDER, popup_rect)) {
                                 
-                                nk_contextual_close(NK_Context);
+                                nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
 
-                                auto_curation_state.set_buf();
-                                fmt::print("[Pixel Cut] cut_threshold:               {:.3f}\n", auto_curation_state.auto_cut_threshold);
-                                fmt::print("[Pixel Cut] pixel mean window size:      {}\n", auto_curation_state.auto_cut_diag_window_for_pixel_mean);
-                                fmt::print("[Pixel Cut] smallest_frag_size_in_pixel: {}\n", auto_curation_state.auto_cut_smallest_frag_size_in_pixel);
+                                nk_label(NK_Context, "Cut threshold (default: 0.05)", NK_TEXT_LEFT);
+                                nk_edit_string_zero_terminated(
+                                    NK_Context, 
+                                    NK_EDIT_FIELD, 
+                                    (char*)auto_curation_state.auto_cut_threshold_buf, 
+                                    sizeof(auto_curation_state.auto_cut_threshold_buf), 
+                                    nk_filter_float);
+                                
+                                nk_label(NK_Context, "Pixel_mean window size (default: 8)", NK_TEXT_LEFT); //  见鬼了，见鬼了，这个地方，如果我使用 "Pixel_mean windows (default: 8)" 点击弹出的窗口外面程序就会卡死，但是使用"Pixel_mean window size (default: 8)" 就不会卡死
+                                nk_edit_string_zero_terminated(
+                                    NK_Context, 
+                                    NK_EDIT_FIELD, 
+                                    (char*)auto_curation_state.auto_cut_diag_window_for_pixel_mean_buf, 
+                                    sizeof(auto_curation_state.auto_cut_diag_window_for_pixel_mean_buf), 
+                                    nk_filter_decimal);
+
+                                nk_label(NK_Context, "Smallest frag size (default: 8)", NK_TEXT_LEFT);
+                                nk_edit_string_zero_terminated(
+                                    NK_Context, 
+                                    NK_EDIT_FIELD, 
+                                    (char*)auto_curation_state.auto_cut_smallest_frag_size_in_pixel_buf, 
+                                    sizeof(auto_curation_state.auto_cut_smallest_frag_size_in_pixel_buf), 
+                                    nk_filter_decimal);
+
+                                nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
+                                if (nk_button_label(NK_Context, "Apply settings")) 
+                                {
+                                    // Apply changes
+                                    // Convert text to integer and float
+                                    auto_curation_state.update_value_from_buf(); // todo 这里还有问题，因为设置了pixel_mean之后 并没有重新计算 pixel_density...
+
+                                    auto_curation_state.set_buf();
+                                    fmt::print("[Pixel Cut] cut_threshold:               {:.3f}\n", auto_curation_state.auto_cut_threshold);
+                                    fmt::print("[Pixel Cut] pixel mean window size:      {}\n", auto_curation_state.auto_cut_diag_window_for_pixel_mean);
+                                    fmt::print("[Pixel Cut] smallest_frag_size_in_pixel: {}\n", auto_curation_state.auto_cut_smallest_frag_size_in_pixel);
+
+                                    auto_cut_button = 0;
+                                    nk_popup_close(NK_Context);
+                                }
+                                /* 关闭按钮 */
+                                if (nk_button_label(NK_Context, "Close")) {
+                                    auto_cut_button = 0;
+                                    auto_curation_state.set_buf();
+                                    nk_popup_close(NK_Context);
+                                }
+                                
+                                nk_popup_end(NK_Context);
+                            } else {
+                                /* 如果用户点击了窗口外的区域，也关闭弹出窗口 */
+                                auto_cut_button = 0;
+                                #ifdef DEBUG 
+                                    fmt::println("Outside of the popup window is clicked.");
+                                #endif // debug
                             }
-
-                            nk_contextual_end(NK_Context);
-
-                            
                         }
                     }
 
                     // Pixel Sort button
                     bounds = nk_widget_bounds(NK_Context);
-                    auto_sort_button = nk_button_label(NK_Context, "Pixel Sort");
-                    {   
-                        if (auto_sort_button && currFileName) 
-                        {
-                            auto_sort_state = 1;
-                            auto_curation_state.clear(); // if click the button, the sort/cut will be applied globally
-                        }
+                    auto_sort_button = nk_button_label(NK_Context, "Pixel Sort") ||auto_sort_button ;
+                    if (auto_sort_button) {   
                         // window to set the parameters for sort
-                        if (nk_contextual_begin(NK_Context, 0, nk_vec2(Screen_Scale.x * 480, Screen_Scale.y * 400), bounds))
-                        {
+                        static struct nk_rect popup_rect = nk_rect(
+                            Screen_Scale.x * 200, Screen_Scale.y * 100, 
+                            Screen_Scale.x * 480, Screen_Scale.y * 260);
+                        if (nk_popup_begin(NK_Context, NK_POPUP_STATIC, "Pixel Sort Parameters", 
+                            NK_WINDOW_CLOSABLE|NK_WINDOW_BORDER, popup_rect)) {
                             nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 1);
                             nk_label(NK_Context, "Smallest Frag Size (default: 2)", NK_TEXT_LEFT);
                             nk_edit_string_zero_terminated(
@@ -11911,45 +11913,34 @@ MainArgs
                             
                             nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 3);
                             if (nk_option_label(NK_Context, "UnionFind", auto_curation_state.sort_mode == 0))
-                            {
                                 auto_curation_state.sort_mode = 0;
-                            }
 
                             if (nk_option_label(NK_Context, "Fuse", auto_curation_state.sort_mode == 1)) 
-                            {
                                 auto_curation_state.sort_mode = 1;
-                            }
 
                             if (nk_option_label(NK_Context, "Deep Fuse", auto_curation_state.sort_mode == 2)) 
-                            {
                                 auto_curation_state.sort_mode = 2;
-                            }
-
-                            // if (nk_option_label(NK_Context, "YaHS", auto_curation_state.sort_mode == 3)) 
-                            // {
-                            //     auto_curation_state.sort_mode = 3;
-                            // }
 
                             nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
-                            if (nk_button_label(NK_Context, "Cancel")) 
-                            {   
-                                printf("[Pixel Sort] Cancel button clicked\n");
-                                auto_curation_state.set_buf();
-                                nk_contextual_close(NK_Context);
-                            }
-                            if (nk_button_label(NK_Context, "Apply")) 
+                            if (nk_button_label(NK_Context, "Apply settings")) 
                             {
                                 // Apply changes
                                 // Convert text to integer and float
                                 auto_curation_state.update_value_from_buf();
-
-                                nk_contextual_close(NK_Context);
-
                                 auto_curation_state.set_buf();
                                 fmt::print("[Pixel Sort] smallest_frag_size_in_pixel: {}\n", auto_curation_state.smallest_frag_size_in_pixel);
                                 fmt::print("[Pixel Sort] link_score_threshold:        {:.3f}\n", auto_curation_state.link_score_threshold);
                                 fmt::print("[Pixel Sort] Sort mode:                   {}\n", auto_curation_state.get_sort_mode_name());
+                                auto_sort_button = 0;
+                                nk_popup_close(NK_Context);
                             }
+                            // 关闭按钮 
+                            if (nk_button_label(NK_Context, "Close")) {
+                                auto_sort_button = 0;
+                                auto_curation_state.set_buf();
+                                nk_popup_close(NK_Context);
+                            }
+                            /*
                             // redo all the changes
                             if (!auto_curation_state.show_autoSort_redo_confirm_popup)
                             {
@@ -11998,7 +11989,16 @@ MainArgs
                                     auto_curation_state.show_autoSort_erase_confirm_popup=false;
                                 }
                             }
-                            nk_contextual_end(NK_Context);
+                            */
+                                
+                            nk_popup_end(NK_Context);
+
+                        } else {
+                            /* 如果用户点击了窗口外的区域，也关闭弹出窗口 */
+                            auto_sort_button = 0;
+                            #ifdef DEBUG 
+                                fmt::println("Outside of the popup window is clicked.");
+                            #endif // debug
                         }
                     }
                     pop_nk_style(NK_Context, 3); // pop the style for Pixel Cut and Pixel Sort button
