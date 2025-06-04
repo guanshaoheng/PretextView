@@ -93,10 +93,8 @@ int get_scaff_id(const std::string& scaff_name)
     {
         fmt::print(stderr, "Error: scaff name {} not match ^\\w+_(\\d+)$ \n", scaff_name);
         assert(0);
-    } else 
-    {
-        return std::stoi(match[1].str()) - 1; 
-    }
+    } 
+    return std::stoi(match[1].str()) - 1; 
 }
 
 
