@@ -11,6 +11,11 @@ struct GreyOutSettings
     s32 n_flags = 64;
     s32 grey_out_flags[64];
     std::unordered_set<std::string> default_grey_out_tag = {"FalseDuplicate", "Primary"}; 
+    std::unordered_set<std::string> paint_tags = {
+        "vertPaint",   // paint vertically
+        "horzPaint",   // paint horizontally
+        "crossPaint",  // paint with cross
+    };
 
     GreyOutSettings() 
     {
@@ -66,12 +71,14 @@ struct GreyOutSettings
         0: no grey out
         1: vertical grey out
         2: horizontal grey out 
+        3: corss grey out
     */
     u32 is_vert_horiz_grey_out(u64* meta_data_flags, meta_data* Meta_Data){
         for (s32 i = 0; i  < ArrayCount(Meta_Data->tags) ; i ++ ) {
             if ((*meta_data_flags & ((u64)1 << i))  ){
                 if ( std::string((char*) Meta_Data->tags[i])=="vertPaint") return 1;
                 else if ( std::string((char*) Meta_Data->tags[i])=="horzPaint") return 2;
+                else if ( std::string((char*) Meta_Data->tags[i]) == "crossPaint") return 3;
             }
         }
         return 0;

@@ -831,6 +831,7 @@ Default_Tags[] =
     "Primary",
     "vertPaint",   // paint vertically
     "horzPaint",   // paint horizontally
+    "crossPaint",  // paint with cross
 };
 
 
@@ -2804,26 +2805,26 @@ MouseMove(GLFWwindow* window, f64 x, f64 y)
                 u32 contigId = Map_State->contigIds[pixel];
 
                 if (MetaData_Edit_State == 1) 
-                    Map_State->metaDataFlags[pixel] |=  (1 << MetaData_Active_Tag); // set the active tag
+                    Map_State->metaDataFlags[pixel] |=  (1ULL << MetaData_Active_Tag); // set the active tag
                 else 
-                    Map_State->metaDataFlags[pixel] &= ~(1 << MetaData_Active_Tag); // clear the active tag
+                    Map_State->metaDataFlags[pixel] &= ~(1ULL << MetaData_Active_Tag); // clear the active tag
                 
                 u32 testPixel = pixel;
                 while (testPixel && (Map_State->contigIds[testPixel - 1] == contigId))
                 {
                     if (MetaData_Edit_State == 1) 
-                        Map_State->metaDataFlags[--testPixel] |=  (1 << MetaData_Active_Tag);
+                        Map_State->metaDataFlags[--testPixel] |=  (1ULL << MetaData_Active_Tag);
                     else 
-                        Map_State->metaDataFlags[--testPixel] &= ~(1 << MetaData_Active_Tag);
+                        Map_State->metaDataFlags[--testPixel] &= ~(1ULL << MetaData_Active_Tag);
                 }
 
                 testPixel = pixel;
                 while ((testPixel < (Number_of_Pixels_1D - 1)) && (Map_State->contigIds[testPixel + 1] == contigId))
                 {
                     if (MetaData_Edit_State == 1) 
-                        Map_State->metaDataFlags[++testPixel] |=  (1 << MetaData_Active_Tag);
+                        Map_State->metaDataFlags[++testPixel] |=  (1ULL << MetaData_Active_Tag);
                     else 
-                        Map_State->metaDataFlags[++testPixel] &= ~(1 << MetaData_Active_Tag);
+                        Map_State->metaDataFlags[++testPixel] &= ~(1ULL << MetaData_Active_Tag);
                 }
 
                 UpdateContigsFromMapState();
@@ -4579,7 +4580,6 @@ Render() {
                 if (*cont->metaDataFlags)
                 {
                     u32 tmp = 0; // used to count the number of tags drawn
-                    bool haplotigTagged = false;
                     ForLoop2(ArrayCount(Meta_Data->tags))
                     {
                         if (*cont->metaDataFlags & ((u64)1 << index2))
@@ -4607,15 +4607,25 @@ Render() {
                                     0);
                             }
 
-                            // Check if the tag is "Haplotig"
-                            if (strcmp((char *)Meta_Data->tags[index2], "Haplotig") == 0)
-                            {
-                                haplotigTagged = true;
-                            }
                         }
                     }
 
                     // draw the grey out mask
+                    auto paint_func = [&](const void* vert_) {
+                        ColourGenerator((u32)0, (f32 *)barColour);
+                        u32 colour = FourFloatColorToU32(*((nk_colorf *)barColour));
+
+                        glUseProgram(Flat_Shader->shaderProgram);
+                        glUniform4fv(Flat_Shader->colorLocation, 1, (GLfloat *)&barColour);
+
+                        glBindBuffer(GL_ARRAY_BUFFER, Scaff_Bar_Data->vbos[ptr]);
+                        glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert_);
+                        glBindVertexArray(Scaff_Bar_Data->vaos[ptr++]);
+                        glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
+
+                        glUseProgram(UI_Shader->shaderProgram);
+                        fonsSetColor(FontStash_Context, colour);
+                    };
                     std::string grey_out_tag = Grey_Out_Settings->is_grey_out(cont->metaDataFlags, Meta_Data);
                     if (!grey_out_tag.empty())
                     {
@@ -4623,22 +4633,10 @@ Render() {
                         vert[1].x = ModelXToScreen(start_contig - 0.5f);     vert[1].y = ModelYToScreen(0.5f - end_contig);
                         vert[2].x = ModelXToScreen(end_contig - 0.5f);       vert[2].y = ModelYToScreen(0.5f - end_contig);
                         vert[3].x = ModelXToScreen(end_contig - 0.5f);       vert[3].y = ModelYToScreen(0.5f - start_contig);
-
-                        ColourGenerator((u32)scaffId, (f32 *)barColour);
-                        u32 colour = FourFloatColorToU32(*((nk_colorf *)barColour));
-
-                        glUseProgram(Flat_Shader->shaderProgram);
-                        glUniform4fv(Flat_Shader->colorLocation, 1, (GLfloat *)&barColour);
-
-                        glBindBuffer(GL_ARRAY_BUFFER, Scaff_Bar_Data->vbos[ptr]);
-                        glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
-                        glBindVertexArray(Scaff_Bar_Data->vaos[ptr++]);
-                        glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
-
-                        glUseProgram(UI_Shader->shaderProgram);
-                        fonsSetColor(FontStash_Context, colour);
+                        paint_func(vert);
                     }
                     else{
+
                         int is_vert_horiz_grey_out = Grey_Out_Settings->is_vert_horiz_grey_out(cont->metaDataFlags, Meta_Data);
                         if (is_vert_horiz_grey_out == 0) continue;
                         // draw the vertical or horizontal grey out mask
@@ -4652,28 +4650,42 @@ Render() {
                             vert[1].y = ModelYToScreen(-0.5f);
                             vert[2].y = ModelYToScreen(-0.5f);
                             vert[3].y = ModelYToScreen( 0.5f);
+                            paint_func(vert);
                         }
-                        else { // horizontal
+                        else if (is_vert_horiz_grey_out == 2) { // horizontal
                             vert[0].x = ModelXToScreen(-0.5f);
                             vert[1].x = ModelXToScreen(-0.5f);
                             vert[2].x = ModelXToScreen( 0.5f);
                             vert[3].x = ModelXToScreen( 0.5f);
+                            paint_func(vert);
                         }
+                        else if (is_vert_horiz_grey_out == 3) { // corss
+                            // paint the hrizontal
+                            vert[0].x = ModelXToScreen(-0.5f);
+                            vert[1].x = ModelXToScreen(-0.5f);
+                            vert[2].x = ModelXToScreen( 0.5f);
+                            vert[3].x = ModelXToScreen( 0.5f);
+                            paint_func(vert);
 
-                        ColourGenerator((u32)scaffId, (f32 *)barColour);
-                        u32 colour = FourFloatColorToU32(*((nk_colorf *)barColour));
+                            // paint the vertical uppon
+                            vertex vert_v0[4];
+                            vert_v0[0].x = ModelXToScreen(start_contig - 0.5f);  vert_v0[0].y = ModelYToScreen(0.5f);
+                            vert_v0[1].x = ModelXToScreen(start_contig - 0.5f);  vert_v0[1].y = ModelYToScreen(0.5f - start_contig);
+                            vert_v0[2].x = ModelXToScreen(end_contig - 0.5f);    vert_v0[2].y = ModelYToScreen(0.5f - start_contig);
+                            vert_v0[3].x = ModelXToScreen(end_contig - 0.5f);    vert_v0[3].y = ModelYToScreen(0.5f);
+                            paint_func(vert_v0);
 
-                        glUseProgram(Flat_Shader->shaderProgram);
-                        glUniform4fv(Flat_Shader->colorLocation, 1, (GLfloat *)&barColour);
-
-                        glBindBuffer(GL_ARRAY_BUFFER, Scaff_Bar_Data->vbos[ptr]);
-                        glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(vertex), vert);
-                        glBindVertexArray(Scaff_Bar_Data->vaos[ptr++]);
-                        glDrawRangeElements(GL_TRIANGLES, 0, 3, 6, GL_UNSIGNED_SHORT, NULL);
-
-                        glUseProgram(UI_Shader->shaderProgram);
-                        fonsSetColor(FontStash_Context, colour);
-
+                            // paint the vertical bottom 
+                            vertex vert_v1[4];
+                            vert_v1[0].x = ModelXToScreen(start_contig - 0.5f);  vert_v1[0].y = ModelYToScreen(0.5f - end_contig);
+                            vert_v1[1].x = ModelXToScreen(start_contig - 0.5f);  vert_v1[1].y = ModelYToScreen(-0.5f);
+                            vert_v1[2].x = ModelXToScreen(end_contig - 0.5f);    vert_v1[2].y = ModelYToScreen(-0.5f);
+                            vert_v1[3].x = ModelXToScreen(end_contig - 0.5f);    vert_v1[3].y = ModelYToScreen(0.5f - end_contig);
+                            paint_func(vert_v1);
+                        }
+                        else {
+                            throw std::runtime_error(fmt::format("This part is unreachable! File: {}, line: {}\n", __FILE__, __LINE__));
+                        }
                     }
 
                 }
@@ -11334,7 +11346,9 @@ GenerateAGP(char *path, u08 overwrite, u08 formatSingletons, u08 preserveOrder)
                     {
                         ForLoop2(ArrayCount(Meta_Data->tags))
                         {
-                            if (*cont->metaDataFlags & (1ULL << index2))
+                            if (*cont->metaDataFlags & (1ULL << index2) &&  // NOTE: please make sure the 1ULL, or after index2 >= 32 there will be unexpected behaviour
+                                Grey_Out_Settings->paint_tags.count(std::string((char*)Meta_Data->tags[index2])) == 0  // make sure this is not tag used for vertical horizontal or cross painting
+                            ) 
                             {
                                 stbsp_snprintf(buffer, sizeof(buffer), "\t%s", (char *)Meta_Data->tags[index2]);
                                 fwrite(buffer, 1, strlen(buffer), file);
@@ -11352,7 +11366,9 @@ GenerateAGP(char *path, u08 overwrite, u08 formatSingletons, u08 preserveOrder)
                     {
                         ForLoop2(ArrayCount(Meta_Data->tags))
                         {
-                            if (*cont->metaDataFlags & (1ULL << index2)) // NOTE: please make sure the 1ULL, or after index2 >= 32 there will be unexpected behaviour
+                            if (*cont->metaDataFlags & (1ULL << index2) &&  // NOTE: please make sure the 1ULL, or after index2 >= 32 there will be unexpected behaviour
+                                Grey_Out_Settings->paint_tags.count(std::string((char*)Meta_Data->tags[index2])) == 0  // make sure this is not tag used for vertical horizontal or cross painting
+                            ) 
                             {
                                 stbsp_snprintf(buffer, sizeof(buffer), "\t%s", (char *)Meta_Data->tags[index2]);
                                 fwrite(buffer, 1, strlen(buffer), file);
@@ -11851,27 +11867,43 @@ MainArgs
                                     sizeof(auto_curation_state.auto_cut_smallest_frag_size_in_pixel_buf), 
                                     nk_filter_decimal);
 
-                                nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
+                                nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 3);
                                 if (nk_button_label(NK_Context, "Apply settings")) 
                                 {
                                     // Apply changes
                                     // Convert text to integer and float
                                     auto_curation_state.update_value_from_buf(); // todo 这里还有问题，因为设置了pixel_mean之后 并没有重新计算 pixel_density...
+                                    auto_curation_state.set_buf();
+                                    fmt::print("[Pixel Cut] cut_threshold:               {:.3f}\n", auto_curation_state.auto_cut_threshold);
+                                    fmt::print("[Pixel Cut] pixel mean window size:      {}\n", auto_curation_state.auto_cut_diag_window_for_pixel_mean);
+                                    fmt::print("[Pixel Cut] smallest_frag_size_in_pixel: {}\n", auto_curation_state.auto_cut_smallest_frag_size_in_pixel);
 
+                                    // auto_cut_button = 0;
+                                    // nk_popup_close(NK_Context);
+                                }
+                                /* run cut 按钮 */
+                                if (nk_button_label(NK_Context, "Run") && currFileName) {
+
+                                    // Convert text to integer and float
+                                    auto_curation_state.update_value_from_buf(); // todo 这里还有问题，因为设置了pixel_mean之后 并没有重新计算 pixel_density...
                                     auto_curation_state.set_buf();
                                     fmt::print("[Pixel Cut] cut_threshold:               {:.3f}\n", auto_curation_state.auto_cut_threshold);
                                     fmt::print("[Pixel Cut] pixel mean window size:      {}\n", auto_curation_state.auto_cut_diag_window_for_pixel_mean);
                                     fmt::print("[Pixel Cut] smallest_frag_size_in_pixel: {}\n", auto_curation_state.auto_cut_smallest_frag_size_in_pixel);
 
                                     auto_cut_button = 0;
+                                    auto_cut_state = 1;
+                                    auto_curation_state.clear(); // click the button will run sort globally
                                     nk_popup_close(NK_Context);
                                 }
+                                
                                 /* 关闭按钮 */
                                 if (nk_button_label(NK_Context, "Close")) {
                                     auto_cut_button = 0;
                                     auto_curation_state.set_buf();
                                     nk_popup_close(NK_Context);
                                 }
+                                
                                 
                                 nk_popup_end(NK_Context);
                             } else {
@@ -11921,7 +11953,7 @@ MainArgs
                             if (nk_option_label(NK_Context, "Deep Fuse", auto_curation_state.sort_mode == 2)) 
                                 auto_curation_state.sort_mode = 2;
 
-                            nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 2);
+                            nk_layout_row_dynamic(NK_Context, Screen_Scale.y * 30.0f, 3);
                             if (nk_button_label(NK_Context, "Apply settings")) 
                             {
                                 // Apply changes
@@ -11931,7 +11963,22 @@ MainArgs
                                 fmt::print("[Pixel Sort] smallest_frag_size_in_pixel: {}\n", auto_curation_state.smallest_frag_size_in_pixel);
                                 fmt::print("[Pixel Sort] link_score_threshold:        {:.3f}\n", auto_curation_state.link_score_threshold);
                                 fmt::print("[Pixel Sort] Sort mode:                   {}\n", auto_curation_state.get_sort_mode_name());
+                                // auto_sort_button = 0;
+                                // nk_popup_close(NK_Context);
+                            }
+                            /* run sort 按钮 */
+                            if (nk_button_label(NK_Context, "Run") && currFileName) {
+                                
+                                // Convert text to integer and float
+                                auto_curation_state.update_value_from_buf();
+                                auto_curation_state.set_buf();
+                                fmt::print("[Pixel Sort] smallest_frag_size_in_pixel: {}\n", auto_curation_state.smallest_frag_size_in_pixel);
+                                fmt::print("[Pixel Sort] link_score_threshold:        {:.3f}\n", auto_curation_state.link_score_threshold);
+                                fmt::print("[Pixel Sort] Sort mode:                   {}\n", auto_curation_state.get_sort_mode_name());
+
                                 auto_sort_button = 0;
+                                auto_sort_state = 1;
+                                auto_curation_state.clear(); // click the button will run sort globally
                                 nk_popup_close(NK_Context);
                             }
                             // 关闭按钮 
@@ -12310,7 +12357,8 @@ MainArgs
                             if (*Meta_Data->tags[i] == 0) break;
                             int tmp = ( MetaData_Active_Tag == i) ; 
                             tmp = nk_check_label(NK_Context, (char*)Meta_Data->tags[i], tmp);
-                            if (tmp) MetaData_Active_Tag = i;
+                            if (tmp) 
+                                MetaData_Active_Tag = i;
                         }
                         nk_tree_pop(NK_Context);
                     }
@@ -12322,12 +12370,19 @@ MainArgs
                         for (u32 i = 0; i < ArrayCount(Meta_Data->tags); i ++ )
                         {   
                             if (*Meta_Data->tags[i] == 0) break;
-                            s32 tmp = Grey_Out_Settings->grey_out_flags[i];
-                            nk_checkbox_label(NK_Context, (char*)Meta_Data->tags[i], Grey_Out_Settings->grey_out_flags+i);
-                            if (tmp!=Grey_Out_Settings->grey_out_flags[i]) 
-                            {
-                                fmt::print("[UserPofile]: Grey out tags changed\n");
-                                UserSaveState();
+                            if (Grey_Out_Settings->paint_tags.count(std::string((char*)Meta_Data->tags[i])) != 0 ){
+                                s32 non = 0;
+                                nk_checkbox_label(NK_Context, (char*)Meta_Data->tags[i], &non);
+                                *(Grey_Out_Settings->grey_out_flags+i) = 0;
+                            }
+                            else{
+                                s32 tmp = Grey_Out_Settings->grey_out_flags[i];
+                                nk_checkbox_label(NK_Context, (char*)Meta_Data->tags[i], Grey_Out_Settings->grey_out_flags+i);
+                                if (tmp!=Grey_Out_Settings->grey_out_flags[i]) 
+                                {
+                                    fmt::print("[UserPofile]: Grey out tag {}({}) changed from {} to {}\n", (char*)Meta_Data->tags[i], i, tmp>0?"true":"false", *(Grey_Out_Settings->grey_out_flags+i)>0?"true":"false");
+                                    UserSaveState();
+                                }
                             }
                         }
                         nk_tree_pop(NK_Context);
@@ -12731,7 +12786,7 @@ MainArgs
                                                 contig *cont = Contigs->contigs_arr + index2;
                                                 f32 contLen = (f32)((f64)cont->length / (f64)Number_of_Pixels_1D);
 
-                                                if (*cont->metaDataFlags & (1 << index))
+                                                if (*cont->metaDataFlags & (1ULL << index))
                                                 {
                                                     char buff[128];
                                                     u32 startCoord = cont->startCoord;
@@ -12997,10 +13052,10 @@ MainArgs
     glfwTerminate();
 
     // free the memory allocated for the shader sources
-    fprintf(stdout, "Memory freed for shader sources.\n");
+    fprintf(stdout, "Memory freed: shader sources.\n");
 
     ResetMemoryArenaP(Loading_Arena);
-    fprintf(stdout, "Memory freed for the arena.\n");
+    fprintf(stdout, "Memory freed: the arena.\n");
 
     EndMain;
 }
