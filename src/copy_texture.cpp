@@ -24,7 +24,7 @@ SOFTWARE.
 #include "copy_texture.h"
 #include "shaderSource.h"
 #include "utilsPretextView.h"
-#include "cmath"
+#include <cmath>
 
 
 Show_State::Show_State()
@@ -1055,9 +1055,7 @@ f32 TexturesArray4AI::cal_diagonal_mean_within_fragments(int shift, const contig
     return (f32)sum / (f32)std::max(cnt, 1u);
 }
 
-/* todo 
-windows： 编译错误，尝试访问 d 
-*/
+
 void TexturesArray4AI::get_interaction_score(
     const u32& row, 
     const u32& column, 

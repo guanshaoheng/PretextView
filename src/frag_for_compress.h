@@ -102,7 +102,8 @@ struct Frag4compress {
             }
         }
         length[0] = Contigs->contigs_arr[frag_id[0]].length;
-        metaDataFlags[0] = (Contigs->contigs_arr[frag_id[0]].metaDataFlags == nullptr)?0:*(Contigs->contigs_arr[frag_id[0]].metaDataFlags);
+        metaDataFlags[0] = (Contigs->contigs_arr[frag_id[0]].metaDataFlags == nullptr)?
+            0 : *(Contigs->contigs_arr[frag_id[0]].metaDataFlags);
         total_length = length[0];
 
         for (u32 i = 1; i < num; i++)
@@ -111,7 +112,8 @@ struct Frag4compress {
             inversed[i] = false; // currently, this is not used
             startCoord[i] = startCoord[i-1] + length[i-1];
             length[i] = Contigs->contigs_arr[frag_id[i]].length;
-            metaDataFlags[i] = (Contigs->contigs_arr[frag_id[i]].metaDataFlags == nullptr)?0:*(Contigs->contigs_arr[frag_id[i]].metaDataFlags);
+            metaDataFlags[i] = (Contigs->contigs_arr[frag_id[i]].metaDataFlags == nullptr)?
+                0 : *(Contigs->contigs_arr[frag_id[i]].metaDataFlags);
             total_length += length[i];
         }
     }
