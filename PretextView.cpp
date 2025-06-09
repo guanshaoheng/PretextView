@@ -102,6 +102,19 @@ SOFTWARE.
 
 #pragma clang diagnostic pop
 
+#ifdef DEBUG_STUCK_PROBLEM
+    #include <time.h>
+    #include <fmt/chrono.h>
+    #define Stuck_Problem_Check_Debug { \
+            fmt::println("Stuck problem check :: File: {}, line: {}, time: {:%H:%M:%S}", \
+                __FILE__, __LINE__, \
+                fmt::localtime(std::time(nullptr))\
+                ); \
+    }
+#else
+    #define Stuck_Problem_Check_Debug 
+#endif //DEBUG_STUCK_PROBLEM
+
 
 #include "Resources.cpp" // defines icons, fonts
 
@@ -4606,7 +4619,6 @@ Render() {
                                     (char *)Meta_Data->tags[index2], 
                                     0);
                             }
-
                         }
                     }
 
@@ -4638,53 +4650,54 @@ Render() {
                     else{
 
                         int is_vert_horiz_grey_out = Grey_Out_Settings->is_vert_horiz_grey_out(cont->metaDataFlags, Meta_Data);
-                        if (is_vert_horiz_grey_out == 0) continue;
-                        // draw the vertical or horizontal grey out mask
-                        vert[0].x = ModelXToScreen(start_contig - 0.5f);  vert[0].y = ModelYToScreen(0.5f - start_contig);
-                        vert[1].x = ModelXToScreen(start_contig - 0.5f);  vert[1].y = ModelYToScreen(0.5f - end_contig);
-                        vert[2].x = ModelXToScreen(end_contig - 0.5f);    vert[2].y = ModelYToScreen(0.5f - end_contig);
-                        vert[3].x = ModelXToScreen(end_contig - 0.5f);    vert[3].y = ModelYToScreen(0.5f - start_contig);
+                        if (is_vert_horiz_grey_out != 0) {
+                            // draw the vertical or horizontal grey out mask
+                            vert[0].x = ModelXToScreen(start_contig - 0.5f);  vert[0].y = ModelYToScreen(0.5f - start_contig);
+                            vert[1].x = ModelXToScreen(start_contig - 0.5f);  vert[1].y = ModelYToScreen(0.5f - end_contig);
+                            vert[2].x = ModelXToScreen(end_contig - 0.5f);    vert[2].y = ModelYToScreen(0.5f - end_contig);
+                            vert[3].x = ModelXToScreen(end_contig - 0.5f);    vert[3].y = ModelYToScreen(0.5f - start_contig);
 
-                        if (is_vert_horiz_grey_out == 1) { // vertical
-                            vert[0].y = ModelYToScreen( 0.5f);
-                            vert[1].y = ModelYToScreen(-0.5f);
-                            vert[2].y = ModelYToScreen(-0.5f);
-                            vert[3].y = ModelYToScreen( 0.5f);
-                            paint_func(vert);
-                        }
-                        else if (is_vert_horiz_grey_out == 2) { // horizontal
-                            vert[0].x = ModelXToScreen(-0.5f);
-                            vert[1].x = ModelXToScreen(-0.5f);
-                            vert[2].x = ModelXToScreen( 0.5f);
-                            vert[3].x = ModelXToScreen( 0.5f);
-                            paint_func(vert);
-                        }
-                        else if (is_vert_horiz_grey_out == 3) { // corss
-                            // paint the hrizontal
-                            vert[0].x = ModelXToScreen(-0.5f);
-                            vert[1].x = ModelXToScreen(-0.5f);
-                            vert[2].x = ModelXToScreen( 0.5f);
-                            vert[3].x = ModelXToScreen( 0.5f);
-                            paint_func(vert);
+                            if (is_vert_horiz_grey_out == 1) { // vertical
+                                vert[0].y = ModelYToScreen( 0.5f);
+                                vert[1].y = ModelYToScreen(-0.5f);
+                                vert[2].y = ModelYToScreen(-0.5f);
+                                vert[3].y = ModelYToScreen( 0.5f);
+                                paint_func(vert);
+                            }
+                            else if (is_vert_horiz_grey_out == 2) { // horizontal
+                                vert[0].x = ModelXToScreen(-0.5f);
+                                vert[1].x = ModelXToScreen(-0.5f);
+                                vert[2].x = ModelXToScreen( 0.5f);
+                                vert[3].x = ModelXToScreen( 0.5f);
+                                paint_func(vert);
+                            }
+                            else if (is_vert_horiz_grey_out == 3) { // corss
+                                // paint the hrizontal
+                                vert[0].x = ModelXToScreen(-0.5f);
+                                vert[1].x = ModelXToScreen(-0.5f);
+                                vert[2].x = ModelXToScreen( 0.5f);
+                                vert[3].x = ModelXToScreen( 0.5f);
+                                paint_func(vert);
 
-                            // paint the vertical uppon
-                            vertex vert_v0[4];
-                            vert_v0[0].x = ModelXToScreen(start_contig - 0.5f);  vert_v0[0].y = ModelYToScreen(0.5f);
-                            vert_v0[1].x = ModelXToScreen(start_contig - 0.5f);  vert_v0[1].y = ModelYToScreen(0.5f - start_contig);
-                            vert_v0[2].x = ModelXToScreen(end_contig - 0.5f);    vert_v0[2].y = ModelYToScreen(0.5f - start_contig);
-                            vert_v0[3].x = ModelXToScreen(end_contig - 0.5f);    vert_v0[3].y = ModelYToScreen(0.5f);
-                            paint_func(vert_v0);
+                                // paint the vertical uppon
+                                vertex vert_v0[4];
+                                vert_v0[0].x = ModelXToScreen(start_contig - 0.5f);  vert_v0[0].y = ModelYToScreen(0.5f);
+                                vert_v0[1].x = ModelXToScreen(start_contig - 0.5f);  vert_v0[1].y = ModelYToScreen(0.5f - start_contig);
+                                vert_v0[2].x = ModelXToScreen(end_contig - 0.5f);    vert_v0[2].y = ModelYToScreen(0.5f - start_contig);
+                                vert_v0[3].x = ModelXToScreen(end_contig - 0.5f);    vert_v0[3].y = ModelYToScreen(0.5f);
+                                paint_func(vert_v0);
 
-                            // paint the vertical bottom 
-                            vertex vert_v1[4];
-                            vert_v1[0].x = ModelXToScreen(start_contig - 0.5f);  vert_v1[0].y = ModelYToScreen(0.5f - end_contig);
-                            vert_v1[1].x = ModelXToScreen(start_contig - 0.5f);  vert_v1[1].y = ModelYToScreen(-0.5f);
-                            vert_v1[2].x = ModelXToScreen(end_contig - 0.5f);    vert_v1[2].y = ModelYToScreen(-0.5f);
-                            vert_v1[3].x = ModelXToScreen(end_contig - 0.5f);    vert_v1[3].y = ModelYToScreen(0.5f - end_contig);
-                            paint_func(vert_v1);
+                                // paint the vertical bottom 
+                                vertex vert_v1[4];
+                                vert_v1[0].x = ModelXToScreen(start_contig - 0.5f);  vert_v1[0].y = ModelYToScreen(0.5f - end_contig);
+                                vert_v1[1].x = ModelXToScreen(start_contig - 0.5f);  vert_v1[1].y = ModelYToScreen(-0.5f);
+                                vert_v1[2].x = ModelXToScreen(end_contig - 0.5f);    vert_v1[2].y = ModelYToScreen(-0.5f);
+                                vert_v1[3].x = ModelXToScreen(end_contig - 0.5f);    vert_v1[3].y = ModelYToScreen(0.5f - end_contig);
+                                paint_func(vert_v1);
+                            } 
                         }
-                        else {
-                            throw std::runtime_error(fmt::format("This part is unreachable! File: {}, line: {}\n", __FILE__, __LINE__));
+                        else { // not grey out vertically, horizontally or crossly.
+                            // throw std::runtime_error(fmt::format("This part is unreachable! File: {}, line: {}\n", __FILE__, __LINE__));
                         }
                     }
 
@@ -5898,7 +5911,8 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
         // 从内存池中分配存储原始 contig 的数组内存，类型为 original_contig，数组长度为 Number_of_Original_Contigs
         Original_Contigs = PushArrayP(arena, original_contig, Number_of_Original_Contigs);
         // 分配一个存储浮点数的数组
-        f32 *contigFracs = PushArrayP(arena, f32, Number_of_Original_Contigs);
+        // f32 *contigFracs = PushArrayP(arena, f32, Number_of_Original_Contigs);
+        f32 *contigFracs = new f32[Number_of_Original_Contigs];
         ForLoop(Number_of_Original_Contigs) // 读取 contigs fraction (f32) and name
         {
 
@@ -5974,6 +5988,7 @@ LoadFile(const char *filePath, memory_arena *arena, char **fileName, u64 *header
 #endif
             }
         }
+        delete[] contigFracs;
         while (lastPixel < Number_of_Pixels_1D)  // 处理数值计算导致的lastPixel小于Number_of_Pixels_1D的问题
         {
             Map_State->originalContigIds[lastPixel] = (u32)(Number_of_Original_Contigs - 1); //假设其为最后一个contig的像素点
@@ -10998,7 +11013,7 @@ UserSaveState(const char *headerHash, u08 overwrite , char *path)
         fwrite(&invert_mouse_tmp, sizeof(bool), 1, file);
     }
 
-    // TODO (shaoheng) save default file browser directory
+    // finished (shaoheng) save default file browser directory
     const char* placeholder = "fdpc"; // placeholder for File Directory Path Cache 
     for (int i = 0; i < 4; i ++ ) fwrite(&placeholder[i], sizeof(char), 1, file);
     for (const file_browser& browser_tmp : { browser, saveBrowser, loadBrowser, saveAGPBrowser, loadAGPBrowser }) {
@@ -11015,7 +11030,6 @@ UserSaveState(const char *headerHash, u08 overwrite , char *path)
 
 
     // END of SAVE user profile settings
-
     fclose(file);
 
     #ifdef DEBUG
@@ -11131,43 +11145,45 @@ global_function
 
     // load selected area color 
     f32 tmp_mask_color[4];
-    if (fread(tmp_mask_color, sizeof(tmp_mask_color), 1, file) == 1)
-    {
+    if (fread(tmp_mask_color, sizeof(tmp_mask_color), 1, file) == 1) {
         auto_curation_state.set_mask_color(tmp_mask_color);
     }
-    else 
-    {
+    else  {
         auto_curation_state.set_mask_color(auto_curation_state.mask_color_default);
+        fmt::println("[UserLoadState::warning]: userProfile loading stops as there is no 1 byte left for tmp_mask_color. The left part will not be restored from the userProfile cache. File: {}, line: {}", __FILE__, __LINE__);
+        return 1;
     }
 
     // load grey out flags
     int32_t grey_out_flags[64];
-    if (fread(grey_out_flags, sizeof(int32_t), 64, file) == 64)
-    {   
-        if (Grey_Out_Settings)
-        {
+    if (fread(grey_out_flags, sizeof(int32_t), 64, file) == 64) {   
+        if (Grey_Out_Settings) {
             memcpy(Grey_Out_Settings->grey_out_flags, grey_out_flags, 64 * sizeof(int32_t));
         }
+    }
+    else {
+        fmt::println("[UserLoadState::warning]: userProfile loading stops as there is no 64 byte left for grey_out_flags. The left part will not be restored from the userProfile cache. File: {}, line: {}", __FILE__, __LINE__);
+        return 1;
     }
 
     // load user profile settings
     bool invert_mouse_tmp;
-    if (fread(&invert_mouse_tmp, sizeof(bool), 1, file) == 1)
-    {
-        if (user_profile_settings_ptr)
-        {
-            user_profile_settings_ptr->invert_mouse = invert_mouse_tmp;
-        }
+    if (fread(&invert_mouse_tmp, sizeof(bool), 1, file) == 1) {
+        if (user_profile_settings_ptr) user_profile_settings_ptr->invert_mouse = invert_mouse_tmp;
+    } 
+    else {
+        if (user_profile_settings_ptr) user_profile_settings_ptr->invert_mouse = false;
+        fmt::println("[UserLoadState::warning]: userProfile loading stops as there is no 1 byte left for invertMouse setting. The left part will not be restored from the userProfile cache. File: {}, line: {}", __FILE__, __LINE__);
+        return 1;
     }
 
+    // file directory path cache
     char lable[4];
-    if (fread(lable, sizeof(char), 4, file) == 4 && strncmp(lable, "fdpc", 4) == 0)
-    {   
+    if (fread(lable, sizeof(char), 4, file) == 4 && strncmp(lable, "fdpc", 4) == 0) {   
         std::vector<file_browser*> browsers = { &browser, &saveBrowser, &loadBrowser, &saveAGPBrowser, &loadAGPBrowser };
         for (file_browser* browser_ptr : browsers) {
             u32 dir_len;
-            if (fread(&dir_len, sizeof(dir_len), 1, file) == 1 && dir_len > 0)
-            {
+            if (fread(&dir_len, sizeof(dir_len), 1, file) == 1 && dir_len > 0) {
                 char *dir = (char *)malloc(dir_len + 1);
                 if (fread(dir, sizeof(char), dir_len, file) == dir_len ) {   
                     dir[dir_len] = '\0'; // Null-terminate the string
@@ -11176,6 +11192,10 @@ global_function
                 free(dir);
             }
         }
+    }
+    else {
+        fmt::println("[UserLoadState::warning]: userProfile loading stops as the 4 byte left is not \'fdpc\' for the file directory path cache. The left part will not be restored from the userProfile cache. File: {}, line: {}", __FILE__, __LINE__);
+        return 1;
     }
 
 
@@ -11472,6 +11492,8 @@ void SortMapByMetaTags(u64 tagMask)
 MainArgs 
 {   
 
+    Stuck_Problem_Check_Debug
+
     #ifdef PYTHON_SCOPED_INTERPRETER
         // START Python interpreter
         py::scoped_interpreter guard{};
@@ -11488,6 +11510,8 @@ MainArgs
         CopyNullTerminatedString((u08 *)ArgBuffer[1], currFile);  // copy the filepath to currfile
         printf("Read from file: %s\n", currFile);  
     }
+
+    Stuck_Problem_Check_Debug
 
     Mouse_Move.x = -1.0;  // intialize the mouse position
     Mouse_Move.y = -1.0;
@@ -11513,12 +11537,16 @@ MainArgs
     CreateMemoryArena(Working_Set, MegaByte(256));
     Thread_Pool = ThreadPoolInit(&Working_Set, 3); 
 
+    Stuck_Problem_Check_Debug
+
     glfwSetErrorCallback(ErrorCallback);
     if (!glfwInit()) 
     {      
         fprintf(stderr, "Failed in initializing the glfw window, exit...\n");  
         exit(EXIT_FAILURE);
     }
+
+    Stuck_Problem_Check_Debug
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -11536,11 +11564,15 @@ MainArgs
         exit(EXIT_FAILURE);
     }
 
+    Stuck_Problem_Check_Debug
+
     glfwMakeContextCurrent(window);
     NK_Context = PushStruct(Working_Set, nk_context);
     glfwSetWindowUserPointer(window, NK_Context);
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
     glfwSwapInterval(1);
+
+    Stuck_Problem_Check_Debug
 
     glfwSetFramebufferSizeCallback(window, GLFWChangeFrameBufferSize);
     glfwSetWindowSizeCallback(window, GLFWChangeWindowSize);
@@ -11579,8 +11611,12 @@ MainArgs
     GLFWcursor *arrowCursor = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
     GLFWcursor *crossCursor = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
 
+    Stuck_Problem_Check_Debug
+
     Setup();
 
+    Stuck_Problem_Check_Debug
+    
     if (initWithFile)
     {
         UI_On = LoadFile((const char *)currFile, Loading_Arena, (char **)&currFileName, &headerHash) == ok ? 0 : 1;
@@ -11607,6 +11643,8 @@ MainArgs
     //     }
     // }
 
+    Stuck_Problem_Check_Debug
+    
 
     u32 showClearCacheScreen = 0;
 
@@ -11625,6 +11663,8 @@ MainArgs
         FileBrowserInit(&loadAGPBrowser, &media);
     }
     
+    Stuck_Problem_Check_Debug
+    
     {
         f64 mousex, mousey;
         glfwGetCursorPos(window, &mousex, &mousey);
@@ -11636,6 +11676,8 @@ MainArgs
 
     Redisplay = 1;
 
+    Stuck_Problem_Check_Debug
+    
     while (!glfwWindowShouldClose(window)) 
     {
         if (Redisplay) 
@@ -11644,6 +11686,7 @@ MainArgs
             glfwSwapBuffers(window);
             Redisplay = 0;
             if (currFileName) SaveState(headerHash);
+            Stuck_Problem_Check_Debug
         }
 
         if (Loading) 
@@ -11683,6 +11726,8 @@ MainArgs
             nk_input_begin(NK_Context);
             GatheringTextInput = 1;
             glfwPollEvents();
+
+            Stuck_Problem_Check_Debug
 
             /*nk_input_key(NK_Context, NK_KEY_DEL, glfwGetKey(window, GLFW_KEY_DELETE) == GLFW_PRESS);
             nk_input_key(NK_Context, NK_KEY_ENTER, glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS);
@@ -12997,6 +13042,7 @@ MainArgs
         }
 
         if (!Redisplay) glfwWaitEvents();
+        Stuck_Problem_Check_Debug
     }
 
     if (currFileName) SaveState(headerHash);
