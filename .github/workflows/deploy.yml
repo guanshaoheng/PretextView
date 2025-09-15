@@ -37,6 +37,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: cmd
         run: |
+          choco install nsis -y --no-progress
           install.cmake.bat
 
       - name: Run install script on Linux
